@@ -213,40 +213,47 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
         <h2 class="section-title">{{ editingId === null ? "支出方法の登録" : "支出方法の編集" }}</h2>
         <form class="form" @submit.prevent="submitForm">
           <p v-if="formError" class="banner-error">{{ formError }}</p>
-          <div class="field">
-            <label for="pm-name">名称</label>
-            <input id="pm-name" v-model="name" type="text" required />
-          </div>
           <div class="field-row">
-            <div class="field field-narrow">
-              <label for="pm-closing-day">締め日（0〜31。0は即時支払）</label>
-              <input id="pm-closing-day" v-model.number="closingDay" type="number" min="0" max="31" required />
+            <div class="field">
+              <label for="pm-name">名称</label>
+              <input id="pm-name" v-model="name" type="text" required />
             </div>
-            <div v-if="closingDay > 0" class="field field-narrow">
-              <label for="pm-closing-shift">締め日用ずらし方向</label>
-              <select id="pm-closing-shift" v-model="closingDayShiftDirection">
-                <option value="earlier">過去</option>
-                <option value="later">未来</option>
-              </select>
+            <div class="field field-narrow">
+              <label for="pm-order">表示順</label>
+              <input id="pm-order" v-model.number="displayOrder" type="number" min="0" required />
             </div>
           </div>
 
+          <div class="field field-narrow">
+            <label for="pm-closing-day">締め日（0〜31。0は即時支払）</label>
+            <input id="pm-closing-day" v-model.number="closingDay" type="number" min="0" max="31" required />
+          </div>
+
           <template v-if="closingDay > 0">
-            <div class="field">
-              <label>締め日用の除外条件</label>
-              <div class="tag-list">
-                <span v-for="e in closingDayExclusions" :key="e.exclusion_kind" class="tag">
-                  {{ exclusionLabel(e.exclusion_kind) }}
-                  <button type="button" @click="removeClosingExclusion(e.exclusion_kind)">×</button>
-                </span>
+            <div class="field-row">
+              <div class="field">
+                <label>締め日用の除外条件</label>
+                <div class="tag-list">
+                  <span v-for="e in closingDayExclusions" :key="e.exclusion_kind" class="tag">
+                    {{ exclusionLabel(e.exclusion_kind) }}
+                    <button type="button" @click="removeClosingExclusion(e.exclusion_kind)">×</button>
+                  </span>
+                </div>
+                <div class="toolbar">
+                  <select v-model="newClosingExclusion">
+                    <option v-for="kind in EXCLUSION_KINDS" :key="kind" :value="kind">
+                      {{ exclusionLabel(kind) }}
+                    </option>
+                  </select>
+                  <button class="btn-secondary" type="button" @click="addClosingExclusion">追加</button>
+                </div>
               </div>
-              <div class="toolbar">
-                <select v-model="newClosingExclusion">
-                  <option v-for="kind in EXCLUSION_KINDS" :key="kind" :value="kind">
-                    {{ exclusionLabel(kind) }}
-                  </option>
+              <div class="field field-narrow">
+                <label for="pm-closing-shift">締め日用ずらし方向</label>
+                <select id="pm-closing-shift" v-model="closingDayShiftDirection">
+                  <option value="earlier">過去</option>
+                  <option value="later">未来</option>
                 </select>
-                <button class="btn-secondary" type="button" @click="addClosingExclusion">追加</button>
               </div>
             </div>
 
@@ -259,6 +266,26 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
                 <label for="pm-payment-day">支払日（1〜31）</label>
                 <input id="pm-payment-day" v-model.number="paymentDay" type="number" min="1" max="31" required />
               </div>
+            </div>
+
+            <div class="field-row">
+              <div class="field">
+                <label>支払日用の除外条件</label>
+                <div class="tag-list">
+                  <span v-for="e in paymentDayExclusions" :key="e.exclusion_kind" class="tag">
+                    {{ exclusionLabel(e.exclusion_kind) }}
+                    <button type="button" @click="removePaymentExclusion(e.exclusion_kind)">×</button>
+                  </span>
+                </div>
+                <div class="toolbar">
+                  <select v-model="newPaymentExclusion">
+                    <option v-for="kind in EXCLUSION_KINDS" :key="kind" :value="kind">
+                      {{ exclusionLabel(kind) }}
+                    </option>
+                  </select>
+                  <button class="btn-secondary" type="button" @click="addPaymentExclusion">追加</button>
+                </div>
+              </div>
               <div class="field field-narrow">
                 <label for="pm-payment-shift">支払日用ずらし方向</label>
                 <select id="pm-payment-shift" v-model="paymentDayShiftDirection">
@@ -267,29 +294,8 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
                 </select>
               </div>
             </div>
-            <div class="field">
-              <label>支払日用の除外条件</label>
-              <div class="tag-list">
-                <span v-for="e in paymentDayExclusions" :key="e.exclusion_kind" class="tag">
-                  {{ exclusionLabel(e.exclusion_kind) }}
-                  <button type="button" @click="removePaymentExclusion(e.exclusion_kind)">×</button>
-                </span>
-              </div>
-              <div class="toolbar">
-                <select v-model="newPaymentExclusion">
-                  <option v-for="kind in EXCLUSION_KINDS" :key="kind" :value="kind">
-                    {{ exclusionLabel(kind) }}
-                  </option>
-                </select>
-                <button class="btn-secondary" type="button" @click="addPaymentExclusion">追加</button>
-              </div>
-            </div>
           </template>
 
-          <div class="field field-narrow">
-            <label for="pm-order">表示順</label>
-            <input id="pm-order" v-model.number="displayOrder" type="number" min="0" required />
-          </div>
           <div class="actions">
             <button class="btn-primary" type="submit">保存</button>
             <button class="btn-secondary" type="button" @click="closeForm">キャンセル</button>

@@ -244,10 +244,16 @@ textarea {
   flex-wrap: wrap;
 }
 
-/* .field-row lays fields out horizontally, so flex-basis sizes their width here. */
+/* .field-row lays fields out horizontally, so flex-basis sizes their width here.
+   A plain .field grows to fill the row; .field-narrow (same specificity, declared
+   after, so it wins on elements with both classes) stays fixed-width instead. */
 .field-row > .field {
-  flex: 0 1 160px;
+  flex: 1 1 200px;
   min-width: 0;
+}
+
+.field-row > .field-narrow {
+  flex: 0 1 160px;
 }
 
 /* Outside a .field-row, .form stacks fields vertically; max-width (not flex-basis,
