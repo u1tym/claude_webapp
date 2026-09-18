@@ -386,7 +386,8 @@ textarea {
 }
 
 .modal.modal-wide {
-  max-width: min(720px, 92vw);
+  width: 80vw;
+  max-width: 80vw;
 }
 
 @media (max-width: 767px) {
