@@ -65,6 +65,10 @@ textarea {
   margin: 0;
   font-size: var(--font-size-title);
   flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .header-icon {
@@ -101,6 +105,9 @@ textarea {
   grid-area: content;
   min-width: 0;
   min-height: 0;
+  width: 100%;
+  max-width: 1440px;
+  margin-inline: auto;
   padding: calc(var(--space) * 3);
   display: flex;
   flex-direction: column;
@@ -143,6 +150,21 @@ textarea {
   align-items: center;
   gap: var(--space);
   flex-wrap: wrap;
+}
+
+.toolbar .field {
+  flex: 1 1 220px;
+  min-width: 0;
+}
+
+.toolbar .field select,
+.toolbar .field input {
+  max-width: 100%;
+}
+
+.back-to-master {
+  display: none;
+  align-self: flex-start;
 }
 
 .split {
@@ -202,6 +224,10 @@ textarea {
   color: inherit;
   min-height: var(--tap);
   cursor: pointer;
+}
+
+.cell-label {
+  display: none;
 }
 
 .form {
@@ -286,6 +312,15 @@ textarea {
   color: var(--color-danger);
 }
 
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-text:focus-visible,
+.nav a:focus-visible,
+.list button.row:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
 .tag-list {
   display: flex;
   flex-wrap: wrap;
@@ -356,8 +391,93 @@ textarea {
     grid-template-columns: 1fr;
   }
 
-  .split.mobile-form .list-panel,
-  .split.mobile-list .form-panel {
+  .split.mode-detail .master-panel,
+  .split.mode-master .detail-panel {
     display: none;
+  }
+
+  .back-to-master {
+    display: inline-flex;
+  }
+
+  /* Dense tables become a stack of cards instead of requiring horizontal scroll. */
+  .list table {
+    display: block;
+  }
+
+  .list thead {
+    display: none;
+  }
+
+  .list tbody {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space);
+  }
+
+  .list tr {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) / 2);
+    border: 1px solid var(--color-border);
+    border-radius: var(--radius);
+    padding: calc(var(--space) * 1.5);
+    background: var(--color-bg);
+  }
+
+  .list td {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--space);
+    border-bottom: 0;
+    padding: 0;
+  }
+
+  .list td .cell-label {
+    display: inline;
+    color: var(--color-text-muted);
+    font-size: 14px;
+  }
+
+  .list td.cell-primary {
+    font-size: var(--font-size-title);
+    font-weight: 600;
+  }
+
+  .list td.cell-amount {
+    font-weight: 600;
+    color: var(--color-primary);
+  }
+
+  .list td.cell-primary .cell-label,
+  .list td.cell-amount .cell-label {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+  }
+
+  .list td.actions {
+    justify-content: flex-end;
+    gap: calc(var(--space) * 2);
+    margin-top: var(--space);
+    padding-top: var(--space);
+    border-top: 1px solid var(--color-border);
+  }
+
+  .list td.actions .btn-text.danger {
+    padding-left: calc(var(--space) * 2);
+    border-left: 1px solid var(--color-border);
+  }
+
+  .list button.row {
+    min-height: auto;
+    padding: 0;
   }
 }

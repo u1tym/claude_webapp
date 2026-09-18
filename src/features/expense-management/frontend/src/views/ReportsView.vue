@@ -129,10 +129,10 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="item in usageReport.items" :key="item.budget_item_id">
-              <td>{{ item.name }}</td>
-              <td>{{ item.budget_amount }}</td>
-              <td>{{ item.actual_amount }}</td>
-              <td>{{ item.difference }}</td>
+              <td class="cell-primary"><span class="cell-label">予算項目</span>{{ item.name }}</td>
+              <td><span class="cell-label">予算金額</span>{{ item.budget_amount }}</td>
+              <td><span class="cell-label">支出合計</span>{{ item.actual_amount }}</td>
+              <td><span class="cell-label">差額</span>{{ item.difference }}</td>
             </tr>
           </tbody>
         </table>
@@ -148,8 +148,8 @@ onMounted(async () => {
           </thead>
           <tbody>
             <tr v-for="item in paymentMonthItems" :key="item.budget_item_id">
-              <td>{{ item.name }}</td>
-              <td>{{ item.actual_amount }}</td>
+              <td class="cell-primary"><span class="cell-label">予算項目</span>{{ item.name }}</td>
+              <td><span class="cell-label">支出合計</span>{{ item.actual_amount }}</td>
             </tr>
           </tbody>
         </table>

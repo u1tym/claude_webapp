@@ -193,11 +193,11 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
         </thead>
         <tbody>
           <tr v-for="method in methods" :key="method.id">
-            <td>{{ method.name }}</td>
-            <td>{{ method.closing_day }}</td>
-            <td>{{ method.payment_month_offset }}</td>
-            <td>{{ method.payment_day }}</td>
-            <td>{{ method.display_order }}</td>
+            <td class="cell-primary"><span class="cell-label">名称</span>{{ method.name }}</td>
+            <td><span class="cell-label">締め日</span>{{ method.closing_day }}</td>
+            <td><span class="cell-label">支払月オフセット</span>{{ method.payment_month_offset }}</td>
+            <td><span class="cell-label">支払日</span>{{ method.payment_day }}</td>
+            <td><span class="cell-label">表示順</span>{{ method.display_order }}</td>
             <td class="actions">
               <button class="btn-text" type="button" @click="openEditForm(method)">編集</button>
               <button class="btn-text danger" type="button" @click="removeMethod(method)">削除</button>

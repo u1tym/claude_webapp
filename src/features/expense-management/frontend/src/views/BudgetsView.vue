@@ -19,6 +19,8 @@ const errorMessage = ref("");
 const periods = ref<BudgetPeriod[]>([]);
 const selectedPeriodId = ref<number | null>(null);
 const items = ref<BudgetItem[]>([]);
+// Compact viewports show either the period list or the selected period's items, never both at once.
+const panelMode = ref<"master" | "detail">("master");
 
 const showPeriodForm = ref(false);
 const periodFormMode = ref<"create" | "duplicate">("create");
@@ -50,7 +52,13 @@ async function loadPeriods(): Promise<void> {
   periods.value = await getBudgetPeriods();
   if (periods.value.length > 0 && selectedPeriodId.value === null) {
     selectedPeriodId.value = periods.value[0]!.id;
+    panelMode.value = "detail";
   }
+}
+
+function selectPeriod(id: number): void {
+  selectedPeriodId.value = id;
+  panelMode.value = "detail";
 }
 
 async function loadItems(): Promise<void> {
@@ -108,6 +116,7 @@ async function submitPeriodForm(): Promise<void> {
         return;
       }
       selectedPeriodId.value = result.id;
+      panelMode.value = "detail";
     } else {
       const sourceId = periods.value[0]!.id;
       const result = await duplicateBudgetPeriod(
@@ -125,6 +134,7 @@ async function submitPeriodForm(): Promise<void> {
         return;
       }
       selectedPeriodId.value = result.id;
+      panelMode.value = "detail";
     }
     showPeriodForm.value = false;
     await loadPeriods();
@@ -194,8 +204,8 @@ async function removeItem(item: BudgetItem): Promise<void> {
   <div v-if="loading" class="loading">読み込み中…</div>
   <template v-else>
     <p v-if="errorMessage" class="banner-error">{{ errorMessage }}</p>
-    <div class="split">
-      <div class="panel">
+    <div class="split" :class="panelMode === 'master' ? 'mode-master' : 'mode-detail'">
+      <div class="panel master-panel">
         <div class="toolbar">
           <h2 class="section-title">予算期間</h2>
           <button class="btn-primary" type="button" @click="openCreatePeriodForm">新規作成</button>
@@ -218,7 +228,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
                 :class="{ selected: p.id === selectedPeriodId }"
               >
                 <td>
-                  <button class="row" type="button" @click="selectedPeriodId = p.id">
+                  <button class="row" type="button" @click="selectPeriod(p.id)">
                     {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
                   </button>
                 </td>
@@ -228,7 +238,10 @@ async function removeItem(item: BudgetItem): Promise<void> {
         </div>
       </div>
 
-      <div class="panel">
+      <div class="panel detail-panel">
+        <button type="button" class="btn-text back-to-master" @click="panelMode = 'master'">
+          ← 予算期間一覧に戻る
+        </button>
         <div class="toolbar">
           <h2 class="section-title">予算項目</h2>
           <button class="btn-primary" type="button" :disabled="selectedPeriodId === null" @click="openCreateItemForm">
@@ -249,9 +262,9 @@ async function removeItem(item: BudgetItem): Promise<void> {
             </thead>
             <tbody>
               <tr v-for="item in items" :key="item.id">
-                <td>{{ item.name }}</td>
-                <td>{{ item.amount }}</td>
-                <td>{{ item.display_order }}</td>
+                <td class="cell-primary"><span class="cell-label">項目名</span>{{ item.name }}</td>
+                <td class="cell-amount"><span class="cell-label">金額</span>{{ item.amount }}</td>
+                <td><span class="cell-label">表示順</span>{{ item.display_order }}</td>
                 <td class="actions">
                   <button class="btn-text" type="button" @click="openEditItemForm(item)">編集</button>
                   <button class="btn-text danger" type="button" @click="removeItem(item)">削除</button>

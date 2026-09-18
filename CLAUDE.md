@@ -20,6 +20,7 @@ Cursorの `globs` / `alwaysApply` によるファイル種別ごとの自動読�
 - @rules/22b-db-design.md — DB設計作成
 - @rules/22c-api-design.md — API設計作成
 - @rules/23-tasks.md — タスク分解
+- @rules/31-web-app-responsive-layout-spec.md — 画面レイアウト（PC/スマートフォンのResponsive UX指針）
 
 ## SPEC開発
 
