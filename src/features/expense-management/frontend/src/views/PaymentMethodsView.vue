@@ -23,7 +23,8 @@ const EXCLUSION_LABELS: Record<string, string> = {
   nonexistent_day: "当月に存在しない日",
   holiday: "祝日",
 };
-const EXCLUSION_KINDS = Object.keys(EXCLUSION_LABELS);
+const WEEKDAY_EXCLUSION_KINDS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
+const OTHER_EXCLUSION_KINDS = ["holiday", "nonexistent_day"];
 
 const loading = ref(true);
 const errorMessage = ref("");
@@ -41,8 +42,6 @@ const paymentDay = ref(1);
 const paymentDayShiftDirection = ref<"earlier" | "later">("earlier");
 const paymentDayExclusions = ref<ExclusionItem[]>([]);
 const displayOrder = ref(1);
-const newClosingExclusion = ref(EXCLUSION_KINDS[0]!);
-const newPaymentExclusion = ref(EXCLUSION_KINDS[0]!);
 
 function handleError(err: unknown): void {
   if (err instanceof Error && err.message === "unauth") {
@@ -108,22 +107,30 @@ function closeForm(): void {
   showForm.value = false;
 }
 
-function addClosingExclusion(): void {
-  if (closingDayExclusions.value.some((e) => e.exclusion_kind === newClosingExclusion.value)) return;
-  closingDayExclusions.value.push({ exclusion_kind: newClosingExclusion.value });
+function isClosingExcluded(kind: string): boolean {
+  return closingDayExclusions.value.some((e) => e.exclusion_kind === kind);
 }
 
-function removeClosingExclusion(kind: string): void {
-  closingDayExclusions.value = closingDayExclusions.value.filter((e) => e.exclusion_kind !== kind);
+function toggleClosingExclusion(kind: string, event: Event): void {
+  const checked = (event.target as HTMLInputElement).checked;
+  if (checked) {
+    if (!isClosingExcluded(kind)) closingDayExclusions.value.push({ exclusion_kind: kind });
+  } else {
+    closingDayExclusions.value = closingDayExclusions.value.filter((e) => e.exclusion_kind !== kind);
+  }
 }
 
-function addPaymentExclusion(): void {
-  if (paymentDayExclusions.value.some((e) => e.exclusion_kind === newPaymentExclusion.value)) return;
-  paymentDayExclusions.value.push({ exclusion_kind: newPaymentExclusion.value });
+function isPaymentExcluded(kind: string): boolean {
+  return paymentDayExclusions.value.some((e) => e.exclusion_kind === kind);
 }
 
-function removePaymentExclusion(kind: string): void {
-  paymentDayExclusions.value = paymentDayExclusions.value.filter((e) => e.exclusion_kind !== kind);
+function togglePaymentExclusion(kind: string, event: Event): void {
+  const checked = (event.target as HTMLInputElement).checked;
+  if (checked) {
+    if (!isPaymentExcluded(kind)) paymentDayExclusions.value.push({ exclusion_kind: kind });
+  } else {
+    paymentDayExclusions.value = paymentDayExclusions.value.filter((e) => e.exclusion_kind !== kind);
+  }
 }
 
 async function submitForm(): Promise<void> {
@@ -233,19 +240,25 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
             <div class="field-row">
               <div class="field">
                 <label>締め日用の除外条件</label>
-                <div class="tag-list">
-                  <span v-for="e in closingDayExclusions" :key="e.exclusion_kind" class="tag">
-                    {{ exclusionLabel(e.exclusion_kind) }}
-                    <button type="button" @click="removeClosingExclusion(e.exclusion_kind)">×</button>
-                  </span>
+                <div class="checkbox-row">
+                  <label v-for="kind in WEEKDAY_EXCLUSION_KINDS" :key="kind" class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      :checked="isClosingExcluded(kind)"
+                      @change="toggleClosingExclusion(kind, $event)"
+                    />
+                    {{ exclusionLabel(kind) }}
+                  </label>
                 </div>
-                <div class="toolbar">
-                  <select v-model="newClosingExclusion">
-                    <option v-for="kind in EXCLUSION_KINDS" :key="kind" :value="kind">
-                      {{ exclusionLabel(kind) }}
-                    </option>
-                  </select>
-                  <button class="btn-secondary" type="button" @click="addClosingExclusion">追加</button>
+                <div class="checkbox-row">
+                  <label v-for="kind in OTHER_EXCLUSION_KINDS" :key="kind" class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      :checked="isClosingExcluded(kind)"
+                      @change="toggleClosingExclusion(kind, $event)"
+                    />
+                    {{ exclusionLabel(kind) }}
+                  </label>
                 </div>
               </div>
               <div class="field field-narrow">
@@ -271,19 +284,25 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
             <div class="field-row">
               <div class="field">
                 <label>支払日用の除外条件</label>
-                <div class="tag-list">
-                  <span v-for="e in paymentDayExclusions" :key="e.exclusion_kind" class="tag">
-                    {{ exclusionLabel(e.exclusion_kind) }}
-                    <button type="button" @click="removePaymentExclusion(e.exclusion_kind)">×</button>
-                  </span>
+                <div class="checkbox-row">
+                  <label v-for="kind in WEEKDAY_EXCLUSION_KINDS" :key="kind" class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      :checked="isPaymentExcluded(kind)"
+                      @change="togglePaymentExclusion(kind, $event)"
+                    />
+                    {{ exclusionLabel(kind) }}
+                  </label>
                 </div>
-                <div class="toolbar">
-                  <select v-model="newPaymentExclusion">
-                    <option v-for="kind in EXCLUSION_KINDS" :key="kind" :value="kind">
-                      {{ exclusionLabel(kind) }}
-                    </option>
-                  </select>
-                  <button class="btn-secondary" type="button" @click="addPaymentExclusion">追加</button>
+                <div class="checkbox-row">
+                  <label v-for="kind in OTHER_EXCLUSION_KINDS" :key="kind" class="checkbox-label">
+                    <input
+                      type="checkbox"
+                      :checked="isPaymentExcluded(kind)"
+                      @change="togglePaymentExclusion(kind, $event)"
+                    />
+                    {{ exclusionLabel(kind) }}
+                  </label>
                 </div>
               </div>
               <div class="field field-narrow">
