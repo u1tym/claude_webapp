@@ -284,39 +284,45 @@ const sortedExpenses = computed(() =>
         <h2 class="section-title">{{ editingId === null ? "支出記録の登録" : "支出記録の編集" }}</h2>
         <form class="form" @submit.prevent="submitForm">
           <p v-if="formError" class="banner-error">{{ formError }}</p>
-          <div class="field field-narrow">
-            <label for="usage-date">利用日</label>
-            <input id="usage-date" v-model="usageDate" type="date" required />
+          <div class="field-row">
+            <div v-if="showFormPeriodSelect" class="field">
+              <label for="form-period">予算期間</label>
+              <select id="form-period" v-model.number="formPeriodId" required>
+                <option v-for="p in periods" :key="p.id" :value="p.id">
+                  {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
+                </option>
+              </select>
+            </div>
+            <div class="field field-narrow">
+              <label for="usage-date">利用日</label>
+              <input id="usage-date" v-model="usageDate" type="date" required />
+            </div>
           </div>
-          <div v-if="showFormPeriodSelect" class="field">
-            <label for="form-period">予算期間</label>
-            <select id="form-period" v-model.number="formPeriodId" required>
-              <option v-for="p in periods" :key="p.id" :value="p.id">
-                {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
-              </option>
-            </select>
+          <div class="field-row">
+            <div class="field">
+              <label for="budget-item">予算区分</label>
+              <select id="budget-item" v-model.number="budgetItemId" required>
+                <option v-for="item in formItems" :key="item.id" :value="item.id">{{ item.name }}</option>
+              </select>
+            </div>
+            <div class="field">
+              <label for="purpose">用途</label>
+              <input id="purpose" v-model="purpose" type="text" required />
+            </div>
           </div>
-          <div class="field">
-            <label for="budget-item">予算区分</label>
-            <select id="budget-item" v-model.number="budgetItemId" required>
-              <option v-for="item in formItems" :key="item.id" :value="item.id">{{ item.name }}</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="purpose">用途</label>
-            <input id="purpose" v-model="purpose" type="text" required />
-          </div>
-          <div class="field field-narrow">
-            <label for="amount">金額</label>
-            <input id="amount" v-model="amount" type="text" inputmode="decimal" placeholder="0.00" required />
-          </div>
-          <div class="field">
-            <label for="payment-method">支出方法</label>
-            <select id="payment-method" v-model.number="paymentMethodId" required>
-              <option v-for="method in methods" :key="method.id" :value="method.id">
-                {{ method.name }}
-              </option>
-            </select>
+          <div class="field-row">
+            <div class="field">
+              <label for="payment-method">支出方法</label>
+              <select id="payment-method" v-model.number="paymentMethodId" required>
+                <option v-for="method in methods" :key="method.id" :value="method.id">
+                  {{ method.name }}
+                </option>
+              </select>
+            </div>
+            <div class="field field-narrow">
+              <label for="amount">金額</label>
+              <input id="amount" v-model="amount" type="text" inputmode="decimal" placeholder="0.00" required />
+            </div>
           </div>
           <div class="field">
             <label for="memo">メモ</label>
