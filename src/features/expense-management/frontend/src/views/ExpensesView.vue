@@ -62,6 +62,9 @@ function threeMonthsAgo(): string {
   return d.toISOString().slice(0, 10);
 }
 
+// The API requires an end_date; this stands in for "no upper bound" when "all" is selected.
+const NO_UPPER_BOUND = "9999-12-31";
+
 function handleError(err: unknown): void {
   if (err instanceof Error && err.message === "unauth") {
     emit("unauth");
@@ -85,7 +88,7 @@ async function loadAllItems(): Promise<void> {
 
 async function loadExpenses(): Promise<void> {
   if (selectedFilter.value === "all") {
-    expenses.value = await getExpenses(threeMonthsAgo(), today());
+    expenses.value = await getExpenses(threeMonthsAgo(), NO_UPPER_BOUND);
     return;
   }
   const period = periods.value.find((p) => p.id === selectedFilter.value);
