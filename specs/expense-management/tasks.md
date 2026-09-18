@@ -729,6 +729,82 @@ Cookie セッション検証と機能利用可否判定を実装する
 
 ---
 
+## タスク 20
+
+### タイトル
+
+除外条件に「祝日」を追加する（バックエンド）
+
+### 見積もり
+
+2時間
+
+### 関連要件
+
+- REQ-005, REQ-006, REQ-013
+
+### 関連設計
+
+- `design.md` / バックエンド設計 / `app/services/closing_date_service.py`, `app/services/payment_method_service.py`
+- `db-design.md` / `expense_management.payment_method_exclusions`
+- `api-design.md` / `exclusion_kind`
+
+### 実装パス
+
+- `src/features/expense-management/backend/sql/03_exclusion_holiday.sql`（新規）
+- `src/features/expense-management/backend/requirements.txt`
+- `src/features/expense-management/backend/app/services/closing_date_service.py`
+- `src/features/expense-management/backend/app/services/payment_method_service.py`
+- `src/features/expense-management/tests/`
+
+### 内容
+
+`payment_method_exclusions_kind_check` 制約を DROP・再 ADD し、`exclusion_kind` に `holiday` を加える新しい DDL ファイルを追加する（`01_expense_management.sql` は変えない）。`requirements.txt` に `jpholiday` を追加する（schedule 機能と同じライブラリ・同じ判定方法）。`closing_date_service.compute_actual_date` の一致判定に、`exclusion_kinds` に `holiday` が含まれ、かつ候補日が `jpholiday` で祝日と判定される場合を追加する。`payment_method_service.VALID_EXCLUSION_KINDS` に `holiday` を追加する。
+
+### 完了条件
+
+- [ ] `holiday` を含む `exclusion_kind` で登録・更新でき、含まない場合と同様に検証される
+- [ ] 締め日または支払日の候補日が日本の祝日に当たるとき、ずらし方向に従って算出結果がずれる
+- [ ] 祝日でない日には影響しない
+- [ ] 既存 DB に新しい DDL を再適用しても失敗しない（べき等）
+
+---
+
+## タスク 21
+
+### タイトル
+
+支出方法管理画面に「祝日」を追加し、フォーム幅を広げる（フロントエンド）
+
+### 見積もり
+
+1時間
+
+### 関連要件
+
+- REQ-005, REQ-006
+
+### 関連設計
+
+- `ui-design.md` / SCR-003: 支出方法管理
+
+### 実装パス
+
+- `src/features/expense-management/frontend/src/views/PaymentMethodsView.vue`
+- `src/features/expense-management/frontend/src/styles.css`
+
+### 内容
+
+除外条件の選択肢（`EXCLUSION_LABELS`）に `holiday: "祝日"` を追加する。登録・編集モーダルに、支出記録フォームで使っている `.modal-wide`（ウィンドウ幅の8割）を適用する。
+
+### 完了条件
+
+- [ ] 除外条件の選択肢に「祝日」が出る。選ぶと締め日用・支払日用それぞれの除外条件一覧に追加・削除できる
+- [ ] 登録・編集モーダルの横幅がウィンドウ幅の8割程度になる
+- [ ] ブラウザで一連の操作を確認できる
+
+---
+
 ## テスト
 
 ### 単体テスト
@@ -737,6 +813,7 @@ Cookie セッション検証と機能利用可否判定を実装する
 - [ ] 実際の締め日・実際の支払日の算出（曜日除外、当月に存在しない日除外、過去/未来のずらし方向、月末境界）を確認する
 - [ ] 予算期間の重複判定を確認する
 - [ ] 予算期間の更新（タイトル・開始日・終了日、400・404）を確認する
+- [ ] 祝日を除外条件にしたときの実際の締め日・実際の支払日の算出を確認する
 - [ ] 締め日0の支出方法で固定値が設定されることを確認する
 - [ ] 予算項目・支出方法の論理削除後も、既存の支出記録の参照が変わらないことを確認する
 
@@ -761,3 +838,5 @@ Cookie セッション検証と機能利用可否判定を実装する
 | 2026-09-18 | 承認済み | タスク17〜18を承認 |
 | 2026-09-18 | 未承認 | 支出記録画面の予算選択を「すべて／直近10件」に変更（タスク19） |
 | 2026-09-18 | 承認済み | タスク19を承認 |
+| 2026-09-18 | 未承認 | 除外条件に「祝日」を追加し、支出方法フォームの幅を広げる（タスク20〜21） |
+| 2026-09-18 | 承認済み | タスク20〜21を承認 |

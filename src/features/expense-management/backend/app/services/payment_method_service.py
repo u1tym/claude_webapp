@@ -24,6 +24,7 @@ VALID_EXCLUSION_KINDS = frozenset(
         "friday",
         "saturday",
         "nonexistent_day",
+        "holiday",
     }
 )
 VALID_SHIFT_DIRECTIONS = frozenset({"earlier", "later"})

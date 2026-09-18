@@ -172,13 +172,13 @@ erDiagram
 
 ### expense_management.payment_method_exclusions
 
-目的: 支出方法の除外条件。締め日用（`target = 'closing_day'`）と支払日用（`target = 'payment_day'`）を区別して持つ。それぞれ「特定の曜日」または「当月に存在しない日」のいずれか。締め日が0の支出方法には行を置かない。
+目的: 支出方法の除外条件。締め日用（`target = 'closing_day'`）と支払日用（`target = 'payment_day'`）を区別して持つ。それぞれ「特定の曜日」「当月に存在しない日」または「祝日」のいずれか。締め日が0の支出方法には行を置かない。
 
 | カラム | 型 | NULL | 既定 | 説明 |
 |--------|-----|------|------|------|
 | `payment_method_id` | integer | NOT NULL | - | 対象の支出方法。`expense_management.payment_methods.id` |
 | `target` | varchar(16) | NOT NULL | - | `closing_day`（締め日用）または `payment_day`（支払日用） |
-| `exclusion_kind` | varchar(16) | NOT NULL | - | `sunday`〜`saturday`のいずれか（特定の曜日）、または `nonexistent_day`（当月に存在しない日） |
+| `exclusion_kind` | varchar(16) | NOT NULL | - | `sunday`〜`saturday`のいずれか（特定の曜日）、`nonexistent_day`（当月に存在しない日）、または `holiday`（日本の国民の祝日。`jpholiday` で判定し、日付そのものはDBに保存しない） |
 
 制約:
 
@@ -186,13 +186,13 @@ erDiagram
 - 一意: なし（PK のみ）
 - 外部キー: `payment_method_id` → `expense_management.payment_methods.id`（ON DELETE RESTRICT）
 - 検査: `target IN ('closing_day', 'payment_day')`
-- 検査: `exclusion_kind IN ('sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'nonexistent_day')`
+- 検査: `exclusion_kind IN ('sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'nonexistent_day', 'holiday')`
 
 インデックス:
 
 - `(payment_method_id)`（PK に付随）
 
-所有者は `payment_method_id` の所有者に一致する（本表に `user_id` は持たない）。同一の `target` × 除外条件種別は支出方法ごとに1行まで（PK で保証）。更新時は置き換える（不要な行は物理削除してよい）。`payment_methods.closing_day = 0` の行に対しては行を置かない（`target` を問わず）。
+所有者は `payment_method_id` の所有者に一致する（本表に `user_id` は持たない）。同一の `target` × 除外条件種別は支出方法ごとに1行まで（PK で保証）。更新時は置き換える（不要な行は物理削除してよい）。`payment_methods.closing_day = 0` の行に対しては行を置かない（`target` を問わず）。`exclusion_kind` の検査制約への `holiday` 追加は、既存 DB に対しては制約の DROP・再 ADD で行う（新しい DDL ファイルを追加する。`01_expense_management.sql` は変えない）。
 
 ### expense_management.expenses
 
@@ -277,3 +277,5 @@ erDiagram
 | 2026-09-18 | 承認済み | `budget_periods.title` の追加と期間重複チェック撤廃を承認 |
 | 2026-09-18 | 未承認 | `budget_periods` の `title`・`start_date`・`end_date` を更新できることを明記（REQ-014）。列追加は無し |
 | 2026-09-18 | 承認済み | `budget_periods` の更新対応を承認 |
+| 2026-09-18 | 未承認 | `payment_method_exclusions.exclusion_kind` の検査制約に `holiday` を追加。既存DBへは制約のDROP・再ADDで反映（新DDLファイル、`01_expense_management.sql`は変えない） |
+| 2026-09-18 | 承認済み | `exclusion_kind` への `holiday` 追加を承認 |

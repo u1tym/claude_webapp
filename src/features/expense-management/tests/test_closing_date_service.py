@@ -51,6 +51,17 @@ def test_compute_actual_date_weekday_exclusion_shifts_earlier() -> None:
     assert result.weekday() == 4  # Friday
 
 
+def test_compute_actual_date_holiday_exclusion_shifts_earlier() -> None:
+    # 2026-08-11 is Mountain Day (山の日), a fixed-date Japanese national holiday.
+    result = compute_actual_date(2026, 8, 11, frozenset({"holiday"}), "earlier")
+    assert result == date(2026, 8, 10)
+
+
+def test_compute_actual_date_holiday_not_excluded_without_kind() -> None:
+    # Without "holiday" registered, a national holiday is not shifted.
+    assert compute_actual_date(2026, 8, 11, frozenset(), "earlier") == date(2026, 8, 11)
+
+
 def test_estimate_payment_date_immediate_when_closing_day_zero() -> None:
     result = estimate_payment_date(
         usage_date=date(2026, 9, 5),

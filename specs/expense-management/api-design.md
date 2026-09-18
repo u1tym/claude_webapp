@@ -39,7 +39,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 - 日時: ISO 8601（`created_at` のみ。応答専用、要求では使わない）
 - 金額: 小数点以下2桁までの数値を表す文字列（例: `"1500.00"`）。誤差を避けるため数値型ではなく文字列で表す
 - `closing_day_shift_direction` / `payment_day_shift_direction`: `earlier`（過去）または `later`（未来）
-- `exclusion_kind`: `sunday`、`monday`、`tuesday`、`wednesday`、`thursday`、`friday`、`saturday`、`nonexistent_day`
+- `exclusion_kind`: `sunday`、`monday`、`tuesday`、`wednesday`、`thursday`、`friday`、`saturday`、`nonexistent_day`、`holiday`（日本の国民の祝日）
 - 除外条件は `{ "exclusion_kind": "..." }` の配列で表す（締め日用・支払日用を別々の配列で持つ）
 
 ### エラー（共通）
@@ -602,3 +602,5 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | 2026-09-18 | 承認済み | 予算期間の `title` 追加と期間重複エラー撤廃を承認 |
 | 2026-09-18 | 未承認 | PATCH `/budget-periods/{budget_period_id}` を追加（REQ-014） |
 | 2026-09-18 | 承認済み | PATCH /budget-periods/{budget_period_id} の追加を承認 |
+| 2026-09-18 | 未承認 | `exclusion_kind` に `holiday`（日本の国民の祝日）を追加 |
+| 2026-09-18 | 承認済み | `exclusion_kind` への `holiday` 追加を承認 |

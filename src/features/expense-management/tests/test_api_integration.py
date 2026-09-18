@@ -301,3 +301,58 @@ def test_payment_method_and_expense_and_report_flow(client) -> None:
     assert r.status_code == 204
     r = client.get("/expenses", params={"start_date": "2031-01-01", "end_date": "2031-01-31"})
     assert r.json()["items"] == []
+
+
+def test_payment_method_exclusion_holiday(client) -> None:
+    r = client.post(
+        "/payment-methods",
+        json={
+            "name": "祝日除外カード",
+            "closing_day": 10,
+            "closing_day_shift_direction": "later",
+            "closing_day_exclusions": [{"exclusion_kind": "holiday"}],
+            "payment_month_offset": 1,
+            "payment_day": 20,
+            "payment_day_shift_direction": "earlier",
+            "payment_day_exclusions": [{"exclusion_kind": "holiday"}, {"exclusion_kind": "sunday"}],
+            "display_order": 1,
+        },
+    )
+    assert r.status_code == 201
+    method = r.json()
+    assert {"exclusion_kind": "holiday"} in method["closing_day_exclusions"]
+    assert {"exclusion_kind": "holiday"} in method["payment_day_exclusions"]
+
+    r = client.patch(
+        f"/payment-methods/{method['id']}",
+        json={
+            "name": "祝日除外カード",
+            "closing_day": 10,
+            "closing_day_shift_direction": "later",
+            "closing_day_exclusions": [],
+            "payment_month_offset": 1,
+            "payment_day": 20,
+            "payment_day_shift_direction": "earlier",
+            "payment_day_exclusions": [{"exclusion_kind": "holiday"}],
+            "display_order": 1,
+        },
+    )
+    assert r.status_code == 200
+    updated = r.json()
+    assert updated["closing_day_exclusions"] == []
+    assert updated["payment_day_exclusions"] == [{"exclusion_kind": "holiday"}]
+
+    invalid = client.post(
+        "/payment-methods",
+        json={
+            "name": "不正な条件",
+            "closing_day": 10,
+            "closing_day_shift_direction": "later",
+            "closing_day_exclusions": [{"exclusion_kind": "holidays"}],
+            "payment_month_offset": 0,
+            "payment_day": 10,
+            "payment_day_shift_direction": "later",
+            "display_order": 1,
+        },
+    )
+    assert invalid.status_code == 400

@@ -21,6 +21,7 @@ const EXCLUSION_LABELS: Record<string, string> = {
   friday: "金曜日",
   saturday: "土曜日",
   nonexistent_day: "当月に存在しない日",
+  holiday: "祝日",
 };
 const EXCLUSION_KINDS = Object.keys(EXCLUSION_LABELS);
 
@@ -208,7 +209,7 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
     </div>
 
     <div v-if="showForm" class="modal-back" @click.self="closeForm">
-      <div class="modal">
+      <div class="modal modal-wide">
         <h2 class="section-title">{{ editingId === null ? "支出方法の登録" : "支出方法の編集" }}</h2>
         <form class="form" @submit.prevent="submitForm">
           <p v-if="formError" class="banner-error">{{ formError }}</p>

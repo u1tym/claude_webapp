@@ -2,6 +2,8 @@ from __future__ import annotations
 
 from datetime import date, timedelta
 
+import jpholiday
+
 _WEEKDAY_KIND = (
     "monday",
     "tuesday",
@@ -49,8 +51,10 @@ def compute_actual_date(
     step = timedelta(days=-1) if shift_direction == "earlier" else timedelta(days=1)
 
     while True:
-        matches = (day_was_nonexistent and "nonexistent_day" in exclusion_kinds) or (
-            _WEEKDAY_KIND[candidate.weekday()] in exclusion_kinds
+        matches = (
+            (day_was_nonexistent and "nonexistent_day" in exclusion_kinds)
+            or (_WEEKDAY_KIND[candidate.weekday()] in exclusion_kinds)
+            or ("holiday" in exclusion_kinds and jpholiday.is_holiday(candidate))
         )
         if not matches:
             return candidate
