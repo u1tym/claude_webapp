@@ -186,11 +186,6 @@ async function saveDetail(): Promise<void> {
   }
 }
 
-function cancelDetail(): void {
-  const current = periods.value.find((p) => p.id === selectedPeriodId.value) ?? null;
-  populateDetailForm(current);
-}
-
 function openCreateItemForm(): void {
   if (selectedPeriodId.value === null) return;
   editingItemId.value = null;
@@ -296,9 +291,8 @@ async function removeItem(item: BudgetItem): Promise<void> {
             <span class="period-range-sep">〜</span>
             <input v-model="detailEndDate" type="date" aria-label="終了日" required />
           </div>
-          <div class="actions">
+          <div class="actions actions-end">
             <button class="btn-primary" type="submit">保存</button>
-            <button class="btn-secondary" type="button" @click="cancelDetail">キャンセル</button>
           </div>
         </form>
       </div>

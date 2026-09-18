@@ -291,6 +291,10 @@ textarea {
   gap: var(--space);
 }
 
+.actions-end {
+  justify-content: flex-end;
+}
+
 .btn-primary,
 .btn-secondary,
 .btn-text {
