@@ -15,6 +15,7 @@ const title = ref("");
 const url = ref("");
 const icon = ref("");
 const preview = ref("");
+const removeIcon = ref(false);
 const confirmId = ref<string | null>(null);
 
 onMounted(() => {
@@ -53,6 +54,7 @@ function startCreate(): void {
   url.value = "";
   icon.value = "";
   preview.value = "";
+  removeIcon.value = false;
 }
 
 function startEdit(item: FeatureItem): void {
@@ -63,6 +65,7 @@ function startEdit(item: FeatureItem): void {
   url.value = item.url;
   icon.value = "";
   preview.value = item.icon;
+  removeIcon.value = false;
 }
 
 function cancel(): void {
@@ -80,6 +83,7 @@ function onFile(event: Event): void {
   reader.onload = () => {
     icon.value = String(reader.result);
     preview.value = icon.value;
+    removeIcon.value = false;
   };
   reader.readAsDataURL(file);
 }
@@ -90,7 +94,7 @@ async function save(): Promise<void> {
   if (title.value.trim() === "" || url.value.trim() === "") {
     return;
   }
-  if (mode.value === "create" && (featureId.value.trim() === "" || icon.value === "")) {
+  if (mode.value === "create" && featureId.value.trim() === "") {
     return;
   }
   loading.value = true;
@@ -102,7 +106,7 @@ async function save(): Promise<void> {
         return;
       }
     } else if (selected.value) {
-      const result = await updateFeature(selected.value.id, title.value, url.value, icon.value);
+      const result = await updateFeature(selected.value.id, title.value, url.value, icon.value, removeIcon.value);
       if (result === "invalid" || result === "missing") {
         error.value = result === "invalid" ? "入力が不正です" : "対象がありません";
         return;
@@ -196,8 +200,18 @@ async function confirmDelete(): Promise<void> {
         />
         <input v-model="title" type="text" placeholder="タイトル" aria-label="タイトル" :disabled="loading" required />
         <input v-model="url" type="text" placeholder="遷移先" aria-label="遷移先" :disabled="loading" required />
-        <input type="file" accept="image/*" aria-label="アイコン" :disabled="loading" @change="onFile" />
-        <img v-if="preview" class="thumb" :src="preview" alt="" />
+        <input
+          type="file"
+          accept="image/*"
+          aria-label="アイコン"
+          :disabled="loading || removeIcon"
+          @change="onFile"
+        />
+        <img v-if="preview && !removeIcon" class="thumb" :src="preview" alt="" />
+        <label v-if="mode === 'edit' && selected && selected.icon !== ''">
+          <input v-model="removeIcon" type="checkbox" :disabled="loading" />
+          アイコンを削除する
+        </label>
         <div class="actions">
           <button class="btn-primary" type="submit" :disabled="loading">保存</button>
           <button class="btn-secondary" type="button" :disabled="loading" @click="cancel">キャンセル</button>

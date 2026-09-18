@@ -521,6 +521,85 @@ GET/POST `/users` と PATCH `/users/{user_id}` に `email` を載せる。一覧
 
 ---
 
+## タスク 14
+
+### タイトル
+
+機能APIのアイコンを任意項目にし、削除に対応する
+
+### 見積もり
+
+2時間
+
+### 関連要件
+
+- REQ-006, REQ-007, REQ-008, REQ-013
+
+### 関連設計
+
+- `design.md` / バックエンド設計 / 業務ロジック（機能）
+- `api-design.md` / POST `/features`、PATCH `/features/{feature_id}`
+- `db-design.md` / `public.features`（`icon` / `icon_media_type` の空値）
+
+### 実装パス
+
+- `src/features/user-management/backend/app/repos.py`
+- `src/features/user-management/backend/app/services/feature_service.py`
+- `src/features/user-management/backend/app/routers/features.py`
+- `src/features/user-management/tests/`
+
+### 内容
+
+POST `/features` の `icon` を省略可にする。省略または空なら、アイコンなし（空のバイト列・空文字列）で保存する。列は NOT NULL のまま変えない。PATCH `/features/{feature_id}` に `remove_icon`（既定 `false`）を追加する。`remove_icon` が `true` のときはアイコンを空のバイト列・空文字列にし、`icon` は無視する。`icon` を指定すればそのアイコンに差し替える。どちらも指定しなければ既存のアイコン設定（空の場合を含む）を維持する。GET/POST/PATCH の応答は、アイコン未設定の機能は `icon` を空文字列で返す。ログの契機・区分は変えない。
+
+### 完了条件
+
+- [ ] POST `/features` を `icon` 省略で呼べる。追加された機能の `icon` は応答で空文字列
+- [ ] PATCH で `icon` を指定すると差し替わる
+- [ ] PATCH で `remove_icon: true` を指定するとアイコンが空文字列になる
+- [ ] PATCH で `icon` と `remove_icon` をどちらも指定しなければ既存のアイコン設定（空を含む）を維持する
+- [ ] GET `/features` でアイコン未設定の機能は `icon` が空文字列
+
+---
+
+## タスク 15
+
+### タイトル
+
+機能画面のアイコン入力を任意にし、削除操作を付ける
+
+### 見積もり
+
+2時間
+
+### 関連要件
+
+- REQ-006, REQ-007, REQ-008
+
+### 関連設計
+
+- `ui-design.md` / SCR-002 機能
+- `api-design.md` / `/features`
+
+### 実装パス
+
+- `src/features/user-management/frontend/src/views/FeaturesView.vue`
+- `src/features/user-management/frontend/src/api.ts`
+
+### 内容
+
+アイコン入力を任意項目にする。追加時はアイコン未選択のまま保存できる。編集対象の機能に既にアイコンが設定されているときだけ「アイコンを削除する」チェックボックスを出す。チェックして保存すると `remove_icon: true` を送る。チェックしていなければ、アイコンを選んでいればそのデータ URL を送り、選んでいなければ `icon` を送らない（既存維持）。一覧はアイコン未設定の行で画像を出さない。
+
+### 完了条件
+
+- [ ] アイコン未選択のまま新規機能を追加できる
+- [ ] アイコンが未設定の機能を一覧で見ても画像は出ない（壊れた表示にならない）
+- [ ] 既存アイコンがある機能の編集で「アイコンを削除する」が出て、保存するとアイコンが外れる
+- [ ] 新規追加時は「アイコンを削除する」が出ない
+- [ ] ブラウザで追加・差し替え・削除・維持の4パターンを確認できる
+
+---
+
 ## テスト
 
 ### 単体テスト
@@ -528,6 +607,7 @@ GET/POST `/users` と PATCH `/users/{user_id}` に `email` を載せる。一覧
 - [ ] `src/features/user-management/tests/` に配置する
 - [ ] 自己削除禁止、本機能削除禁止、自己からの本機能割当解除禁止、重複、論理削除済み対象、パスワード非出力を確認する
 - [ ] メールアドレスの必須、空、形式不正、一覧への出力を確認する
+- [ ] 機能のアイコン省略追加、`remove_icon` によるアイコン削除、アイコン未指定時の既存維持を確認する
 
 ### 結合テスト
 
@@ -551,3 +631,5 @@ GET/POST `/users` と PATCH `/users/{user_id}` に `email` を載せる。一覧
 | 2026-08-29 19:19 | 承認済み | 公開パス `/portal_user_management/` と dist 配置の改訂を承認 |
 | 2026-08-30 08:26 | 未承認 | メールアドレス（タスク 11〜13）。DDL・API・画面 |
 | 2026-08-30 08:27 | 承認済み | タスク 11〜13 を承認 |
+| 2026-09-18 | 未承認 | 機能のアイコン任意項目化（タスク 14〜15）。API・画面 |
+| 2026-09-18 | 承認済み | タスク 14〜15 を承認 |

@@ -198,6 +198,51 @@ def test_feature_crud_and_protected(log_dir: Path) -> None:
     assert "本機能" in text
 
 
+def test_feature_icon_optional_and_removal(log_dir: Path) -> None:
+    op_id, _ = _operator()
+    client = _client_as(op_id)
+    icon = to_data_url("image/png", PNG_1X1)
+
+    feature_id = _unique("feat_noicon")
+    created = client.post(
+        "/features",
+        json={"id": feature_id, "title": "アイコンなし", "url": "http://localhost/x"},
+    )
+    assert created.status_code == 201
+    assert created.json()["icon"] == ""
+
+    listed = client.get("/features")
+    item = next(i for i in listed.json()["items"] if i["id"] == feature_id)
+    assert item["icon"] == ""
+
+    replaced = client.patch(
+        f"/features/{feature_id}",
+        json={"title": "アイコン追加", "url": "http://localhost/x", "icon": icon},
+    )
+    assert replaced.status_code == 200
+    assert replaced.json()["icon"].startswith("data:image/png;base64,")
+
+    kept = client.patch(
+        f"/features/{feature_id}",
+        json={"title": "維持", "url": "http://localhost/x"},
+    )
+    assert kept.status_code == 200
+    assert kept.json()["icon"].startswith("data:image/png;base64,")
+
+    removed_icon = client.patch(
+        f"/features/{feature_id}",
+        json={"title": "削除", "url": "http://localhost/x", "remove_icon": True},
+    )
+    assert removed_icon.status_code == 200
+    assert removed_icon.json()["icon"] == ""
+
+    cleanup = client.delete(f"/features/{feature_id}")
+    assert cleanup.status_code == 204
+
+    text = _log_text(log_dir)
+    assert "機能追加成功" in text
+
+
 def test_assignment_crud_and_self_unassign() -> None:
     op_id, _ = _operator()
     client = _client_as(op_id)

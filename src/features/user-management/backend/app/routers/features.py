@@ -15,9 +15,9 @@ class FeatureCreateBody(BaseModel):
     id: str
     title: str
     url: str
-    icon: str
+    icon: str | None = None
 
-    @field_validator("id", "title", "url", "icon")
+    @field_validator("id", "title", "url")
     @classmethod
     def not_blank(cls, value: str) -> str:
         if value.strip() == "":
@@ -29,6 +29,7 @@ class FeatureUpdateBody(BaseModel):
     title: str
     url: str
     icon: str | None = None
+    remove_icon: bool = False
 
     @field_validator("title", "url")
     @classmethod
@@ -96,7 +97,9 @@ def patch_feature(
     if icon == "":
         icon = None
     try:
-        row = feature_service.change_feature(feature_id, body.title, body.url, icon)
+        row = feature_service.change_feature(
+            feature_id, body.title, body.url, icon, remove_icon=body.remove_icon
+        )
     except feature_service.InvalidIconError:
         raise HTTPException(status_code=400, detail="入力が不正です") from None
     except feature_service.NotFoundError:

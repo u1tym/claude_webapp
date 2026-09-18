@@ -151,15 +151,15 @@ erDiagram
 
 ### public.features
 
-目的: 機能マスタ。本機能は未削除の一覧、追加、タイトル・遷移先・アイコンの更新、論理削除を行う。識別子 `user-management` の行は削除しない。
+目的: 機能マスタ。本機能は未削除の一覧、追加、タイトル・遷移先・アイコン（任意）の更新、論理削除を行う。識別子 `user-management` の行は削除しない。
 
 | カラム | 型 | NULL | 既定 | 説明 |
 |--------|-----|------|------|------|
 | `id` | varchar(64) | NOT NULL | - | 機能ID。運用者が指定する。PK |
 | `title` | varchar(255) | NOT NULL | - | メニューに出すタイトル |
 | `url` | varchar(2048) | NOT NULL | - | 遷移先 URL |
-| `icon` | bytea | NOT NULL | - | 機能を表すアイコンのバイナリ。ディスク上のファイルは持たない |
-| `icon_media_type` | varchar(64) | NOT NULL | - | アイコンのメディアタイプ |
+| `icon` | bytea | NOT NULL | - | 機能を表すアイコンのバイナリ。ディスク上のファイルは持たない。アイコン未設定のときは空のバイト列 |
+| `icon_media_type` | varchar(64) | NOT NULL | - | アイコンのメディアタイプ。アイコン未設定のときは空文字列 |
 | `is_deleted` | boolean | NOT NULL | false | 論理削除なら true |
 
 制約:
@@ -174,9 +174,9 @@ erDiagram
 
 本機能の扱い:
 
-- 一覧は `is_deleted = false` のみ。
-- 追加は `id`・`title`・`url`・`icon`・`icon_media_type` を挿入する。同じ `id` は置けない。
-- 更新は未削除行の `title`・`url`、および指定があるとき `icon` と `icon_media_type`。`id` は変えない。
+- 一覧は `is_deleted = false` のみ。アイコンが空のバイト列の行は、アイコンなしの機能として扱う。
+- 追加は `id`・`title`・`url` を挿入する。アイコンを指定したときは `icon`・`icon_media_type` も保存する。指定しなければ `icon` は空のバイト列、`icon_media_type` は空文字列で保存する（列自体は NOT NULL のまま。DDL は変えない）。同じ `id` は置けない。
+- 更新は未削除行の `title`・`url`。アイコンを指定すればその `icon`・`icon_media_type` に差し替え、削除が指定されれば `icon` を空のバイト列、`icon_media_type` を空文字列にする。どちらも指定しなければ、既存の `icon`・`icon_media_type`（空のバイト列・空文字列の場合を含む）を維持する。`id` は変えない。
 - 削除は `is_deleted = true` にする。`id = 'user-management'` は更新しない。
 - 論理削除では割当行を残す。
 
@@ -248,3 +248,5 @@ erDiagram
 | 2026-08-26 23:00 | 承認済み | 初版を承認 |
 | 2026-08-30 08:24 | 未承認 | `public.users` に `email`（varchar、NOT NULL、既定空文字）を追加。一意制約なし。DDL は portal |
 | 2026-08-30 08:25 | 承認済み | `public.users` の `email` を承認 |
+| 2026-09-18 | 未承認 | `public.features` のアイコンを任意項目として扱う。未設定・削除時は `icon` を空のバイト列、`icon_media_type` を空文字列にする。列は NOT NULL のまま、DDL変更なし |
+| 2026-09-18 | 承認済み | `public.features` のアイコン任意項目化を承認 |

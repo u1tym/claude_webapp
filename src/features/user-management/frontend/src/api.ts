@@ -176,9 +176,12 @@ export async function updateFeature(
   title: string,
   url: string,
   icon: string,
+  removeIcon = false,
 ): Promise<FeatureItem | "invalid" | "missing"> {
-  const body: { title: string; url: string; icon?: string } = { title, url };
-  if (icon !== "") {
+  const body: { title: string; url: string; icon?: string; remove_icon?: boolean } = { title, url };
+  if (removeIcon) {
+    body.remove_icon = true;
+  } else if (icon !== "") {
     body.icon = icon;
   }
   const res = await apiFetch(`/features/${encodeURIComponent(featureId)}`, {

@@ -38,14 +38,17 @@ def list_features() -> list[FeatureRow]:
     return items
 
 
-def add_feature(feature_id: str, title: str, url: str, icon: str) -> FeatureRow:
+def add_feature(feature_id: str, title: str, url: str, icon: str | None) -> FeatureRow:
     logged = safe_text(feature_id)
     write("INF", f"機能追加要求 id={logged} title={safe_text(title)}")
-    parsed = from_data_url(icon)
-    if parsed is None:
-        write("WRN", f"機能追加失敗 id={logged} 理由=入力不正")
-        raise InvalidIconError
-    media_type, raw = parsed
+    media_type = ""
+    raw = b""
+    if icon:
+        parsed = from_data_url(icon)
+        if parsed is None:
+            write("WRN", f"機能追加失敗 id={logged} 理由=入力不正")
+            raise InvalidIconError
+        media_type, raw = parsed
     if get_feature(feature_id) is not None:
         write("WRN", f"機能追加失敗 id={logged} 理由=重複")
         raise DuplicateError
@@ -58,16 +61,18 @@ def add_feature(feature_id: str, title: str, url: str, icon: str) -> FeatureRow:
     return row
 
 
-def change_feature(feature_id: str, title: str, url: str, icon: str | None) -> FeatureRow:
+def change_feature(feature_id: str, title: str, url: str, icon: str | None, remove_icon: bool = False) -> FeatureRow:
     logged = safe_text(feature_id)
-    write("INF", f"機能更新要求 id={logged} title={safe_text(title)}")
+    write("INF", f"機能更新要求 id={logged} title={safe_text(title)} アイコン削除={remove_icon}")
     current = get_feature(feature_id)
     if current is None or current.is_deleted:
         write("WRN", f"機能更新失敗 id={logged} 理由=対象なし")
         raise NotFoundError
     media: str | None = None
     raw: bytes | None = None
-    if icon:
+    if remove_icon:
+        media, raw = "", b""
+    elif icon:
         parsed = from_data_url(icon)
         if parsed is None:
             write("WRN", f"機能更新失敗 id={logged} 理由=入力不正")
