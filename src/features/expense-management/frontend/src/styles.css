@@ -162,6 +162,10 @@ textarea {
   max-width: 100%;
 }
 
+.push-end {
+  margin-left: auto;
+}
+
 .panel {
   min-height: 0;
   display: flex;
@@ -379,6 +383,10 @@ textarea {
   max-width: min(480px, 90vw);
   max-height: 85vh;
   overflow: auto;
+}
+
+.modal.modal-wide {
+  max-width: min(720px, 92vw);
 }
 
 @media (max-width: 767px) {
