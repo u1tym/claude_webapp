@@ -63,11 +63,6 @@ function populateDetailForm(period: BudgetPeriod | null): void {
 
 async function loadPeriods(): Promise<void> {
   periods.value = await getBudgetPeriods();
-  if (periods.value.length > 0 && selectedPeriodId.value === null) {
-    selectedPeriodId.value = periods.value[0]!.id;
-    view.value = "detail";
-    populateDetailForm(periods.value[0]!);
-  }
 }
 
 async function loadItems(): Promise<void> {
