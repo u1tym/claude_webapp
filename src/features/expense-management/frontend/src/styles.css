@@ -162,19 +162,6 @@ textarea {
   max-width: 100%;
 }
 
-.back-to-master {
-  display: none;
-  align-self: flex-start;
-}
-
-.split {
-  flex: 1;
-  min-height: 0;
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: calc(var(--space) * 3);
-}
-
 .panel {
   min-height: 0;
   display: flex;
@@ -385,19 +372,6 @@ textarea {
 
   .nav a.router-link-active {
     box-shadow: inset 0 -3px 0 var(--color-primary);
-  }
-
-  .split {
-    grid-template-columns: 1fr;
-  }
-
-  .split.mode-detail .master-panel,
-  .split.mode-master .detail-panel {
-    display: none;
-  }
-
-  .back-to-master {
-    display: inline-flex;
   }
 
   /* Dense tables become a stack of cards instead of requiring horizontal scroll. */

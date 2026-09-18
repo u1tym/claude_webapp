@@ -176,6 +176,36 @@ def test_budget_period_and_item_flow(client) -> None:
     )
     assert r.status_code == 400
 
+    r = client.patch(
+        f"/budget-periods/{period['id']}",
+        json={"title": "2030年1月分(改題)", "start_date": "2030-01-05", "end_date": "2030-01-25"},
+    )
+    assert r.status_code == 200
+    updated_period = r.json()
+    assert updated_period["title"] == "2030年1月分(改題)"
+    assert updated_period["start_date"] == "2030-01-05"
+    assert updated_period["end_date"] == "2030-01-25"
+
+    r = client.patch(
+        f"/budget-periods/{period['id']}",
+        json={"title": "", "start_date": "2030-01-05", "end_date": "2030-01-25"},
+    )
+    assert r.status_code == 400
+
+    r = client.patch(
+        f"/budget-periods/{period['id']}",
+        json={"title": "無効な期間", "start_date": "2030-01-25", "end_date": "2030-01-05"},
+    )
+    assert r.status_code == 400
+
+    r = client.patch(
+        "/budget-periods/0",
+        json={"title": "存在しない", "start_date": "2030-01-01", "end_date": "2030-01-31"},
+    )
+    assert r.status_code == 404
+
+    period = updated_period
+
     r = client.post(
         "/budget-items",
         json={"budget_period_id": period["id"], "name": "食費", "amount": "20000.00", "display_order": 1},

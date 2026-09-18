@@ -62,6 +62,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | GET | `/budget-periods` | 要 | REQ-004 |
 | POST | `/budget-periods` | 要 | REQ-001 |
 | POST | `/budget-periods/{budget_period_id}/duplicate` | 要 | REQ-002 |
+| PATCH | `/budget-periods/{budget_period_id}` | 要 | REQ-014 |
 | GET | `/budget-items` | 要 | REQ-004 |
 | POST | `/budget-items` | 要 | REQ-003 |
 | PATCH | `/budget-items/{budget_item_id}` | 要 | REQ-003 |
@@ -176,6 +177,31 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 ```
 
 処理概要: `budget_period_id` で指定した予算期間（本人の所有、未削除の予算項目のみ）を複製元として、要求の `title`・`start_date`・`end_date` で新しい予算期間を作成し、複製元の予算項目（項目名・金額・表示順）を新しい `id` でコピーする。
+
+エラー:
+
+| 状況 | 応答 |
+|------|------|
+| `title` が空、または `end_date` が `start_date` より前 | 400 |
+| `budget_period_id` が本人の予算期間でない | 404 |
+
+### PATCH `/budget-periods/{budget_period_id}`
+
+対応 REQ: REQ-014
+
+要求:
+
+```json
+{ "title": "2026年10月分", "start_date": "2026-10-01", "end_date": "2026-10-31" }
+```
+
+応答: 200
+
+```json
+{ "id": 2, "title": "2026年10月分", "start_date": "2026-10-01", "end_date": "2026-10-31" }
+```
+
+処理概要: `budget_period_id` で指定した、本人の予算期間のタイトル・開始日・終了日を更新する。同一ユーザの既存の予算期間と期間が重なっていても更新できる。
 
 エラー:
 
@@ -574,3 +600,5 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | 2026-09-18 | 承認済み | GET /settings の追加を承認 |
 | 2026-09-18 | 未承認 | 予算期間に `title` を追加。期間重複エラー（409）を撤廃 |
 | 2026-09-18 | 承認済み | 予算期間の `title` 追加と期間重複エラー撤廃を承認 |
+| 2026-09-18 | 未承認 | PATCH `/budget-periods/{budget_period_id}` を追加（REQ-014） |
+| 2026-09-18 | 承認済み | PATCH /budget-periods/{budget_period_id} の追加を承認 |

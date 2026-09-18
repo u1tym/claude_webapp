@@ -610,6 +610,85 @@ Cookie セッション検証と機能利用可否判定を実装する
 
 ---
 
+## タスク 17
+
+### タイトル
+
+予算期間の更新 API を実装する
+
+### 見積もり
+
+2時間
+
+### 関連要件
+
+- REQ-014
+
+### 関連設計
+
+- `design.md` / バックエンド設計 / `app/routers/budget_periods.py`, `app/services/budget_service.py`
+- `api-design.md` / PATCH `/budget-periods/{budget_period_id}`
+- `db-design.md` / `expense_management.budget_periods`
+
+### 実装パス
+
+- `src/features/expense-management/backend/app/repos.py`
+- `src/features/expense-management/backend/app/routers/budget_periods.py`
+- `src/features/expense-management/backend/app/services/budget_service.py`
+- `src/features/expense-management/tests/`
+
+### 内容
+
+`PATCH /budget-periods/{budget_period_id}` を追加する。タイトル・開始日・終了日を受け付けて更新する。`title` が空、または `end_date` が `start_date` より前なら 400。対象が本人の予算期間でない、または存在しないなら 404。期間重複チェックは行わない。`id`・`user_id` は変えない。
+
+### 完了条件
+
+- [ ] PATCH でタイトル・開始日・終了日を更新できる
+- [ ] 終了日が開始日より前のとき 400 になる
+- [ ] 他人の予算期間、または存在しない ID のとき 404 になる
+- [ ] 更新後の期間が既存の予算期間と重なっていても保存できる
+
+---
+
+## タスク 18
+
+### タイトル
+
+予算管理画面（SCR-002）を一覧表示／詳細表示の構成に変更する
+
+### 見積もり
+
+3時間
+
+### 関連要件
+
+- REQ-001, REQ-002, REQ-003, REQ-004, REQ-014
+
+### 関連設計
+
+- `ui-design.md` / SCR-002: 予算管理
+- `api-design.md` / `/budget-periods`, `/budget-periods/{id}/duplicate`, PATCH `/budget-periods/{id}`, `/budget-items`
+
+### 実装パス
+
+- `src/features/expense-management/frontend/src/views/BudgetsView.vue`
+- `src/features/expense-management/frontend/src/api.ts`
+
+### 内容
+
+予算管理画面を、既存の2カラム同時表示（予算期間一覧＋予算項目一覧）から、「一覧表示」（予算期間一覧を画面幅いっぱいに表示。新規作成・複製作成ボタン）と「詳細表示」（戻るボタン、予算期間編集フォーム［タイトル・開始日・終了日、保存/キャンセル］、予算項目一覧と追加・編集・削除）の2状態へ再構成する。予算期間を選ぶと詳細表示に切り替わり、詳細表示の保存は詳細表示のまま内容を更新する（一覧表示には戻らない）。「戻る」で一覧表示に戻る。パスは変えない。
+
+### 完了条件
+
+- [ ] 一覧表示で予算期間一覧が画面幅いっぱいに表示される
+- [ ] 予算期間を選ぶと詳細表示に切り替わる
+- [ ] 詳細表示でタイトル・開始日・終了日を編集して保存できる。保存後も詳細表示のまま
+- [ ] 詳細表示で予算項目の追加・編集・削除ができる
+- [ ] 「戻る」で一覧表示に戻る
+- [ ] ブラウザで一連の操作を確認できる
+
+---
+
 ## テスト
 
 ### 単体テスト
@@ -617,6 +696,7 @@ Cookie セッション検証と機能利用可否判定を実装する
 - [ ] `src/features/expense-management/tests/` に配置する
 - [ ] 実際の締め日・実際の支払日の算出（曜日除外、当月に存在しない日除外、過去/未来のずらし方向、月末境界）を確認する
 - [ ] 予算期間の重複判定を確認する
+- [ ] 予算期間の更新（タイトル・開始日・終了日、400・404）を確認する
 - [ ] 締め日0の支出方法で固定値が設定されることを確認する
 - [ ] 予算項目・支出方法の論理削除後も、既存の支出記録の参照が変わらないことを確認する
 
@@ -627,7 +707,7 @@ Cookie セッション検証と機能利用可否判定を実装する
 
 ### 受け入れテスト
 
-- [ ] `requirements.md` の受け入れ条件（REQ-001〜REQ-013）を満たす
+- [ ] `requirements.md` の受け入れ条件（REQ-001〜REQ-014）を満たす
 
 ## 承認
 
@@ -637,3 +717,5 @@ Cookie セッション検証と機能利用可否判定を実装する
 |------|------|----------|
 | 2026-09-18 | 未承認 | 初版 |
 | 2026-09-18 | 承認済み | 初版を承認 |
+| 2026-09-18 | 未承認 | 予算期間の更新（タスク17〜18）。API・画面 |
+| 2026-09-18 | 承認済み | タスク17〜18を承認 |

@@ -102,6 +102,25 @@ def insert_budget_period(user_id: int, title: str, start_date: date, end_date: d
             return _budget_period_from_row(row)
 
 
+def update_budget_period(
+    budget_period_id: int,
+    user_id: int,
+    title: str,
+    start_date: date,
+    end_date: date,
+) -> None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE expense_management.budget_periods
+                SET title = %s, start_date = %s, end_date = %s
+                WHERE id = %s AND user_id = %s
+                """,
+                (title, start_date, end_date, budget_period_id, user_id),
+            )
+
+
 def list_budget_items(
     user_id: int, budget_period_id: int, include_deleted: bool = False
 ) -> list[BudgetItemRow]:

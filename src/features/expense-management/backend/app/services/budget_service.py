@@ -16,6 +16,7 @@ from app.repos import (
     list_budget_periods,
     logical_delete_budget_item,
     update_budget_item,
+    update_budget_period,
 )
 
 
@@ -78,6 +79,27 @@ def create_period(user_id: int, title: str, start_date: date, end_date: date) ->
     row = insert_budget_period(user_id, trimmed_title, start_date, end_date)
     write("INF", f"予算期間作成成功 user_id={user_id} budget_period_id={row.id}")
     return _period_body(row)
+
+
+def change_period(
+    user_id: int, budget_period_id: int, title: str, start_date: date, end_date: date
+) -> dict[str, object]:
+    write(
+        "INF",
+        f"予算期間更新要求 user_id={user_id} budget_period_id={budget_period_id} title={title} "
+        f"start_date={start_date} end_date={end_date}",
+    )
+    existing = get_budget_period(user_id, budget_period_id)
+    if existing is None:
+        write("WRN", f"予算期間更新失敗 user_id={user_id} budget_period_id={budget_period_id} 理由=対象なし")
+        raise NotFoundError()
+    trimmed_title = _validate_title(title)
+    _validate_period_range(start_date, end_date)
+    update_budget_period(budget_period_id, user_id, trimmed_title, start_date, end_date)
+    updated = get_budget_period(user_id, budget_period_id)
+    assert updated is not None
+    write("INF", f"予算期間更新成功 user_id={user_id} budget_period_id={budget_period_id}")
+    return _period_body(updated)
 
 
 def duplicate_period(

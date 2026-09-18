@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref, watch } from "vue";
+import { onMounted, ref } from "vue";
 import {
   type BudgetItem,
   type BudgetPeriod,
@@ -10,6 +10,7 @@ import {
   getBudgetItems,
   getBudgetPeriods,
   updateBudgetItem,
+  updateBudgetPeriod,
 } from "../api";
 
 const emit = defineEmits<{ unauth: []; forbidden: [] }>();
@@ -19,8 +20,8 @@ const errorMessage = ref("");
 const periods = ref<BudgetPeriod[]>([]);
 const selectedPeriodId = ref<number | null>(null);
 const items = ref<BudgetItem[]>([]);
-// Compact viewports show either the period list or the selected period's items, never both at once.
-const panelMode = ref<"master" | "detail">("master");
+// The screen shows either the full-width period list or the selected period's detail, never both at once.
+const view = ref<"list" | "detail">("list");
 
 const showPeriodForm = ref(false);
 const periodFormMode = ref<"create" | "duplicate">("create");
@@ -28,6 +29,11 @@ const periodFormError = ref("");
 const periodTitle = ref("");
 const periodStartDate = ref("");
 const periodEndDate = ref("");
+
+const detailTitle = ref("");
+const detailStartDate = ref("");
+const detailEndDate = ref("");
+const detailError = ref("");
 
 const showItemForm = ref(false);
 const editingItemId = ref<number | null>(null);
@@ -48,17 +54,20 @@ function handleError(err: unknown): void {
   errorMessage.value = "読み込みに失敗しました";
 }
 
+function populateDetailForm(period: BudgetPeriod | null): void {
+  detailError.value = "";
+  detailTitle.value = period?.title ?? "";
+  detailStartDate.value = period?.start_date ?? "";
+  detailEndDate.value = period?.end_date ?? "";
+}
+
 async function loadPeriods(): Promise<void> {
   periods.value = await getBudgetPeriods();
   if (periods.value.length > 0 && selectedPeriodId.value === null) {
     selectedPeriodId.value = periods.value[0]!.id;
-    panelMode.value = "detail";
+    view.value = "detail";
+    populateDetailForm(periods.value[0]!);
   }
-}
-
-function selectPeriod(id: number): void {
-  selectedPeriodId.value = id;
-  panelMode.value = "detail";
 }
 
 async function loadItems(): Promise<void> {
@@ -69,9 +78,16 @@ async function loadItems(): Promise<void> {
   items.value = await getBudgetItems(selectedPeriodId.value);
 }
 
-watch(selectedPeriodId, () => {
+function selectPeriod(period: BudgetPeriod): void {
+  selectedPeriodId.value = period.id;
+  view.value = "detail";
+  populateDetailForm(period);
   loadItems().catch(handleError);
-});
+}
+
+function goToList(): void {
+  view.value = "list";
+}
 
 onMounted(async () => {
   try {
@@ -109,14 +125,14 @@ function closePeriodForm(): void {
 
 async function submitPeriodForm(): Promise<void> {
   try {
+    let created: BudgetPeriod;
     if (periodFormMode.value === "create") {
       const result = await createBudgetPeriod(periodTitle.value, periodStartDate.value, periodEndDate.value);
       if (result === "invalid") {
         periodFormError.value = "タイトルを入力し、終了日は開始日以降にしてください";
         return;
       }
-      selectedPeriodId.value = result.id;
-      panelMode.value = "detail";
+      created = result;
     } else {
       const sourceId = periods.value[0]!.id;
       const result = await duplicateBudgetPeriod(
@@ -133,15 +149,46 @@ async function submitPeriodForm(): Promise<void> {
         periodFormError.value = "複製元の予算期間が見つかりません";
         return;
       }
-      selectedPeriodId.value = result.id;
-      panelMode.value = "detail";
+      created = result;
     }
     showPeriodForm.value = false;
+    selectedPeriodId.value = created.id;
+    view.value = "detail";
+    populateDetailForm(created);
     await loadPeriods();
     await loadItems();
   } catch (err) {
     handleError(err);
   }
+}
+
+async function saveDetail(): Promise<void> {
+  if (selectedPeriodId.value === null) return;
+  try {
+    const result = await updateBudgetPeriod(
+      selectedPeriodId.value,
+      detailTitle.value,
+      detailStartDate.value,
+      detailEndDate.value,
+    );
+    if (result === "invalid") {
+      detailError.value = "タイトルを入力し、終了日は開始日以降にしてください";
+      return;
+    }
+    if (result === "missing") {
+      detailError.value = "対象の予算期間が見つかりません";
+      return;
+    }
+    populateDetailForm(result);
+    await loadPeriods();
+  } catch (err) {
+    handleError(err);
+  }
+}
+
+function cancelDetail(): void {
+  const current = periods.value.find((p) => p.id === selectedPeriodId.value) ?? null;
+  populateDetailForm(current);
 }
 
 function openCreateItemForm(): void {
@@ -204,77 +251,89 @@ async function removeItem(item: BudgetItem): Promise<void> {
   <div v-if="loading" class="loading">読み込み中…</div>
   <template v-else>
     <p v-if="errorMessage" class="banner-error">{{ errorMessage }}</p>
-    <div class="split" :class="panelMode === 'master' ? 'mode-master' : 'mode-detail'">
-      <div class="panel master-panel">
-        <div class="toolbar">
-          <h2 class="section-title">予算期間</h2>
-          <button class="btn-primary" type="button" @click="openCreatePeriodForm">新規作成</button>
-          <button class="btn-secondary" type="button" :disabled="periods.length === 0" @click="openDuplicatePeriodForm">
-            直近から複製作成
-          </button>
-        </div>
-        <div class="list">
-          <p v-if="periods.length === 0" class="empty">データがありません</p>
-          <table v-else>
-            <thead>
-              <tr>
-                <th>予算期間</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr
-                v-for="p in periods"
-                :key="p.id"
-                :class="{ selected: p.id === selectedPeriodId }"
-              >
-                <td>
-                  <button class="row" type="button" @click="selectPeriod(p.id)">
-                    {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
-                  </button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+
+    <template v-if="view === 'list'">
+      <div class="toolbar">
+        <button class="btn-primary" type="button" @click="openCreatePeriodForm">新規作成</button>
+        <button class="btn-secondary" type="button" :disabled="periods.length === 0" @click="openDuplicatePeriodForm">
+          直近から複製作成
+        </button>
+      </div>
+      <div class="panel list">
+        <p v-if="periods.length === 0" class="empty">データがありません</p>
+        <table v-else>
+          <thead>
+            <tr>
+              <th>予算期間</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="p in periods" :key="p.id">
+              <td>
+                <button class="row" type="button" @click="selectPeriod(p)">
+                  {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
+
+    <template v-else>
+      <button class="btn-text" type="button" @click="goToList">← 予算期間一覧に戻る</button>
+
+      <div class="panel">
+        <p v-if="detailError" class="banner-error">{{ detailError }}</p>
+        <form class="form" @submit.prevent="saveDetail">
+          <div class="field">
+            <label for="detail-title">タイトル</label>
+            <input id="detail-title" v-model="detailTitle" type="text" required />
+          </div>
+          <div class="field">
+            <label for="detail-start">開始日</label>
+            <input id="detail-start" v-model="detailStartDate" type="date" required />
+          </div>
+          <div class="field">
+            <label for="detail-end">終了日</label>
+            <input id="detail-end" v-model="detailEndDate" type="date" required />
+          </div>
+          <div class="actions">
+            <button class="btn-primary" type="submit">保存</button>
+            <button class="btn-secondary" type="button" @click="cancelDetail">キャンセル</button>
+          </div>
+        </form>
       </div>
 
-      <div class="panel detail-panel">
-        <button type="button" class="btn-text back-to-master" @click="panelMode = 'master'">
-          ← 予算期間一覧に戻る
-        </button>
-        <div class="toolbar">
-          <h2 class="section-title">予算項目</h2>
-          <button class="btn-primary" type="button" :disabled="selectedPeriodId === null" @click="openCreateItemForm">
-            追加
-          </button>
-        </div>
-        <div class="list">
-          <p v-if="selectedPeriodId === null" class="empty">予算期間を選択してください</p>
-          <p v-else-if="items.length === 0" class="empty">データがありません</p>
-          <table v-else>
-            <thead>
-              <tr>
-                <th>項目名</th>
-                <th>金額</th>
-                <th>表示順</th>
-                <th></th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="item in items" :key="item.id">
-                <td class="cell-primary"><span class="cell-label">項目名</span>{{ item.name }}</td>
-                <td class="cell-amount"><span class="cell-label">金額</span>{{ item.amount }}</td>
-                <td><span class="cell-label">表示順</span>{{ item.display_order }}</td>
-                <td class="actions">
-                  <button class="btn-text" type="button" @click="openEditItemForm(item)">編集</button>
-                  <button class="btn-text danger" type="button" @click="removeItem(item)">削除</button>
-                </td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+      <div class="toolbar">
+        <h2 class="section-title">予算項目</h2>
+        <button class="btn-primary" type="button" @click="openCreateItemForm">追加</button>
       </div>
-    </div>
+      <div class="panel list">
+        <p v-if="items.length === 0" class="empty">データがありません</p>
+        <table v-else>
+          <thead>
+            <tr>
+              <th>項目名</th>
+              <th>金額</th>
+              <th>表示順</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in items" :key="item.id">
+              <td class="cell-primary"><span class="cell-label">項目名</span>{{ item.name }}</td>
+              <td class="cell-amount"><span class="cell-label">金額</span>{{ item.amount }}</td>
+              <td><span class="cell-label">表示順</span>{{ item.display_order }}</td>
+              <td class="actions">
+                <button class="btn-text" type="button" @click="openEditItemForm(item)">編集</button>
+                <button class="btn-text danger" type="button" @click="removeItem(item)">削除</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+    </template>
 
     <div v-if="showPeriodForm" class="modal-back" @click.self="closePeriodForm">
       <div class="modal">

@@ -130,6 +130,29 @@ export async function createBudgetPeriod(
   throw new Error("budget-periods");
 }
 
+export async function updateBudgetPeriod(
+  budgetPeriodId: number,
+  title: string,
+  startDate: string,
+  endDate: string,
+): Promise<BudgetPeriod | "invalid" | "missing"> {
+  const res = await apiFetch(`/budget-periods/${budgetPeriodId}`, {
+    method: "PATCH",
+    body: JSON.stringify({ title, start_date: startDate, end_date: endDate }),
+  });
+  throwIfAuthFailed(res);
+  if (res.status === 200) {
+    return (await res.json()) as BudgetPeriod;
+  }
+  if (res.status === 400) {
+    return "invalid";
+  }
+  if (res.status === 404) {
+    return "missing";
+  }
+  throw new Error("budget-periods");
+}
+
 export async function duplicateBudgetPeriod(
   sourceBudgetPeriodId: number,
   title: string,

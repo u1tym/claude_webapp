@@ -36,6 +36,22 @@ def create_budget_period(
         raise HTTPException(status_code=400, detail="入力が不正です") from None
 
 
+@router.patch("/{budget_period_id}")
+def update_budget_period(
+    budget_period_id: int,
+    body: BudgetPeriodBody,
+    auth: AuthContext = Depends(get_current_user),
+) -> dict[str, object]:
+    try:
+        return budget_service.change_period(
+            auth.user.id, budget_period_id, body.title, body.start_date, body.end_date
+        )
+    except InvalidInputError:
+        raise HTTPException(status_code=400, detail="入力が不正です") from None
+    except NotFoundError:
+        raise HTTPException(status_code=404, detail="対象がありません") from None
+
+
 @router.post("/{budget_period_id}/duplicate", status_code=201)
 def duplicate_budget_period(
     budget_period_id: int,

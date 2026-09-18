@@ -85,7 +85,7 @@ erDiagram
 
 ### expense_management.budget_periods
 
-目的: 利用者本人の予算期間。タイトルと開始日〜終了日を持つ。削除機能は無い（要件に無い）。同一ユーザ内で期間が重なる行を複数持てる。
+目的: 利用者本人の予算期間。タイトルと開始日〜終了日を持つ。`title`・`start_date`・`end_date` は更新できる。削除機能は無い（要件に無い）。同一ユーザ内で期間が重なる行を複数持てる。
 
 | カラム | 型 | NULL | 既定 | 説明 |
 |--------|-----|------|------|------|
@@ -107,7 +107,7 @@ erDiagram
 
 - `(user_id, start_date, end_date)`（一覧の並び）
 
-同一ユーザ内で期間が重なる行を複数追加できる（重複チェックは行わない）。
+同一ユーザ内で期間が重なる行を複数追加できる（重複チェックは行わない）。更新時も同様に重複チェックは行わない。更新できるのは本人が所有する行（`user_id` が一致する行）のみ。`id`・`user_id` は変えない。
 
 ### expense_management.budget_items
 
@@ -257,6 +257,7 @@ erDiagram
 | REQ-011 | `expenses.usage_date` と `budget_periods` の期間、`budget_items.amount` との集計（`is_deleted = false`） |
 | REQ-012 | `expenses.payment_date` の年月による集計（`is_deleted = false`） |
 | REQ-013 | `payment_methods` の `closing_day` / `closing_day_shift_direction` / `payment_day` / `payment_day_shift_direction`、`payment_method_exclusions`（`target` で締め日用・支払日用を区別）。テーブルとしては保持のみで、算出はバックエンドの `closing_date_service` |
+| REQ-014 | `budget_periods` の `title` / `start_date` / `end_date` の更新（`user_id` が一致する行のみ）。重複チェックは行わない |
 
 ## 未決事項
 
@@ -274,3 +275,5 @@ erDiagram
 | 2026-09-18 | 承認済み | `payment_methods.display_order` と `expenses` の論理削除を含む DB 設計を承認 |
 | 2026-09-18 | 未承認 | `budget_periods` に `title` を追加。期間重複チェックを撤廃し、同一ユーザ内で期間が重なる行を複数許容 |
 | 2026-09-18 | 承認済み | `budget_periods.title` の追加と期間重複チェック撤廃を承認 |
+| 2026-09-18 | 未承認 | `budget_periods` の `title`・`start_date`・`end_date` を更新できることを明記（REQ-014）。列追加は無し |
+| 2026-09-18 | 承認済み | `budget_periods` の更新対応を承認 |
