@@ -286,17 +286,15 @@ async function removeItem(item: BudgetItem): Promise<void> {
       <div class="panel">
         <p v-if="detailError" class="banner-error">{{ detailError }}</p>
         <form class="form" @submit.prevent="saveDetail">
-          <div class="field">
+          <div class="period-field">
             <label for="detail-title">タイトル</label>
             <input id="detail-title" v-model="detailTitle" type="text" required />
           </div>
-          <div class="field">
-            <label for="detail-start">開始日</label>
-            <input id="detail-start" v-model="detailStartDate" type="date" required />
-          </div>
-          <div class="field">
-            <label for="detail-end">終了日</label>
-            <input id="detail-end" v-model="detailEndDate" type="date" required />
+          <div class="period-field">
+            <span class="period-field-label">期間</span>
+            <input v-model="detailStartDate" type="date" aria-label="開始日" required />
+            <span class="period-range-sep">〜</span>
+            <input v-model="detailEndDate" type="date" aria-label="終了日" required />
           </div>
           <div class="actions">
             <button class="btn-primary" type="submit">保存</button>

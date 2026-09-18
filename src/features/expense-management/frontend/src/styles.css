@@ -234,6 +234,30 @@ textarea {
   font-size: 14px;
 }
 
+.period-field {
+  display: flex;
+  align-items: center;
+  gap: var(--space);
+  flex-wrap: wrap;
+}
+
+.period-field label,
+.period-field-label {
+  min-width: 4em;
+  color: var(--color-text-muted);
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+.period-field input {
+  flex: 1 1 140px;
+  min-width: 0;
+}
+
+.period-range-sep {
+  color: var(--color-text-muted);
+}
+
 .form input,
 .form select,
 .form textarea {
