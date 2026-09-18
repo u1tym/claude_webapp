@@ -279,7 +279,7 @@ const sortedExpenses = computed(() =>
       </p>
     </div>
 
-    <div v-if="showForm" class="modal-back" @click.self="closeForm">
+    <div v-if="showForm" class="modal-back">
       <div class="modal modal-wide">
         <h2 class="section-title">{{ editingId === null ? "支出記録の登録" : "支出記録の編集" }}</h2>
         <form class="form" @submit.prevent="submitForm">

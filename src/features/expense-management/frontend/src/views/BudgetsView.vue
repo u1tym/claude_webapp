@@ -322,7 +322,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
       </div>
     </template>
 
-    <div v-if="showPeriodForm" class="modal-back" @click.self="closePeriodForm">
+    <div v-if="showPeriodForm" class="modal-back">
       <div class="modal">
         <h2 class="section-title">
           {{ periodFormMode === "create" ? "予算期間の新規作成" : "予算期間の複製作成" }}
@@ -349,7 +349,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
       </div>
     </div>
 
-    <div v-if="showItemForm" class="modal-back" @click.self="closeItemForm">
+    <div v-if="showItemForm" class="modal-back">
       <div class="modal">
         <h2 class="section-title">{{ editingItemId === null ? "予算項目の追加" : "予算項目の編集" }}</h2>
         <form class="form" @submit.prevent="submitItemForm">
