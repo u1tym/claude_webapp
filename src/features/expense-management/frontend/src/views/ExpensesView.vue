@@ -284,7 +284,7 @@ const sortedExpenses = computed(() =>
         <h2 class="section-title">{{ editingId === null ? "支出記録の登録" : "支出記録の編集" }}</h2>
         <form class="form" @submit.prevent="submitForm">
           <p v-if="formError" class="banner-error">{{ formError }}</p>
-          <div class="field">
+          <div class="field field-narrow">
             <label for="usage-date">利用日</label>
             <input id="usage-date" v-model="usageDate" type="date" required />
           </div>
@@ -306,7 +306,7 @@ const sortedExpenses = computed(() =>
             <label for="purpose">用途</label>
             <input id="purpose" v-model="purpose" type="text" required />
           </div>
-          <div class="field">
+          <div class="field field-narrow">
             <label for="amount">金額</label>
             <input id="amount" v-model="amount" type="text" inputmode="decimal" placeholder="0.00" required />
           </div>
@@ -322,7 +322,7 @@ const sortedExpenses = computed(() =>
             <label for="memo">メモ</label>
             <textarea id="memo" v-model="memo"></textarea>
           </div>
-          <div class="field">
+          <div class="field field-narrow">
             <label for="payment-date">支払日</label>
             <input id="payment-date" v-model="paymentDate" type="date" required />
           </div>

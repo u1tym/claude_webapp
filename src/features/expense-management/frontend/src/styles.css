@@ -238,6 +238,25 @@ textarea {
   font-size: 14px;
 }
 
+.field-row {
+  display: flex;
+  gap: calc(var(--space) * 2);
+  flex-wrap: wrap;
+}
+
+/* .field-row lays fields out horizontally, so flex-basis sizes their width here. */
+.field-row > .field {
+  flex: 0 1 160px;
+  min-width: 0;
+}
+
+/* Outside a .field-row, .form stacks fields vertically; max-width (not flex-basis,
+   which would size the vertical axis there) is what keeps a lone field from
+   stretching to the modal's full width. */
+.field-narrow {
+  max-width: 160px;
+}
+
 .period-field {
   display: flex;
   align-items: center;

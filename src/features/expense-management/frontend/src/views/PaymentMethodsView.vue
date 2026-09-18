@@ -217,19 +217,21 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
             <label for="pm-name">名称</label>
             <input id="pm-name" v-model="name" type="text" required />
           </div>
-          <div class="field">
-            <label for="pm-closing-day">締め日（0〜31。0は即時支払）</label>
-            <input id="pm-closing-day" v-model.number="closingDay" type="number" min="0" max="31" required />
-          </div>
-
-          <template v-if="closingDay > 0">
-            <div class="field">
+          <div class="field-row">
+            <div class="field field-narrow">
+              <label for="pm-closing-day">締め日（0〜31。0は即時支払）</label>
+              <input id="pm-closing-day" v-model.number="closingDay" type="number" min="0" max="31" required />
+            </div>
+            <div v-if="closingDay > 0" class="field field-narrow">
               <label for="pm-closing-shift">締め日用ずらし方向</label>
               <select id="pm-closing-shift" v-model="closingDayShiftDirection">
                 <option value="earlier">過去</option>
                 <option value="later">未来</option>
               </select>
             </div>
+          </div>
+
+          <template v-if="closingDay > 0">
             <div class="field">
               <label>締め日用の除外条件</label>
               <div class="tag-list">
@@ -248,20 +250,22 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
               </div>
             </div>
 
-            <div class="field">
-              <label for="pm-offset">支払月オフセット</label>
-              <input id="pm-offset" v-model.number="paymentMonthOffset" type="number" min="0" required />
-            </div>
-            <div class="field">
-              <label for="pm-payment-day">支払日（1〜31）</label>
-              <input id="pm-payment-day" v-model.number="paymentDay" type="number" min="1" max="31" required />
-            </div>
-            <div class="field">
-              <label for="pm-payment-shift">支払日用ずらし方向</label>
-              <select id="pm-payment-shift" v-model="paymentDayShiftDirection">
-                <option value="earlier">過去</option>
-                <option value="later">未来</option>
-              </select>
+            <div class="field-row">
+              <div class="field field-narrow">
+                <label for="pm-offset">支払月オフセット</label>
+                <input id="pm-offset" v-model.number="paymentMonthOffset" type="number" min="0" required />
+              </div>
+              <div class="field field-narrow">
+                <label for="pm-payment-day">支払日（1〜31）</label>
+                <input id="pm-payment-day" v-model.number="paymentDay" type="number" min="1" max="31" required />
+              </div>
+              <div class="field field-narrow">
+                <label for="pm-payment-shift">支払日用ずらし方向</label>
+                <select id="pm-payment-shift" v-model="paymentDayShiftDirection">
+                  <option value="earlier">過去</option>
+                  <option value="later">未来</option>
+                </select>
+              </div>
             </div>
             <div class="field">
               <label>支払日用の除外条件</label>
@@ -282,7 +286,7 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
             </div>
           </template>
 
-          <div class="field">
+          <div class="field field-narrow">
             <label for="pm-order">表示順</label>
             <input id="pm-order" v-model.number="displayOrder" type="number" min="0" required />
           </div>

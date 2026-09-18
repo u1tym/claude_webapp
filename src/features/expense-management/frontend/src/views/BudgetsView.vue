@@ -333,13 +333,15 @@ async function removeItem(item: BudgetItem): Promise<void> {
             <label for="period-title">タイトル</label>
             <input id="period-title" v-model="periodTitle" type="text" required />
           </div>
-          <div class="field">
-            <label for="period-start">開始日</label>
-            <input id="period-start" v-model="periodStartDate" type="date" required />
-          </div>
-          <div class="field">
-            <label for="period-end">終了日</label>
-            <input id="period-end" v-model="periodEndDate" type="date" required />
+          <div class="field-row">
+            <div class="field field-narrow">
+              <label for="period-start">開始日</label>
+              <input id="period-start" v-model="periodStartDate" type="date" required />
+            </div>
+            <div class="field field-narrow">
+              <label for="period-end">終了日</label>
+              <input id="period-end" v-model="periodEndDate" type="date" required />
+            </div>
           </div>
           <div class="actions">
             <button class="btn-primary" type="submit">保存</button>
@@ -358,13 +360,15 @@ async function removeItem(item: BudgetItem): Promise<void> {
             <label for="item-name">項目名</label>
             <input id="item-name" v-model="itemName" type="text" required />
           </div>
-          <div class="field">
-            <label for="item-amount">金額</label>
-            <input id="item-amount" v-model="itemAmount" type="text" inputmode="decimal" placeholder="0.00" required />
-          </div>
-          <div class="field">
-            <label for="item-order">表示順</label>
-            <input id="item-order" v-model.number="itemDisplayOrder" type="number" min="0" required />
+          <div class="field-row">
+            <div class="field field-narrow">
+              <label for="item-amount">金額</label>
+              <input id="item-amount" v-model="itemAmount" type="text" inputmode="decimal" placeholder="0.00" required />
+            </div>
+            <div class="field field-narrow">
+              <label for="item-order">表示順</label>
+              <input id="item-order" v-model.number="itemDisplayOrder" type="number" min="0" required />
+            </div>
           </div>
           <div class="actions">
             <button class="btn-primary" type="submit">保存</button>
