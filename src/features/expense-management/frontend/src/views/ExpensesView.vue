@@ -39,6 +39,7 @@ const amount = ref("");
 const paymentMethodId = ref<number | null>(null);
 const memo = ref("");
 const paymentDate = ref("");
+const autoCalculatePaymentDate = ref(true);
 
 // Only a new record started while "all" is selected lets the user pick which budget period it belongs to.
 const showFormPeriodSelect = computed(() => editingId.value === null && selectedFilter.value === "all");
@@ -141,6 +142,7 @@ function openCreateForm(): void {
   paymentMethodId.value = methods.value[0]?.id ?? null;
   memo.value = "";
   paymentDate.value = today();
+  autoCalculatePaymentDate.value = true;
   showForm.value = true;
   refreshEstimate().catch(() => undefined);
 }
@@ -155,6 +157,7 @@ function openEditForm(expense: Expense): void {
   paymentMethodId.value = expense.payment_method_id;
   memo.value = expense.memo ?? "";
   paymentDate.value = expense.payment_date;
+  autoCalculatePaymentDate.value = true;
   showForm.value = true;
 }
 
@@ -174,7 +177,14 @@ async function refreshEstimate(): Promise<void> {
 }
 
 watch([usageDate, paymentMethodId], () => {
+  if (!autoCalculatePaymentDate.value) return;
   refreshEstimate().catch(() => undefined);
+});
+
+watch(autoCalculatePaymentDate, (enabled) => {
+  if (enabled) {
+    refreshEstimate().catch(() => undefined);
+  }
 });
 
 async function submitForm(): Promise<void> {
@@ -328,9 +338,15 @@ const sortedExpenses = computed(() =>
             <label for="memo">メモ</label>
             <textarea id="memo" v-model="memo"></textarea>
           </div>
-          <div class="field field-narrow">
-            <label for="payment-date">支払日</label>
-            <input id="payment-date" v-model="paymentDate" type="date" required />
+          <div class="field-row">
+            <div class="field field-narrow">
+              <label for="payment-date">支払日</label>
+              <input id="payment-date" v-model="paymentDate" type="date" required />
+            </div>
+            <label class="checkbox-label payment-date-auto">
+              <input type="checkbox" v-model="autoCalculatePaymentDate" />
+              自動計算
+            </label>
           </div>
           <div class="actions">
             <button class="btn-primary" type="submit">保存</button>

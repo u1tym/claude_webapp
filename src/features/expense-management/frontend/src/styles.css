@@ -416,6 +416,12 @@ textarea {
   outline-offset: 2px;
 }
 
+/* Sits beside a .field-narrow date field in a .field-row; align to the input's
+   baseline (the row's bottom), not centered across the field's label + input. */
+.payment-date-auto {
+  align-self: flex-end;
+}
+
 .modal-back {
   position: fixed;
   inset: 0;
