@@ -221,6 +221,10 @@ textarea {
   display: none;
 }
 
+.cell-amount {
+  text-align: right;
+}
+
 .form {
   display: flex;
   flex-direction: column;
