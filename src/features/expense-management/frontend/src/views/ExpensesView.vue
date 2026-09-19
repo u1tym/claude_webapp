@@ -273,7 +273,7 @@ const sortedExpenses = computed(() =>
 
     <div class="panel list">
       <p v-if="periods.length === 0" class="empty">データがありません</p>
-      <table v-else>
+      <table v-else class="table-fixed-expenses">
         <thead>
           <tr>
             <th>利用日</th>
