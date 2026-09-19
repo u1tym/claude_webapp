@@ -12,6 +12,7 @@ from app.repos import (
     get_user_by_id,
     insert_assignment,
     list_active_assignments,
+    update_assignment_order,
 )
 
 
@@ -54,6 +55,27 @@ def add_assignment(user_id: int, feature_id: str, display_order: int) -> Assignm
         write("WRN", f"割当追加失敗 user_id={user_id} feature_id={logged} 理由=重複")
         raise DuplicateError from None
     write("INF", f"割当追加成功 user_id={user_id} feature_id={logged}")
+    return AssignmentRow(
+        user_id=user.id,
+        username=user.username,
+        feature_id=feature.id,
+        feature_title=feature.title,
+        display_order=display_order,
+    )
+
+
+def change_assignment(user_id: int, feature_id: str, display_order: int) -> AssignmentRow:
+    logged = safe_text(feature_id)
+    write("INF", f"割当更新要求 user_id={user_id} feature_id={logged} order={display_order}")
+    if not assignment_exists(user_id, feature_id):
+        write("WRN", f"割当更新失敗 user_id={user_id} feature_id={logged} 理由=対象なし")
+        raise NotFoundError
+    update_assignment_order(user_id, feature_id, display_order)
+    user = get_user_by_id(user_id)
+    feature = get_feature(feature_id)
+    assert user is not None
+    assert feature is not None
+    write("INF", f"割当更新成功 user_id={user_id} feature_id={logged}")
     return AssignmentRow(
         user_id=user.id,
         username=user.username,

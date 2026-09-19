@@ -23,6 +23,10 @@ class AssignmentCreateBody(BaseModel):
         return value
 
 
+class AssignmentUpdateBody(BaseModel):
+    display_order: int
+
+
 def _item(
     user_id: int,
     username: str,
@@ -70,6 +74,27 @@ def create_assignment(
         raise HTTPException(status_code=404, detail="対象がありません") from None
     except assignment_service.DuplicateError:
         raise HTTPException(status_code=409, detail="保存できませんでした") from None
+    return _item(
+        row.user_id,
+        row.username,
+        row.feature_id,
+        row.feature_title,
+        row.display_order,
+        auth.user.id,
+    )
+
+
+@router.patch("/{user_id}/{feature_id}")
+def patch_assignment(
+    user_id: int,
+    feature_id: str,
+    body: AssignmentUpdateBody,
+    auth: AuthContext = Depends(get_current_user),
+) -> dict[str, object]:
+    try:
+        row = assignment_service.change_assignment(user_id, feature_id, body.display_order)
+    except assignment_service.NotFoundError:
+        raise HTTPException(status_code=404, detail="対象がありません") from None
     return _item(
         row.user_id,
         row.username,

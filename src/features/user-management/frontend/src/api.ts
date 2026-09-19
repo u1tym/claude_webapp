@@ -250,6 +250,28 @@ export async function createAssignment(
   throw new Error("assignments");
 }
 
+export async function updateAssignment(
+  userId: number,
+  featureId: string,
+  displayOrder: number,
+): Promise<AssignmentItem | "invalid" | "missing"> {
+  const res = await apiFetch(`/assignments/${userId}/${encodeURIComponent(featureId)}`, {
+    method: "PATCH",
+    body: JSON.stringify({ display_order: displayOrder }),
+  });
+  throwIfAuthFailed(res);
+  if (res.status === 200) {
+    return (await res.json()) as AssignmentItem;
+  }
+  if (res.status === 400) {
+    return "invalid";
+  }
+  if (res.status === 404) {
+    return "missing";
+  }
+  throw new Error("assignments");
+}
+
 export async function deleteAssignment(
   userId: number,
   featureId: string,

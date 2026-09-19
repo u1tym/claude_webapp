@@ -61,6 +61,7 @@ DB のバイナリとメディアタイプから、JSON では data URL 文字�
 | DELETE | `/features/{feature_id}` | 要 | REQ-009 |
 | GET | `/assignments` | 要 | REQ-010 |
 | POST | `/assignments` | 要 | REQ-011 |
+| PATCH | `/assignments/{user_id}/{feature_id}` | 要 | REQ-014 |
 | DELETE | `/assignments/{user_id}/{feature_id}` | 要 | REQ-012 |
 
 REQ-013 は各操作 API のログ出力であり、専用エンドポイントは無い。
@@ -442,6 +443,41 @@ REQ-013 は各操作 API のログ出力であり、専用エンドポイント�
 | ユーザまたは機能が無い／論理削除済み | 404 |
 | 既に割り当て済み | 409、保存できませんでした |
 
+### PATCH `/assignments/{user_id}/{feature_id}`
+
+- 認証: 要
+- 対応 REQ: REQ-014
+
+要求:
+
+```json
+{ "display_order": 2 }
+```
+
+応答: 200
+
+```json
+{
+  "user_id": 1,
+  "username": "string",
+  "feature_id": "string",
+  "feature_title": "string",
+  "display_order": 2,
+  "can_unassign": true
+}
+```
+
+処理概要: 割り当て済みの組み合わせ（`user_id` × `feature_id`）の `display_order` だけを更新する。ユーザ・機能自体は変えない。
+
+エラー:
+
+| 状況 | 応答 |
+|------|------|
+| `display_order` が無い、または整数でない | 400 |
+| 未ログイン | 401 |
+| 権限なし | 403 |
+| 割り当てられていない組み合わせ | 404 |
+
 ### DELETE `/assignments/{user_id}/{feature_id}`
 
 - 認証: 要
@@ -479,6 +515,7 @@ REQ-013 は各操作 API のログ出力であり、専用エンドポイント�
 | REQ-011 | POST `/assignments` |
 | REQ-012 | DELETE `/assignments/{user_id}/{feature_id}` |
 | REQ-013 | 各操作 API のログ（専用パスなし） |
+| REQ-014 | PATCH `/assignments/{user_id}/{feature_id}` |
 
 ## 未決事項
 
@@ -496,3 +533,5 @@ REQ-013 は各操作 API のログ出力であり、専用エンドポイント�
 | 2026-08-30 08:26 | 承認済み | ユーザの `email` を承認 |
 | 2026-09-18 | 未承認 | POST `/features` の `icon` を省略可に。PATCH `/features/{id}` に `remove_icon` を追加し、アイコンの削除ができるようにする。未設定アイコンは空文字列 |
 | 2026-09-18 | 承認済み | `/features` のアイコン任意項目化・削除対応を承認 |
+| 2026-09-19 23:43 | 未承認 | PATCH `/assignments/{user_id}/{feature_id}` を追加し、表示順を更新できるようにする（REQ-014） |
+| 2026-09-19 23:47 | 承認済み | PATCH `/assignments/{user_id}/{feature_id}` の追加を承認 |

@@ -6,6 +6,7 @@ import {
   getAssignments,
   getFeatures,
   getUsers,
+  updateAssignment,
   type AssignmentItem,
   type FeatureItem,
   type UserItem,
@@ -20,7 +21,8 @@ const features = ref<FeatureItem[]>([]);
 const loading = ref(true);
 const error = ref("");
 const success = ref("");
-const mode = ref<"list" | "create">("list");
+const mode = ref<"list" | "create" | "edit">("list");
+const selected = ref<AssignmentItem | null>(null);
 const userId = ref("");
 const featureId = ref("");
 const displayOrder = ref("");
@@ -58,13 +60,23 @@ function handle(err: unknown): void {
 
 function startCreate(): void {
   mode.value = "create";
+  selected.value = null;
   userId.value = "";
   featureId.value = "";
   displayOrder.value = "";
 }
 
+function startEdit(item: AssignmentItem): void {
+  mode.value = "edit";
+  selected.value = item;
+  userId.value = String(item.user_id);
+  featureId.value = item.feature_id;
+  displayOrder.value = String(item.display_order);
+}
+
 function cancel(): void {
   mode.value = "list";
+  selected.value = null;
 }
 
 function rowKey(item: AssignmentItem): string {
@@ -84,11 +96,19 @@ async function save(): Promise<void> {
   }
   loading.value = true;
   try {
-    const result = await createAssignment(Number(userId.value), featureId.value, order);
-    if (result === "invalid" || result === "missing" || result === "conflict") {
-      error.value =
-        result === "invalid" ? "入力が不正です" : result === "missing" ? "対象がありません" : "保存できませんでした";
-      return;
+    if (mode.value === "create") {
+      const result = await createAssignment(Number(userId.value), featureId.value, order);
+      if (result === "invalid" || result === "missing" || result === "conflict") {
+        error.value =
+          result === "invalid" ? "入力が不正です" : result === "missing" ? "対象がありません" : "保存できませんでした";
+        return;
+      }
+    } else if (selected.value) {
+      const result = await updateAssignment(selected.value.user_id, selected.value.feature_id, order);
+      if (result === "invalid" || result === "missing") {
+        error.value = result === "invalid" ? "入力が不正です" : "対象がありません";
+        return;
+      }
     }
     success.value = "保存しました";
     window.setTimeout(() => {
@@ -152,10 +172,14 @@ async function confirmUnassign(): Promise<void> {
             </tr>
           </thead>
           <tbody>
-            <tr v-for="item in items" :key="rowKey(item)">
-              <td>{{ item.username }}</td>
-              <td>{{ item.feature_title }}</td>
-              <td>{{ item.display_order }}</td>
+            <tr
+              v-for="item in items"
+              :key="rowKey(item)"
+              :class="{ selected: selected !== null && rowKey(selected) === rowKey(item) }"
+            >
+              <td><button class="row" type="button" @click="startEdit(item)">{{ item.username }}</button></td>
+              <td><button class="row" type="button" @click="startEdit(item)">{{ item.feature_title }}</button></td>
+              <td><button class="row" type="button" @click="startEdit(item)">{{ item.display_order }}</button></td>
               <td>
                 <button
                   v-if="item.can_unassign"
@@ -175,11 +199,11 @@ async function confirmUnassign(): Promise<void> {
     </section>
     <section v-if="mode !== 'list'" class="panel form-panel">
       <form class="form" @submit.prevent="save">
-        <select v-model="userId" aria-label="ユーザ" :disabled="loading" required>
+        <select v-model="userId" aria-label="ユーザ" :disabled="loading || mode === 'edit'" required>
           <option value="">ユーザ</option>
           <option v-for="user in users" :key="user.id" :value="String(user.id)">{{ user.username }}</option>
         </select>
-        <select v-model="featureId" aria-label="機能" :disabled="loading" required>
+        <select v-model="featureId" aria-label="機能" :disabled="loading || mode === 'edit'" required>
           <option value="">機能</option>
           <option v-for="feature in features" :key="feature.id" :value="feature.id">{{ feature.title }}</option>
         </select>

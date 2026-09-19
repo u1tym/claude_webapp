@@ -182,7 +182,7 @@ erDiagram
 
 ### public.menu_assignments
 
-目的: ユーザのメニューに載せる機能と表示順。本機能は未削除同士の一覧、追加、行削除（解除）を行う。
+目的: ユーザのメニューに載せる機能と表示順。本機能は未削除同士の一覧、追加、表示順の更新、行削除（解除）を行う。
 
 | カラム | 型 | NULL | 既定 | 説明 |
 |--------|-----|------|------|------|
@@ -205,6 +205,7 @@ erDiagram
 
 - 一覧は `users.is_deleted = false` かつ `features.is_deleted = false` の行だけ。
 - 追加は未削除のユーザと未削除の機能に限り挿入する。同じ `(user_id, feature_id)` は置けない。
+- 表示順の更新は、既存の `(user_id, feature_id)` 行の `display_order` だけを変える。存在しない組み合わせの更新は失敗する。
 - 解除は行を削除する。操作中ユーザの `user_id` かつ `feature_id = 'user-management'` は削除しない。
 - 利用可否判定も、未削除のユーザと未削除の機能のときだけ有効とする。
 
@@ -233,6 +234,7 @@ erDiagram
 | REQ-011 | `public.menu_assignments` への挿入 |
 | REQ-012 | `public.menu_assignments` の行削除。自己かつ `feature_id = 'user-management'` は削除しない |
 | REQ-013 | テーブルなし（ファイルログ） |
+| REQ-014 | `public.menu_assignments` の `display_order` 更新 |
 
 ## 未決事項
 
@@ -250,3 +252,5 @@ erDiagram
 | 2026-08-30 08:25 | 承認済み | `public.users` の `email` を承認 |
 | 2026-09-18 | 未承認 | `public.features` のアイコンを任意項目として扱う。未設定・削除時は `icon` を空のバイト列、`icon_media_type` を空文字列にする。列は NOT NULL のまま、DDL変更なし |
 | 2026-09-18 | 承認済み | `public.features` のアイコン任意項目化を承認 |
+| 2026-09-19 23:43 | 未承認 | `public.menu_assignments` の `display_order` を更新できるようにする（REQ-014）。列・DDL変更なし |
+| 2026-09-19 23:47 | 承認済み | 表示順更新の追加を承認 |

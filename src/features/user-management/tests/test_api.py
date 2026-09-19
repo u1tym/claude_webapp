@@ -263,6 +263,21 @@ def test_assignment_crud_and_self_unassign() -> None:
     )
     assert dup.status_code == 409
 
+    updated = client.patch(
+        f"/assignments/{other.id}/{feature_id}",
+        json={"display_order": 5},
+    )
+    assert updated.status_code == 200
+    assert updated.json()["display_order"] == 5
+
+    other_feature_id = _unique("af2")
+    insert_feature(other_feature_id, "別の割当先", "http://localhost/a2", PNG_1X1, "image/png")
+    missing_update = client.patch(
+        f"/assignments/{other.id}/{other_feature_id}",
+        json={"display_order": 1},
+    )
+    assert missing_update.status_code == 404
+
     listed = client.get("/assignments")
     assert listed.status_code == 200
     self_rows = [

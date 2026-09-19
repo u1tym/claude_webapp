@@ -354,6 +354,19 @@ def insert_assignment(user_id: int, feature_id: str, display_order: int) -> None
             )
 
 
+def update_assignment_order(user_id: int, feature_id: str, display_order: int) -> None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE public.menu_assignments
+                SET display_order = %s
+                WHERE user_id = %s AND feature_id = %s
+                """,
+                (display_order, user_id, feature_id),
+            )
+
+
 def delete_assignment(user_id: int, feature_id: str) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:

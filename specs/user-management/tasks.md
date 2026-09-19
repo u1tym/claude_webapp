@@ -600,6 +600,54 @@ POST `/features` の `icon` を省略可にする。省略または空なら、�
 
 ---
 
+## タスク 16
+
+### タイトル
+
+割当の表示順を更新できるようにする
+
+### 見積もり
+
+3時間
+
+### 関連要件
+
+- REQ-014
+
+### 関連設計
+
+- `design.md` / バックエンド設計 / 業務ロジック（割当）
+- `api-design.md` / PATCH `/assignments/{user_id}/{feature_id}`
+- `db-design.md` / `public.menu_assignments`
+- `ui-design.md` / SCR-003 割当
+
+### 実装パス
+
+- `src/features/user-management/backend/app/repos.py`
+- `src/features/user-management/backend/app/services/assignment_service.py`
+- `src/features/user-management/backend/app/routers/assignments.py`
+- `src/features/user-management/frontend/src/api.ts`
+- `src/features/user-management/frontend/src/views/AssignmentsView.vue`
+
+### 内容
+
+`repos.py` に `update_assignment_order(user_id, feature_id, display_order)` を追加する（`UPDATE public.menu_assignments SET display_order = %s WHERE user_id = %s AND feature_id = %s`）。`assignment_service.py` に `change_assignment(user_id, feature_id, display_order)` を追加する。割当が存在しなければ `NotFoundError`。存在すれば更新し、更新後の `AssignmentRow`（ユーザ名・機能タイトルを付けたもの）を返す。要求・判断・失敗理由をログへ出す。
+
+`routers/assignments.py` に `PATCH /assignments/{user_id}/{feature_id}` を追加する。要求は `{"display_order": int}`。`NotFoundError` は404。
+
+フロントエンドの割当画面に、一覧の行選択を追加する。行を選ぶとユーザ・機能・表示順を入力欄に入れ、ユーザと機能のセレクトを無効化する（`disabled`）。保存時、選択中なら `updateAssignment` を呼んで表示順だけを送り、未選択（新規）なら従来どおり `createAssignment` を呼ぶ。キャンセルで選択を解除し、ユーザ・機能のセレクトを再び有効にする。
+
+### 完了条件
+
+- [ ] `PATCH /assignments/{user_id}/{feature_id}` で表示順を更新できる
+- [ ] 割り当てられていない組み合わせへの更新は404になる
+- [ ] 割当一覧の行を選ぶと、その割当のユーザ・機能・表示順が入力欄に入り、ユーザ・機能は変更できない
+- [ ] 表示順を変えて保存すると、一覧に反映される
+- [ ] 新規追加（行を選ばない状態での保存）は従来どおり動作する
+- [ ] ブラウザで一連の操作を確認できる
+
+---
+
 ## テスト
 
 ### 単体テスト
@@ -608,6 +656,7 @@ POST `/features` の `icon` を省略可にする。省略または空なら、�
 - [ ] 自己削除禁止、本機能削除禁止、自己からの本機能割当解除禁止、重複、論理削除済み対象、パスワード非出力を確認する
 - [ ] メールアドレスの必須、空、形式不正、一覧への出力を確認する
 - [ ] 機能のアイコン省略追加、`remove_icon` によるアイコン削除、アイコン未指定時の既存維持を確認する
+- [ ] 割当の表示順更新（成功、割り当てられていない組み合わせでの404）を確認する
 
 ### 結合テスト
 
@@ -633,3 +682,5 @@ POST `/features` の `icon` を省略可にする。省略または空なら、�
 | 2026-08-30 08:27 | 承認済み | タスク 11〜13 を承認 |
 | 2026-09-18 | 未承認 | 機能のアイコン任意項目化（タスク 14〜15）。API・画面 |
 | 2026-09-18 | 承認済み | タスク 14〜15 を承認 |
+| 2026-09-19 23:43 | 未承認 | 割当の表示順更新（タスク16）。API・画面 |
+| 2026-09-19 23:47 | 承認済み | タスク16を承認 |
