@@ -305,7 +305,7 @@ const sortedExpenses = computed(() =>
                 <option v-for="item in formItems" :key="item.id" :value="item.id">{{ item.name }}</option>
               </select>
             </div>
-            <div class="field">
+            <div class="field field-grow">
               <label for="purpose">用途</label>
               <input id="purpose" v-model="purpose" type="text" required />
             </div>
@@ -319,7 +319,7 @@ const sortedExpenses = computed(() =>
                 </option>
               </select>
             </div>
-            <div class="field field-narrow">
+            <div class="field field-grow">
               <label for="amount">金額</label>
               <input id="amount" v-model="amount" type="text" inputmode="decimal" placeholder="0.00" required />
             </div>

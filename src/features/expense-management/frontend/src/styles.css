@@ -257,6 +257,12 @@ textarea {
   flex: 0 0 auto;
 }
 
+/* Within a row, a .field-grow takes roughly twice the extra space of a plain
+   sibling .field, so paired fields don't have to split the row evenly. */
+.field-row > .field-grow {
+  flex-grow: 2;
+}
+
 /* Outside a .field-row, .form stacks fields vertically and stretches children to
    fill its width by default; flex-start sizes a narrow field to its own content
    (label or input, whichever is wider) instead of the modal's full width. */
