@@ -43,16 +43,13 @@ const memo = ref("");
 const paymentDate = ref("");
 const autoCalculatePaymentDate = ref(true);
 
-// Only a new record started while "all" is selected lets the user pick which budget period it belongs to.
-const showFormPeriodSelect = computed(() => editingId.value === null && selectedFilter.value === "all");
+// Editing always lets the user re-pick the budget period. A new record only offers the choice
+// while "all" is selected; starting from a single selected period skips straight to its items.
+const showFormPeriodSelect = computed(() => editingId.value !== null || selectedFilter.value === "all");
 
 const formItems = computed(() => {
-  if (editingId.value !== null) {
-    const current = items.value.find((i) => i.id === budgetItemId.value);
-    return current ? items.value.filter((i) => i.budget_period_id === current.budget_period_id) : items.value;
-  }
-  const periodId = selectedFilter.value === "all" ? formPeriodId.value : selectedFilter.value;
-  return periodId === null ? [] : items.value.filter((i) => i.budget_period_id === periodId);
+  const periodId = showFormPeriodSelect.value ? formPeriodId.value : selectedFilter.value;
+  return typeof periodId === "number" ? items.value.filter((i) => i.budget_period_id === periodId) : [];
 });
 
 function today(): string {
@@ -106,8 +103,12 @@ watch(selectedFilter, () => {
   loadExpenses().catch(handleError);
 });
 
-watch(formPeriodId, () => {
-  if (showForm.value && editingId.value === null) {
+// Reassign the budget item only when the newly selected period actually stops matching it,
+// so opening the form (which sets the period and the item together) doesn't clobber the item.
+watch(formPeriodId, (periodId) => {
+  if (!showForm.value || !showFormPeriodSelect.value || periodId === null) return;
+  const current = items.value.find((i) => i.id === budgetItemId.value);
+  if (!current || current.budget_period_id !== periodId) {
     budgetItemId.value = formItems.value[0]?.id ?? null;
   }
 });
@@ -153,6 +154,8 @@ function openEditForm(expense: Expense): void {
   editingId.value = expense.id;
   formError.value = "";
   usageDate.value = expense.usage_date;
+  const currentItem = items.value.find((i) => i.id === expense.budget_item_id);
+  formPeriodId.value = currentItem?.budget_period_id ?? null;
   budgetItemId.value = expense.budget_item_id;
   purpose.value = expense.purpose;
   amount.value = expense.amount;
