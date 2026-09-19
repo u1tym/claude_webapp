@@ -22,7 +22,7 @@ class PasswordBody(BaseModel):
 def list_passwords(
     keyword: str | None = Query(default=None),
     auth: AuthContext = Depends(get_current_user),
-) -> dict[str, list[dict[str, object]]]:
+) -> dict[str, object]:
     items = password_service.list_for_user(auth.user.id, keyword)
     return {"total": len(items), "items": items}
 
