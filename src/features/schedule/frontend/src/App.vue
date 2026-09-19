@@ -2,11 +2,7 @@
 import { onMounted, ref } from "vue";
 import { RouterView } from "vue-router";
 import { AuthError, getSettings, type Settings } from "./api";
-import iconBack from "./assets/icon-back.png";
-import iconEdit from "./assets/icon-edit.png";
-import iconNew from "./assets/icon-new.png";
-import iconSettings from "./assets/icon-settings.png";
-import iconTrash from "./assets/icon-trash.png";
+import Icon from "./components/Icon.vue";
 import {
   addCategoryNav,
   categoryNavBusy,
@@ -56,9 +52,8 @@ onMounted(async () => {
   </div>
   <div v-else-if="forbidden" class="shell">
     <header class="header">
-      <button v-if="settings" class="btn-text" type="button" @click="goMenu">
-        <img class="header-icon" :src="iconBack" alt="" />
-        Back
+      <button v-if="settings" class="btn-text" type="button" aria-label="Back" @click="goMenu">
+        <Icon name="back" />
       </button>
       <h1 class="header-title">Schedule</h1>
       <img v-if="settings?.icon_system" class="header-icon" :src="settings.icon_system" alt="" />
@@ -68,19 +63,20 @@ onMounted(async () => {
     </nav>
     <main class="content forbidden">
       <p>This feature is unavailable</p>
-      <button v-if="settings" class="btn-secondary" type="button" @click="goMenu">Back</button>
+      <button v-if="settings" class="btn-secondary" type="button" aria-label="Back" @click="goMenu">
+        <Icon name="back" />
+      </button>
     </main>
   </div>
   <div v-else-if="settings" class="shell">
     <header class="header">
-      <button class="btn-text" type="button" @click="goMenu">
-        <img class="header-icon" :src="iconBack" alt="" />
-        Back
+      <button class="btn-text" type="button" aria-label="Back" @click="goMenu">
+        <Icon name="back" />
       </button>
       <h1 class="header-title">Schedule</h1>
       <img v-if="settings.icon_system" class="header-icon" :src="settings.icon_system" alt="" />
       <button class="btn-text btn-icon" type="button" aria-label="Settings" @click="openHolidaySettings">
-        <img class="header-icon header-icon-lg" :src="iconSettings" alt="" />
+        <Icon name="config" />
       </button>
     </header>
     <nav class="nav" aria-label="Navigation">
@@ -117,7 +113,7 @@ onMounted(async () => {
             :disabled="categoryNavBusy"
             @click="addCategoryNav"
           >
-            <img class="header-icon" :src="iconNew" alt="" />
+            <Icon name="plus" />
           </button>
         </div>
         <div class="nav-cat-body">
@@ -139,7 +135,7 @@ onMounted(async () => {
                   aria-label="Edit"
                   @click.stop="editCategoryNav(item.id, $event)"
                 >
-                  <img class="row-icon" :src="iconEdit" alt="" />
+                  <Icon name="edit" />
                 </button>
                 <button
                   class="btn-text btn-icon-sm"
@@ -147,7 +143,7 @@ onMounted(async () => {
                   aria-label="Delete"
                   @click.stop="removeCategoryNav(item.id)"
                 >
-                  <img class="row-icon" :src="iconTrash" alt="" />
+                  <Icon name="delete" />
                 </button>
               </span>
             </li>

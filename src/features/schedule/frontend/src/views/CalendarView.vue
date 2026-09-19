@@ -45,11 +45,6 @@ import {
 } from "../calendar";
 import { setHolidaySettingsHandler } from "../holiday-settings";
 import Icon from "../components/Icon.vue";
-import iconEdit from "../assets/icon-edit.png";
-import iconLeft from "../assets/icon-left.png";
-import iconNew from "../assets/icon-new.png";
-import iconRight from "../assets/icon-right.png";
-import iconTrash from "../assets/icon-trash.png";
 import { monthLinks, setMonthHandler } from "../month-nav";
 import {
   categoryNavBusy,
@@ -1409,11 +1404,11 @@ onUnmounted(() => {
     <template v-else>
       <div class="toolbar">
         <button class="btn-text btn-icon" type="button" aria-label="Prev" :disabled="busy" @click="shiftMonth(-1)">
-          <img class="month-nav-icon" :src="iconLeft" alt="" />
+          <Icon name="back" />
         </button>
         <h2 class="month-title">{{ titleText }}</h2>
         <button class="btn-text btn-icon" type="button" aria-label="Next" :disabled="busy" @click="shiftMonth(1)">
-          <img class="month-nav-icon" :src="iconRight" alt="" />
+          <Icon class="icon-flip" name="back" />
         </button>
       </div>
       <div class="body">
@@ -1610,7 +1605,7 @@ onUnmounted(() => {
                 aria-label="Edit"
                 @click="openCategoryEdit(item, $event)"
               >
-                <img class="row-icon" :src="iconEdit" alt="" />
+                <Icon name="edit" />
               </button>
               <button
                 class="btn-text btn-icon-sm"
@@ -1618,7 +1613,7 @@ onUnmounted(() => {
                 aria-label="Delete"
                 @click.stop="askDelete('category', item.id)"
               >
-                <img class="row-icon" :src="iconTrash" alt="" />
+                <Icon name="delete" />
               </button>
             </span>
           </li>
@@ -1667,7 +1662,7 @@ onUnmounted(() => {
           <div class="section-head">
             <h3>Routines</h3>
             <button class="btn-text btn-icon" type="button" aria-label="New" :disabled="busy" @click="openRoutineAdd">
-              <img class="header-icon" :src="iconNew" alt="" />
+              <Icon name="plus" />
             </button>
           </div>
           <div class="apply-actions">
@@ -1701,7 +1696,7 @@ onUnmounted(() => {
                   :disabled="busy"
                   @click="openRoutineEdit(item, $event)"
                 >
-                  <img class="row-icon" :src="iconEdit" alt="" />
+                  <Icon name="edit" />
                 </button>
                 <button
                   class="btn-text btn-icon-sm"
@@ -1710,7 +1705,7 @@ onUnmounted(() => {
                   :disabled="busy"
                   @click.stop="askDelete('routine', item.id)"
                 >
-                  <img class="row-icon" :src="iconTrash" alt="" />
+                  <Icon name="delete" />
                 </button>
               </span>
             </li>
@@ -1997,7 +1992,7 @@ onUnmounted(() => {
             :disabled="busy"
             @click="shiftApplyMonth(-1)"
           >
-            <img class="row-icon" :src="iconLeft" alt="" />
+            <Icon name="back" />
           </button>
           <span class="apply-month-label">{{ applyMonthText }}</span>
           <button
@@ -2007,7 +2002,7 @@ onUnmounted(() => {
             :disabled="busy"
             @click="shiftApplyMonth(1)"
           >
-            <img class="row-icon" :src="iconRight" alt="" />
+            <Icon class="icon-flip" name="back" />
           </button>
         </div>
         <div class="modal-actions">
@@ -2089,12 +2084,6 @@ onUnmounted(() => {
   font-weight: 500;
   text-align: center;
   min-width: 12ch;
-}
-
-.month-nav-icon {
-  width: 40px;
-  height: 40px;
-  object-fit: contain;
 }
 
 .month-bar {
@@ -2480,12 +2469,6 @@ onUnmounted(() => {
 .row-actions {
   margin-left: auto;
   display: flex;
-}
-
-.row-icon {
-  width: 28px;
-  height: 28px;
-  object-fit: contain;
 }
 
 .swatch {

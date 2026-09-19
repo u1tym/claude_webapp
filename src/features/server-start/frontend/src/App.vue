@@ -2,6 +2,7 @@
 import { onMounted, provide, ref } from "vue";
 import { RouterView } from "vue-router";
 import { AuthError, getSettings, type Settings } from "./api";
+import Icon from "./components/Icon.vue";
 
 const settings = ref<Settings | null>(null);
 const loadError = ref("");
@@ -40,9 +41,8 @@ onMounted(async () => {
   </div>
   <div v-else-if="forbidden" class="shell">
     <header class="header">
-      <button v-if="settings" class="btn-text" type="button" @click="goMenu">
-        <img v-if="settings.icon_back" class="header-icon" :src="settings.icon_back" alt="" />
-        戻る
+      <button v-if="settings" class="btn-text" type="button" aria-label="戻る" @click="goMenu">
+        <Icon name="back" />
       </button>
       <h1 class="header-title">PC起動</h1>
       <img v-if="settings?.icon_system" class="header-icon" :src="settings.icon_system" alt="" />
@@ -52,14 +52,15 @@ onMounted(async () => {
     </nav>
     <main class="content forbidden">
       <p>この機能を使えません</p>
-      <button v-if="settings" class="btn-secondary" type="button" @click="goMenu">戻る</button>
+      <button v-if="settings" class="btn-secondary" type="button" aria-label="戻る" @click="goMenu">
+        <Icon name="back" />
+      </button>
     </main>
   </div>
   <div v-else-if="settings" class="shell">
     <header class="header">
-      <button class="btn-text" type="button" @click="goMenu">
-        <img v-if="settings.icon_back" class="header-icon" :src="settings.icon_back" alt="" />
-        戻る
+      <button class="btn-text" type="button" aria-label="戻る" @click="goMenu">
+        <Icon name="back" />
       </button>
       <h1 class="header-title">PC起動</h1>
       <img v-if="settings.icon_system" class="header-icon" :src="settings.icon_system" alt="" />

@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from "vue";
 import { useRoute } from "vue-router";
 import { getSettings, type Settings } from "./api";
+import Icon from "./components/Icon.vue";
 
 const route = useRoute();
 const settings = ref<Settings | null>(null);
@@ -43,9 +44,8 @@ function onUnauth(): void {
 <template>
   <div class="shell">
     <header class="header">
-      <button class="btn-text" type="button" @click="goMenu">
-        <img v-if="settings" class="header-icon" :src="settings.icon_back" alt="" />
-        戻る
+      <button class="btn-text" type="button" aria-label="戻る" @click="goMenu">
+        <Icon name="back" />
       </button>
       <h1 class="header-title">{{ title }}</h1>
       <img v-if="settings" class="header-icon" :src="settings.icon_system" alt="" />
