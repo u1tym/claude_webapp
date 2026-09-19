@@ -2,6 +2,7 @@
 import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { getMenu, logMenuNavigation, logout, type MenuItem } from "../api";
+import Icon from "../components/Icon.vue";
 
 const router = useRouter();
 const items = ref<MenuItem[]>([]);
@@ -80,10 +81,11 @@ async function onLogout(): Promise<void> {
     <button
       class="btn-logout"
       type="button"
+      aria-label="ログアウト"
       :disabled="loading || logoutBusy"
       @click="onLogout"
     >
-      ログアウト
+      <Icon name="logout" />
     </button>
     <p v-if="error" class="banner-error">{{ error }}</p>
     <div v-if="loading" class="loading">読み込み中…</div>

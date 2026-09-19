@@ -34,6 +34,12 @@ body,
   background-size: 32px 32px;
 }
 
+.icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
 .banner-error {
   color: var(--color-danger);
   margin: 0 0 calc(var(--space) * 2);
@@ -103,6 +109,9 @@ body,
 }
 
 .login-form button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: none;
   background: var(--color-primary);
   color: var(--color-text);
@@ -129,6 +138,9 @@ body,
 }
 
 .btn-logout {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   align-self: flex-end;
   min-height: var(--tap);
   padding: 0 calc(var(--space) * 2);

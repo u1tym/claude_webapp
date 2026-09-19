@@ -14,6 +14,7 @@ import {
   getPaymentMethods,
   updateExpense,
 } from "../api";
+import Icon from "../components/Icon.vue";
 
 const emit = defineEmits<{ unauth: []; forbidden: [] }>();
 
@@ -250,7 +251,9 @@ const sortedExpenses = computed(() =>
           </option>
         </select>
       </div>
-      <button class="btn-primary push-end" type="button" @click="openCreateForm">新規登録</button>
+      <button class="btn-primary push-end" type="button" aria-label="新規登録" @click="openCreateForm">
+        <Icon name="new" />
+      </button>
     </div>
 
     <div class="panel list">
@@ -276,9 +279,11 @@ const sortedExpenses = computed(() =>
             <td><span class="cell-label">支出方法</span>{{ methodName(expense.payment_method_id) }}</td>
             <td><span class="cell-label">支払日</span>{{ expense.payment_date }}</td>
             <td class="actions">
-              <button class="btn-text" type="button" @click="openEditForm(expense)">編集</button>
-              <button class="btn-text danger" type="button" @click="removeExpense(expense)">
-                削除
+              <button class="btn-text" type="button" aria-label="編集" @click="openEditForm(expense)">
+                <Icon name="edit" />
+              </button>
+              <button class="btn-text danger" type="button" aria-label="削除" @click="removeExpense(expense)">
+                <Icon name="delete" />
               </button>
             </td>
           </tr>
@@ -349,8 +354,12 @@ const sortedExpenses = computed(() =>
             </label>
           </div>
           <div class="actions">
-            <button class="btn-primary" type="submit">保存</button>
-            <button class="btn-secondary" type="button" @click="closeForm">キャンセル</button>
+            <button class="btn-primary" type="submit" aria-label="保存">
+              <Icon name="check" />
+            </button>
+            <button class="btn-secondary" type="button" aria-label="キャンセル" @click="closeForm">
+              <Icon name="close" />
+            </button>
           </div>
         </form>
       </div>

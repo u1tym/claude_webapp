@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { inject, onMounted, ref } from "vue";
 import { AuthError, getStatus, startPower } from "../api";
+import Icon from "../components/Icon.vue";
 
 const onAuthError = inject<(error: unknown) => void>("onAuthError");
 const loading = ref(true);
@@ -87,8 +88,14 @@ onMounted(() => {
       <p v-if="starting" class="caption">起動を実行中…</p>
       <p v-if="isUp !== null" class="status-text">{{ isUp ? "起動済み" : "未起動" }}</p>
       <div class="actions">
-        <button class="btn-secondary" type="button" :disabled="starting" @click="loadStatus">
-          確認
+        <button
+          class="btn-secondary"
+          type="button"
+          aria-label="確認"
+          :disabled="starting"
+          @click="loadStatus"
+        >
+          <Icon name="check" />
         </button>
         <button
           v-if="isUp !== null"
@@ -106,7 +113,9 @@ onMounted(() => {
         <p>起動済みです。続けて起動しますか？</p>
         <div class="modal-actions">
           <button class="btn-primary" type="button" @click="onConfirm">起動</button>
-          <button class="btn-secondary" type="button" @click="onCancel">キャンセル</button>
+          <button class="btn-secondary" type="button" aria-label="キャンセル" @click="onCancel">
+            <Icon name="close" />
+          </button>
         </div>
       </div>
     </div>

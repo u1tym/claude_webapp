@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
 import { createUser, deleteUser, getUsers, updateUser, type UserItem } from "../api";
+import Icon from "../components/Icon.vue";
 
 const emit = defineEmits<{ unauth: []; forbidden: [] }>();
 
@@ -159,7 +160,9 @@ async function confirmDelete(): Promise<void> {
   <div v-else class="split" :class="mode === 'list' ? 'mobile-list' : 'mobile-form'">
     <section class="panel list-panel">
       <div class="actions">
-        <button class="btn-primary" type="button" :disabled="loading" @click="startCreate">新規</button>
+        <button class="btn-primary" type="button" aria-label="新規" :disabled="loading" @click="startCreate">
+          <Icon name="new" />
+        </button>
       </div>
       <div class="list">
         <p v-if="items.length === 0" class="empty">データがありません</p>
@@ -213,16 +216,21 @@ async function confirmDelete(): Promise<void> {
           :required="mode === 'create'"
         />
         <div class="actions">
-          <button class="btn-primary" type="submit" :disabled="loading">保存</button>
-          <button class="btn-secondary" type="button" :disabled="loading" @click="cancel">キャンセル</button>
+          <button class="btn-primary" type="submit" aria-label="保存" :disabled="loading">
+            <Icon name="check" />
+          </button>
+          <button class="btn-secondary" type="button" aria-label="キャンセル" :disabled="loading" @click="cancel">
+            <Icon name="close" />
+          </button>
           <button
             v-if="mode === 'edit' && selected && !selected.is_self"
             class="btn-text danger"
             type="button"
+            aria-label="削除"
             :disabled="loading"
             @click="confirmId = selected.id"
           >
-            削除
+            <Icon name="delete" />
           </button>
         </div>
       </form>
@@ -232,8 +240,12 @@ async function confirmDelete(): Promise<void> {
     <div class="modal">
       <p>削除しますか？</p>
       <div class="actions">
-        <button class="btn-primary" type="button" @click="confirmDelete">削除</button>
-        <button class="btn-secondary" type="button" @click="confirmId = null">キャンセル</button>
+        <button class="btn-primary" type="button" aria-label="削除" @click="confirmDelete">
+          <Icon name="delete" />
+        </button>
+        <button class="btn-secondary" type="button" aria-label="キャンセル" @click="confirmId = null">
+          <Icon name="close" />
+        </button>
       </div>
     </div>
   </div>

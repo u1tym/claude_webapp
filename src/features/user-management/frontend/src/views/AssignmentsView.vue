@@ -10,6 +10,7 @@ import {
   type FeatureItem,
   type UserItem,
 } from "../api";
+import Icon from "../components/Icon.vue";
 
 const emit = defineEmits<{ unauth: []; forbidden: [] }>();
 
@@ -135,7 +136,9 @@ async function confirmUnassign(): Promise<void> {
   <div v-else class="split" :class="mode === 'list' ? 'mobile-list' : 'mobile-form'">
     <section class="panel list-panel">
       <div class="actions">
-        <button class="btn-primary" type="button" :disabled="loading" @click="startCreate">新規</button>
+        <button class="btn-primary" type="button" aria-label="新規" :disabled="loading" @click="startCreate">
+          <Icon name="new" />
+        </button>
       </div>
       <div class="list">
         <p v-if="items.length === 0" class="empty">データがありません</p>
@@ -158,10 +161,11 @@ async function confirmUnassign(): Promise<void> {
                   v-if="item.can_unassign"
                   class="btn-text danger"
                   type="button"
+                  aria-label="解除"
                   :disabled="loading"
                   @click="confirmKey = rowKey(item)"
                 >
-                  解除
+                  <Icon name="stop" />
                 </button>
               </td>
             </tr>
@@ -181,8 +185,12 @@ async function confirmUnassign(): Promise<void> {
         </select>
         <input v-model="displayOrder" type="number" placeholder="表示順" aria-label="表示順" :disabled="loading" required />
         <div class="actions">
-          <button class="btn-primary" type="submit" :disabled="loading">保存</button>
-          <button class="btn-secondary" type="button" :disabled="loading" @click="cancel">キャンセル</button>
+          <button class="btn-primary" type="submit" aria-label="保存" :disabled="loading">
+            <Icon name="check" />
+          </button>
+          <button class="btn-secondary" type="button" aria-label="キャンセル" :disabled="loading" @click="cancel">
+            <Icon name="close" />
+          </button>
         </div>
       </form>
     </section>
@@ -191,8 +199,12 @@ async function confirmUnassign(): Promise<void> {
     <div class="modal">
       <p>解除しますか？</p>
       <div class="actions">
-        <button class="btn-primary" type="button" @click="confirmUnassign">解除</button>
-        <button class="btn-secondary" type="button" @click="confirmKey = null">キャンセル</button>
+        <button class="btn-primary" type="button" aria-label="解除" @click="confirmUnassign">
+          <Icon name="stop" />
+        </button>
+        <button class="btn-secondary" type="button" aria-label="キャンセル" @click="confirmKey = null">
+          <Icon name="close" />
+        </button>
       </div>
     </div>
   </div>

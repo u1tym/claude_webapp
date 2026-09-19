@@ -219,11 +219,20 @@ select {
 .btn-primary,
 .btn-secondary,
 .btn-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: var(--tap);
   min-width: var(--tap);
   padding: 0 calc(var(--space) * 2);
   border-radius: var(--radius);
   cursor: pointer;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .btn-primary {

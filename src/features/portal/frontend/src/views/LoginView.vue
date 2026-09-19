@@ -3,6 +3,7 @@ import { onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { getSession, login } from "../api";
 import logoUrl from "../assets/Mugi2.png";
+import Icon from "../components/Icon.vue";
 
 const router = useRouter();
 const username = ref("");
@@ -69,7 +70,7 @@ async function onSubmit(): Promise<void> {
           :disabled="loading"
           required
         />
-        <button type="submit" :disabled="loading">ログイン</button>
+        <button type="submit" aria-label="ログイン" :disabled="loading"><Icon name="login" /></button>
       </form>
     </div>
   </div>

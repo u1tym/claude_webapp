@@ -12,6 +12,7 @@ import {
   updateBudgetItem,
   updateBudgetPeriod,
 } from "../api";
+import Icon from "../components/Icon.vue";
 
 const emit = defineEmits<{ unauth: []; forbidden: [] }>();
 
@@ -244,7 +245,9 @@ async function removeItem(item: BudgetItem): Promise<void> {
 
     <template v-if="view === 'list'">
       <div class="toolbar">
-        <button class="btn-primary" type="button" @click="openCreatePeriodForm">新規作成</button>
+        <button class="btn-primary" type="button" aria-label="新規作成" @click="openCreatePeriodForm">
+          <Icon name="new" />
+        </button>
         <button class="btn-secondary" type="button" :disabled="periods.length === 0" @click="openDuplicatePeriodForm">
           直近から複製作成
         </button>
@@ -271,7 +274,9 @@ async function removeItem(item: BudgetItem): Promise<void> {
     </template>
 
     <template v-else>
-      <button class="btn-text" type="button" @click="goToList">← 予算期間一覧に戻る</button>
+      <button class="btn-text" type="button" aria-label="予算期間一覧に戻る" @click="goToList">
+        <Icon name="back" />
+      </button>
 
       <div class="panel">
         <p v-if="detailError" class="banner-error">{{ detailError }}</p>
@@ -287,14 +292,18 @@ async function removeItem(item: BudgetItem): Promise<void> {
             <input v-model="detailEndDate" type="date" aria-label="終了日" required />
           </div>
           <div class="actions actions-end">
-            <button class="btn-primary" type="submit">保存</button>
+            <button class="btn-primary" type="submit" aria-label="保存">
+              <Icon name="check" />
+            </button>
           </div>
         </form>
       </div>
 
       <div class="toolbar">
         <h2 class="section-title">予算項目</h2>
-        <button class="btn-primary" type="button" @click="openCreateItemForm">追加</button>
+        <button class="btn-primary" type="button" aria-label="追加" @click="openCreateItemForm">
+          <Icon name="new" />
+        </button>
       </div>
       <div class="panel list">
         <p v-if="items.length === 0" class="empty">データがありません</p>
@@ -313,8 +322,12 @@ async function removeItem(item: BudgetItem): Promise<void> {
               <td class="cell-amount"><span class="cell-label">金額</span>{{ item.amount }}</td>
               <td><span class="cell-label">表示順</span>{{ item.display_order }}</td>
               <td class="actions">
-                <button class="btn-text" type="button" @click="openEditItemForm(item)">編集</button>
-                <button class="btn-text danger" type="button" @click="removeItem(item)">削除</button>
+                <button class="btn-text" type="button" aria-label="編集" @click="openEditItemForm(item)">
+                  <Icon name="edit" />
+                </button>
+                <button class="btn-text danger" type="button" aria-label="削除" @click="removeItem(item)">
+                  <Icon name="delete" />
+                </button>
               </td>
             </tr>
           </tbody>
@@ -344,8 +357,12 @@ async function removeItem(item: BudgetItem): Promise<void> {
             </div>
           </div>
           <div class="actions">
-            <button class="btn-primary" type="submit">保存</button>
-            <button class="btn-secondary" type="button" @click="closePeriodForm">キャンセル</button>
+            <button class="btn-primary" type="submit" aria-label="保存">
+              <Icon name="check" />
+            </button>
+            <button class="btn-secondary" type="button" aria-label="キャンセル" @click="closePeriodForm">
+              <Icon name="close" />
+            </button>
           </div>
         </form>
       </div>
@@ -371,8 +388,12 @@ async function removeItem(item: BudgetItem): Promise<void> {
             </div>
           </div>
           <div class="actions">
-            <button class="btn-primary" type="submit">保存</button>
-            <button class="btn-secondary" type="button" @click="closeItemForm">キャンセル</button>
+            <button class="btn-primary" type="submit" aria-label="保存">
+              <Icon name="check" />
+            </button>
+            <button class="btn-secondary" type="button" aria-label="キャンセル" @click="closeItemForm">
+              <Icon name="close" />
+            </button>
           </div>
         </form>
       </div>

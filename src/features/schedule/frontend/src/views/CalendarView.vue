@@ -44,6 +44,7 @@ import {
   type DayCell,
 } from "../calendar";
 import { setHolidaySettingsHandler } from "../holiday-settings";
+import Icon from "../components/Icon.vue";
 import iconEdit from "../assets/icon-edit.png";
 import iconLeft from "../assets/icon-left.png";
 import iconNew from "../assets/icon-new.png";
@@ -1626,8 +1627,12 @@ onUnmounted(() => {
           {{ prefs.show_deleted ? "Hide deleted" : "Show deleted" }}
         </button>
         <div class="modal-actions">
-          <button class="btn-primary" type="button" :disabled="busy" @click="openCategoryAdd">New</button>
-          <button class="btn-secondary" type="button" @click="categoryPanel = false">Close</button>
+          <button class="btn-primary" type="button" aria-label="New" :disabled="busy" @click="openCategoryAdd">
+            <Icon name="new" />
+          </button>
+          <button class="btn-secondary" type="button" aria-label="Close" @click="categoryPanel = false">
+            <Icon name="close" />
+          </button>
         </div>
       </div>
     </div>
@@ -1712,7 +1717,9 @@ onUnmounted(() => {
           </ul>
         </div>
         <div class="modal-actions">
-          <button class="btn-secondary" type="button" @click="settingsPanel = false">Close</button>
+          <button class="btn-secondary" type="button" aria-label="Close" @click="settingsPanel = false">
+            <Icon name="close" />
+          </button>
         </div>
       </div>
     </div>
@@ -1794,16 +1801,27 @@ onUnmounted(() => {
           </select>
         </div>
         <div class="modal-actions">
-          <button class="btn-primary" type="button" :disabled="busy" @click="saveSchedule">Save</button>
-          <button class="btn-secondary" type="button" :disabled="busy" @click="scheduleOpen = false">Cancel</button>
+          <button class="btn-primary" type="button" aria-label="Save" :disabled="busy" @click="saveSchedule">
+            <Icon name="check" />
+          </button>
+          <button
+            class="btn-secondary"
+            type="button"
+            aria-label="Cancel"
+            :disabled="busy"
+            @click="scheduleOpen = false"
+          >
+            <Icon name="close" />
+          </button>
           <button
             v-if="scheduleForm.id !== null"
             class="btn-text"
             type="button"
+            aria-label="Delete"
             :disabled="busy"
             @click="askDelete('schedule', scheduleForm.id)"
           >
-            Delete
+            <Icon name="delete" />
           </button>
         </div>
       </div>
@@ -1818,8 +1836,18 @@ onUnmounted(() => {
           <input v-model="categoryForm.color" class="field" type="color" :disabled="busy" />
         </div>
         <div class="modal-actions">
-          <button class="btn-primary" type="button" :disabled="busy" @click="saveCategory">Save</button>
-          <button class="btn-secondary" type="button" :disabled="busy" @click="categoryOpen = false">Cancel</button>
+          <button class="btn-primary" type="button" aria-label="Save" :disabled="busy" @click="saveCategory">
+            <Icon name="check" />
+          </button>
+          <button
+            class="btn-secondary"
+            type="button"
+            aria-label="Cancel"
+            :disabled="busy"
+            @click="categoryOpen = false"
+          >
+            <Icon name="close" />
+          </button>
         </div>
       </div>
     </div>
@@ -1833,8 +1861,18 @@ onUnmounted(() => {
           <input v-model="holidayForm.name" class="field" placeholder="Name" :disabled="busy" />
         </div>
         <div class="modal-actions">
-          <button class="btn-primary" type="button" :disabled="busy" @click="saveHoliday">Save</button>
-          <button class="btn-secondary" type="button" :disabled="busy" @click="holidayOpen = false">Cancel</button>
+          <button class="btn-primary" type="button" aria-label="Save" :disabled="busy" @click="saveHoliday">
+            <Icon name="check" />
+          </button>
+          <button
+            class="btn-secondary"
+            type="button"
+            aria-label="Cancel"
+            :disabled="busy"
+            @click="holidayOpen = false"
+          >
+            <Icon name="close" />
+          </button>
         </div>
       </div>
     </div>
@@ -1932,8 +1970,18 @@ onUnmounted(() => {
           <textarea v-model="routineForm.detail" class="field" placeholder="Details" :disabled="busy"></textarea>
         </div>
         <div class="modal-actions">
-          <button class="btn-primary" type="button" :disabled="busy" @click="saveRoutine">Save</button>
-          <button class="btn-secondary" type="button" :disabled="busy" @click="routineOpen = false">Cancel</button>
+          <button class="btn-primary" type="button" aria-label="Save" :disabled="busy" @click="saveRoutine">
+            <Icon name="check" />
+          </button>
+          <button
+            class="btn-secondary"
+            type="button"
+            aria-label="Cancel"
+            :disabled="busy"
+            @click="routineOpen = false"
+          >
+            <Icon name="close" />
+          </button>
         </div>
       </div>
     </div>
@@ -1964,7 +2012,15 @@ onUnmounted(() => {
         </div>
         <div class="modal-actions">
           <button class="btn-primary" type="button" :disabled="busy" @click="confirmApply">Apply</button>
-          <button class="btn-secondary" type="button" :disabled="busy" @click="applyOpen = false">Cancel</button>
+          <button
+            class="btn-secondary"
+            type="button"
+            aria-label="Cancel"
+            :disabled="busy"
+            @click="applyOpen = false"
+          >
+            <Icon name="close" />
+          </button>
         </div>
       </div>
     </div>
@@ -1974,8 +2030,18 @@ onUnmounted(() => {
         <h2>Delete</h2>
         <p>Delete this?</p>
         <div class="modal-actions">
-          <button class="btn-primary" type="button" :disabled="busy" @click="confirmDelete">Delete</button>
-          <button class="btn-secondary" type="button" :disabled="busy" @click="confirmKind = null">Cancel</button>
+          <button class="btn-primary" type="button" aria-label="Delete" :disabled="busy" @click="confirmDelete">
+            <Icon name="delete" />
+          </button>
+          <button
+            class="btn-secondary"
+            type="button"
+            aria-label="Cancel"
+            :disabled="busy"
+            @click="confirmKind = null"
+          >
+            <Icon name="close" />
+          </button>
         </div>
       </div>
     </div>

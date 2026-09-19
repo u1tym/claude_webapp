@@ -9,6 +9,7 @@ import {
   getPaymentMethods,
   updatePaymentMethod,
 } from "../api";
+import Icon from "../components/Icon.vue";
 
 const emit = defineEmits<{ unauth: []; forbidden: [] }>();
 
@@ -183,7 +184,9 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
   <template v-else>
     <p v-if="errorMessage" class="banner-error">{{ errorMessage }}</p>
     <div class="toolbar">
-      <button class="btn-primary" type="button" @click="openCreateForm">新規登録</button>
+      <button class="btn-primary" type="button" aria-label="新規登録" @click="openCreateForm">
+        <Icon name="new" />
+      </button>
     </div>
 
     <div class="panel list">
@@ -207,8 +210,12 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
             <td><span class="cell-label">支払日</span>{{ method.payment_day }}</td>
             <td><span class="cell-label">表示順</span>{{ method.display_order }}</td>
             <td class="actions">
-              <button class="btn-text" type="button" @click="openEditForm(method)">編集</button>
-              <button class="btn-text danger" type="button" @click="removeMethod(method)">削除</button>
+              <button class="btn-text" type="button" aria-label="編集" @click="openEditForm(method)">
+                <Icon name="edit" />
+              </button>
+              <button class="btn-text danger" type="button" aria-label="削除" @click="removeMethod(method)">
+                <Icon name="delete" />
+              </button>
             </td>
           </tr>
         </tbody>
@@ -316,8 +323,12 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
           </template>
 
           <div class="actions">
-            <button class="btn-primary" type="submit">保存</button>
-            <button class="btn-secondary" type="button" @click="closeForm">キャンセル</button>
+            <button class="btn-primary" type="submit" aria-label="保存">
+              <Icon name="check" />
+            </button>
+            <button class="btn-secondary" type="button" aria-label="キャンセル" @click="closeForm">
+              <Icon name="close" />
+            </button>
           </div>
         </form>
       </div>

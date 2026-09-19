@@ -125,11 +125,20 @@ button {
 .btn-primary,
 .btn-secondary,
 .btn-text {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-height: var(--tap);
   border-radius: var(--radius);
   padding: 0 calc(var(--space) * 2);
   border: 1px solid transparent;
   transition: border-color var(--duration);
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
 }
 
 .btn-primary {
