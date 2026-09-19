@@ -1,11 +1,11 @@
 :root {
-  --color-bg: #070b14;
-  --color-surface: #0e1624;
-  --color-text: #e8f1ff;
-  --color-text-muted: #8aa0b8;
-  --color-border: #1e3a4f;
-  --color-primary: #8b7cff;
-  --color-danger: #ff5c7a;
+  --color-bg: #faf7f2;
+  --color-surface: #ffffff;
+  --color-text: #3a3244;
+  --color-text-muted: #8b8496;
+  --color-border: #e6e0ed;
+  --color-primary: #a78bfa;
+  --color-danger: #d1477a;
   --space: 8px;
   --radius: 8px;
   --font-size: 16px;
@@ -29,8 +29,8 @@ body,
   color: var(--color-text);
   background-color: var(--color-bg);
   background-image:
-    linear-gradient(rgb(139 124 255 / 4%) 1px, transparent 1px),
-    linear-gradient(90deg, rgb(139 124 255 / 4%) 1px, transparent 1px);
+    linear-gradient(rgb(167 139 250 / 6%) 1px, transparent 1px),
+    linear-gradient(90deg, rgb(167 139 250 / 6%) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
@@ -228,7 +228,7 @@ select {
 
 .btn-primary {
   background: var(--color-primary);
-  color: var(--color-bg);
+  color: var(--color-text);
   border: 0;
 }
 

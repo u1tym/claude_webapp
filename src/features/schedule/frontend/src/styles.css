@@ -1,11 +1,11 @@
 :root {
-  --color-bg: #070b14;
-  --color-surface: #0e1624;
-  --color-text: #e8f1ff;
-  --color-text-muted: #8aa0b8;
-  --color-border: #1e3a4f;
-  --color-primary: #4da3ff;
-  --color-danger: #ff5c7a;
+  --color-bg: #faf7f2;
+  --color-surface: #ffffff;
+  --color-text: #3a3244;
+  --color-text-muted: #8b8496;
+  --color-border: #e6e0ed;
+  --color-primary: #6c9bff;
+  --color-danger: #d1477a;
   --space: 8px;
   --radius: 8px;
   --font-size: 16px;
@@ -37,8 +37,8 @@ body,
 
 body {
   background-image:
-    linear-gradient(rgba(77, 163, 255, 0.04) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(77, 163, 255, 0.04) 1px, transparent 1px);
+    linear-gradient(rgba(108, 155, 255, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(108, 155, 255, 0.06) 1px, transparent 1px);
   background-size: 32px 32px;
 }
 
@@ -292,7 +292,7 @@ button {
 
 .btn-primary {
   background: var(--color-primary);
-  color: var(--color-bg);
+  color: var(--color-text);
   border-color: var(--color-primary);
 }
 

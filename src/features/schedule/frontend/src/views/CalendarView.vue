@@ -169,7 +169,7 @@ const scheduleForm = ref({
   is_completed: false,
   needs_notification: false,
 });
-const categoryForm = ref({ id: null as number | null, name: "", color: "#4DA3FF" });
+const categoryForm = ref({ id: null as number | null, name: "", color: "#6C9BFF" });
 const holidayForm = ref({ holiday_date: "", name: "" });
 
 let successTimer = 0;
@@ -290,14 +290,14 @@ function parseHexColor(value: string): [number, number, number] | null {
 function textOn(background: string): string {
   const rgb = parseHexColor(background);
   if (rgb === null) {
-    return "#e8f1ff";
+    return "#3a3244";
   }
   const [r, g, b] = rgb.map((channel) => {
     const s = channel / 255;
     return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
   });
   const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-  return luminance > 0.45 ? "#070b14" : "#e8f1ff";
+  return luminance > 0.45 ? "#3a3244" : "#ffffff";
 }
 
 function handle(errorValue: unknown): boolean {
@@ -369,7 +369,7 @@ function tone(cell: DayCell): "danger" | "primary" | "normal" {
 }
 
 function categoryColor(categoryId: number): string {
-  return categories.value.find((item) => item.id === categoryId)?.color ?? "#4DA3FF";
+  return categories.value.find((item) => item.id === categoryId)?.color ?? "#6C9BFF";
 }
 
 function itemTone(categoryId: number): { backgroundColor: string; color: string } {
@@ -1118,7 +1118,7 @@ async function applyEveryRoutine(): Promise<void> {
 }
 
 function openCategoryAdd(): void {
-  categoryForm.value = { id: null, name: "", color: "#4DA3FF" };
+  categoryForm.value = { id: null, name: "", color: "#6C9BFF" };
   formError.value = "";
   categoryOpen.value = true;
 }

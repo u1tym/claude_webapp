@@ -23,9 +23,9 @@
 
 ## 思想
 
-情報を主役とする。暗い面の上に、細い光の線と一つのアクセントで構造を示す。視認性・操作性・拡張性を優先する。
+情報を主役とする。明るく柔らかな面の上に、淡いパステルの色面と一つのアクセントで構造を示す。視認性・操作性・拡張性を優先する。
 
-キーワード: Precise / Dark / Luminous / Structured / Extensible
+キーワード: Precise / Bright / Gentle / Structured / Extensible
 
 常に意識すること
 
@@ -36,9 +36,9 @@
 
 同じ役割のものは必ず同じ見た目とする。機能ごとに専用の見た目を作らない。殻（分割とナビ）は、ログイン画面とメニュー画面を除き、全機能で同じ形にする。
 
-避けること: パステル、高彩度の蛍光の塗りつぶし、虹色のグラデーション、厚いドロップシャドウ、目的のないアニメーション。
+避けること: 高彩度の蛍光色の塗りつぶし、虹色のグラデーション、厚いドロップシャドウ、目的のないアニメーション、コントラストの低い配色（淡い文字色を淡い背景に重ねる等）。
 
-優先すること: 可読性、視線誘導、情報密度の最適化。暗い背景でのコントラスト。
+優先すること: 可読性、視線誘導、情報密度の最適化。明るい背景でのコントラスト。
 
 新機能は既存コンポーネントを再利用しない。このルールの見た目・思想・殻へ適合させる。新しい見た目パターンは、既存では表現できないときだけ追加する。
 
@@ -90,13 +90,13 @@
 
 ```css
 :root {
-  --color-bg: #070b14;
-  --color-surface: #0e1624;
-  --color-text: #e8f1ff;
-  --color-text-muted: #8aa0b8;
-  --color-border: #1e3a4f;
-  --color-primary: #3ee0c8;
-  --color-danger: #ff5c7a;
+  --color-bg: #faf7f2;
+  --color-surface: #ffffff;
+  --color-text: #3a3244;
+  --color-text-muted: #8b8496;
+  --color-border: #e6e0ed;
+  --color-primary: #4ecdc4;
+  --color-danger: #d1477a;
   --space: 8px;
   --radius: 8px;
   --font-size: 16px;
@@ -106,15 +106,15 @@
 }
 ```
 
-`--color-primary` は次から機能ごとに 1 つ選ぶ。画面全体の背景には使わない。パステル、パレット外の独自色は置かない。
+`--color-primary` は次から機能ごとに 1 つ選ぶ。画面全体の背景には使わない。パレット外の独自色は置かない。彩度を上げすぎた蛍光色にはしない（淡く柔らかいトーンを保つ）。
 
 ```
-Cyan     #3EE0C8
-Blue     #4DA3FF
-Violet   #8B7CFF
-Lime     #B8E04A
-Orange   #FF9A4A
-Magenta  #E05CFF
+Teal     #4ECDC4
+Blue     #6C9BFF
+Violet   #A78BFA
+Lime     #A0D468
+Orange   #FFA36C
+Magenta  #E58FE0
 ```
 
 テーマカラーを使う箇所
@@ -126,7 +126,7 @@ Magenta  #E05CFF
 - フォーカスリング
 - チャートの系列
 
-ページ背景は `--color-bg`。薄いグリッド（アクセントの 4% 程度）を敷いてよい。パネルは `--color-surface`。フォントはシステム UI。本文 16px、見出し 20px。アニメーションは 150〜250ms（既定 `--duration`）。光彩はフォーカス・選択・ホバーに限り、常時点灯の強いグローは使わない。
+ページ背景は `--color-bg`。薄いグリッド（アクセントの 4% 程度）を敷いてよい。パネルは `--color-surface`。フォントはシステム UI。本文 16px、見出し 20px。アニメーションは 150〜250ms（既定 `--duration`）。強調はフォーカス・選択・ホバーに限り、常時点灯の強い光彩は使わない。
 
 
 ## 情報の優先度（見た目）
@@ -148,7 +148,7 @@ Magenta  #E05CFF
 |------|--------|
 | 見出し | 20px、`--color-text` |
 | 説明文 / Caption | 16px または一段小さく、`--color-text-muted` |
-| 主ボタン | 塗り `--color-primary`、高さ `--tap`、角丸 `--radius`。文字は `--color-bg` |
+| 主ボタン | 塗り `--color-primary`、高さ `--tap`、角丸 `--radius`。文字は `--color-text` |
 | 副ボタン | 面 `--color-surface`、枠 `--color-border`、文字 `--color-text`、高さ `--tap`、角丸 `--radius` |
 | テキストボタン | 枠なし、文字 `--color-text-muted` または `--color-primary`、高さ `--tap` |
 | カード | 面 `--color-surface`、枠 1px `--color-border`、角丸 `--radius`。ホバー時だけ枠を `--color-primary` に近づける |
