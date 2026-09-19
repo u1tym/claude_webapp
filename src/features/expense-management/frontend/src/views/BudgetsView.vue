@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from "vue";
+import { formatAmount } from "../format";
 import {
   type BudgetItem,
   type BudgetPeriod,
@@ -319,7 +320,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
           <tbody>
             <tr v-for="item in items" :key="item.id">
               <td class="cell-primary"><span class="cell-label">項目名</span>{{ item.name }}</td>
-              <td class="cell-amount"><span class="cell-label">金額</span>{{ item.amount }}</td>
+              <td class="cell-amount"><span class="cell-label">金額</span>{{ formatAmount(item.amount) }}</td>
               <td><span class="cell-label">表示順</span>{{ item.display_order }}</td>
               <td class="actions">
                 <button class="btn-text" type="button" aria-label="編集" @click="openEditItemForm(item)">

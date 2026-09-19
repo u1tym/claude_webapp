@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
+import { formatAmount } from "../format";
 import {
   type BudgetItem,
   type BudgetPeriod,
@@ -275,7 +276,7 @@ const sortedExpenses = computed(() =>
             <td><span class="cell-label">利用日</span>{{ expense.usage_date }}</td>
             <td><span class="cell-label">予算区分</span>{{ itemName(expense.budget_item_id) }}</td>
             <td class="cell-primary"><span class="cell-label">用途</span>{{ expense.purpose }}</td>
-            <td class="cell-amount"><span class="cell-label">金額</span>{{ expense.amount }}</td>
+            <td class="cell-amount"><span class="cell-label">金額</span>{{ formatAmount(expense.amount) }}</td>
             <td><span class="cell-label">支出方法</span>{{ methodName(expense.payment_method_id) }}</td>
             <td><span class="cell-label">支払日</span>{{ expense.payment_date }}</td>
             <td class="actions">

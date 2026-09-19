@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref, watch } from "vue";
+import { formatAmount } from "../format";
 import {
   type BudgetPeriod,
   type PaymentMonthReportItem,
@@ -130,9 +131,9 @@ onMounted(async () => {
           <tbody>
             <tr v-for="item in usageReport.items" :key="item.budget_item_id">
               <td class="cell-primary"><span class="cell-label">予算項目</span>{{ item.name }}</td>
-              <td class="cell-amount"><span class="cell-label">予算金額</span>{{ item.budget_amount }}</td>
-              <td class="cell-amount"><span class="cell-label">支出合計</span>{{ item.actual_amount }}</td>
-              <td class="cell-amount"><span class="cell-label">差額</span>{{ item.difference }}</td>
+              <td class="cell-amount"><span class="cell-label">予算金額</span>{{ formatAmount(item.budget_amount) }}</td>
+              <td class="cell-amount"><span class="cell-label">支出合計</span>{{ formatAmount(item.actual_amount) }}</td>
+              <td class="cell-amount"><span class="cell-label">差額</span>{{ formatAmount(item.difference) }}</td>
             </tr>
           </tbody>
         </table>
@@ -149,7 +150,7 @@ onMounted(async () => {
           <tbody>
             <tr v-for="item in paymentMonthItems" :key="item.budget_item_id">
               <td class="cell-primary"><span class="cell-label">予算項目</span>{{ item.name }}</td>
-              <td class="cell-amount"><span class="cell-label">支出合計</span>{{ item.actual_amount }}</td>
+              <td class="cell-amount"><span class="cell-label">支出合計</span>{{ formatAmount(item.actual_amount) }}</td>
             </tr>
           </tbody>
         </table>
