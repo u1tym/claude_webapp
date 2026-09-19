@@ -31,6 +31,7 @@ const periodFormError = ref("");
 const periodTitle = ref("");
 const periodStartDate = ref("");
 const periodEndDate = ref("");
+const duplicateSourceId = ref<number | null>(null);
 
 const detailTitle = ref("");
 const detailStartDate = ref("");
@@ -113,6 +114,7 @@ function openDuplicatePeriodForm(): void {
   periodTitle.value = "";
   periodStartDate.value = "";
   periodEndDate.value = "";
+  duplicateSourceId.value = periods.value[0]!.id;
   showPeriodForm.value = true;
 }
 
@@ -131,9 +133,12 @@ async function submitPeriodForm(): Promise<void> {
       }
       created = result;
     } else {
-      const sourceId = periods.value[0]!.id;
+      if (duplicateSourceId.value === null) {
+        periodFormError.value = "複製元の予算期間を選択してください";
+        return;
+      }
       const result = await duplicateBudgetPeriod(
-        sourceId,
+        duplicateSourceId.value,
         periodTitle.value,
         periodStartDate.value,
         periodEndDate.value,
@@ -250,7 +255,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
           <Icon name="plus" />
         </button>
         <button class="btn-secondary" type="button" :disabled="periods.length === 0" @click="openDuplicatePeriodForm">
-          直近から複製作成
+          複製作成
         </button>
       </div>
       <div class="panel list">
@@ -343,6 +348,14 @@ async function removeItem(item: BudgetItem): Promise<void> {
         </h2>
         <form class="form" @submit.prevent="submitPeriodForm">
           <p v-if="periodFormError" class="banner-error">{{ periodFormError }}</p>
+          <div v-if="periodFormMode === 'duplicate'" class="field">
+            <label for="period-source">複製元の予算期間</label>
+            <select id="period-source" v-model.number="duplicateSourceId" required>
+              <option v-for="p in periods" :key="p.id" :value="p.id">
+                {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
+              </option>
+            </select>
+          </div>
           <div class="field">
             <label for="period-title">タイトル</label>
             <input id="period-title" v-model="periodTitle" type="text" required />
