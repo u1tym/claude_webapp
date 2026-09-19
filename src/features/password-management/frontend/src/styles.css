@@ -204,6 +204,7 @@ button {
 .list th {
   position: sticky;
   top: 0;
+  z-index: 1;
   background: var(--color-surface);
   text-align: center;
   font-weight: 600;
