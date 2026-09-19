@@ -275,6 +275,7 @@ def test_payment_method_and_expense_and_report_flow(client) -> None:
         "/expenses",
         json={
             "usage_date": "2031-01-05",
+            "budget_period_id": period["id"],
             "budget_item_id": item["id"],
             "purpose": "映画",
             "amount": "1800.00",
@@ -284,6 +285,65 @@ def test_payment_method_and_expense_and_report_flow(client) -> None:
     )
     assert r.status_code == 201
     expense = r.json()
+    assert expense["budget_period_id"] == period["id"]
+
+    # budget_item_id without budget_period_id is rejected
+    r = client.post(
+        "/expenses",
+        json={
+            "usage_date": "2031-01-05",
+            "budget_item_id": item["id"],
+            "purpose": "不正",
+            "amount": "100.00",
+            "payment_method_id": method["id"],
+            "payment_date": estimated,
+        },
+    )
+    assert r.status_code == 400
+
+    # a budget item from another period is rejected
+    r = client.post(
+        "/budget-periods",
+        json={"title": "別期間", "start_date": "2031-02-01", "end_date": "2031-02-28"},
+    )
+    other_period = r.json()
+    r = client.post(
+        "/expenses",
+        json={
+            "usage_date": "2031-01-05",
+            "budget_period_id": other_period["id"],
+            "budget_item_id": item["id"],
+            "purpose": "不正",
+            "amount": "100.00",
+            "payment_method_id": method["id"],
+            "payment_date": estimated,
+        },
+    )
+    assert r.status_code == 400
+
+    # "no budget" is allowed
+    r = client.post(
+        "/expenses",
+        json={
+            "usage_date": "2031-01-06",
+            "purpose": "予算なし",
+            "amount": "500.00",
+            "payment_method_id": method["id"],
+            "payment_date": estimated,
+        },
+    )
+    assert r.status_code == 201
+    unassigned_expense = r.json()
+    assert unassigned_expense["budget_period_id"] is None
+    assert unassigned_expense["budget_item_id"] is None
+
+    r = client.get("/expenses", params={"budget_period_id": period["id"]})
+    assert r.status_code == 200
+    assert [i["id"] for i in r.json()["items"]] == [expense["id"]]
+
+    r = client.get("/expenses", params={"unassigned": "true"})
+    assert r.status_code == 200
+    assert [i["id"] for i in r.json()["items"]] == [unassigned_expense["id"]]
 
     r = client.get("/reports/usage-date", params={"budget_period_id": period["id"]})
     assert r.status_code == 200
@@ -298,6 +358,8 @@ def test_payment_method_and_expense_and_report_flow(client) -> None:
     assert any(i["budget_item_id"] == item["id"] and i["actual_amount"] == "1800.00" for i in r.json()["items"])
 
     r = client.delete(f"/expenses/{expense['id']}")
+    assert r.status_code == 204
+    r = client.delete(f"/expenses/{unassigned_expense['id']}")
     assert r.status_code == 204
     r = client.get("/expenses", params={"start_date": "2031-01-01", "end_date": "2031-01-31"})
     assert r.json()["items"] == []

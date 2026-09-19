@@ -843,6 +843,100 @@ Cookie セッション検証と機能利用可否判定を実装する
 
 ---
 
+## タスク 23
+
+### タイトル
+
+支出記録に予算（`budget_period_id`）を持たせる（バックエンド・DB）
+
+### 見積もり
+
+3時間
+
+### 関連要件
+
+- REQ-008, REQ-009, REQ-010
+
+### 関連設計
+
+- `db-design.md` / `expense_management.expenses`
+- `api-design.md` / GET・POST・PATCH `/expenses`
+
+### 実装パス
+
+- `src/features/expense-management/backend/sql/04_expenses_budget_period.sql`（新規）
+- `src/features/expense-management/backend/app/repos.py`
+- `src/features/expense-management/backend/app/services/expense_service.py`
+- `src/features/expense-management/backend/app/services/report_service.py`
+- `src/features/expense-management/backend/app/routers/expenses.py`
+- `src/features/expense-management/tests/`
+
+### 内容
+
+新しい DDL ファイルで `expenses` に `budget_period_id`（NULL 可、`budget_periods` への FK）を追加し、既存行は `budget_items.budget_period_id` から補完する。`budget_item_id` を NOT NULL から NULL 許容に変更し、検査制約 `budget_period_id IS NOT NULL OR budget_item_id IS NULL` を追加する。`(user_id, budget_period_id)` にインデックスを追加する。
+
+`ExpenseRow` / `ExpenseInput` に `budget_period_id` を追加し、`budget_item_id` の型を `int | None` にする。登録・更新時の検証を、`budget_period_id` が `None` なら `budget_item_id` も `None` であること、`budget_period_id` が `None` でないなら本人の予算期間であり、かつ `budget_item_id` がその予算期間に属する本人の未削除の予算項目であることに変更する。
+
+`GET /expenses` に `budget_period_id`・`unassigned` クエリを追加する。どちらか一方を指定したときはそれによる絞り込み（`budget_period_id` の一致、または `budget_period_id IS NULL`）を行い、どちらも指定が無いときは従来どおり `start_date`〜`end_date` の利用日範囲で絞り込む。両方指定、またはどちらも `start_date`/`end_date` も無い場合は 400。
+
+`report_service.py` が使う予算項目ごとの集計（利用日基準・支払発生月基準）は、`budget_item_id IS NOT NULL` の行だけを対象にする（`budget_item_id` が NULL の行は既存の集計 SQL のグルーピングに含めない）。
+
+### 完了条件
+
+- [ ] 新しい DDL を既存 DB に適用でき、既存の支出記録に `budget_period_id` が補完される（べき等）
+- [ ] 予算なし（`budget_period_id` と `budget_item_id` がどちらも `null`）で登録・更新できる
+- [ ] 予算期間を指定すると、その期間に属さない予算項目は 400 になる
+- [ ] `GET /expenses?budget_period_id=...` が、利用日に関わらずその予算の支出記録だけを返す
+- [ ] `GET /expenses?unassigned=true` が、予算なしの支出記録だけを返す
+- [ ] 予算なしの支出記録が、利用日基準・支払発生月基準どちらの集計にも例外なく除外される
+
+---
+
+## タスク 24
+
+### タイトル
+
+支出記録画面（SCR-001）の予算選択・登録編集フォームを、支出記録に紐づく予算に対応させる
+
+### 見積もり
+
+3時間
+
+### 関連要件
+
+- REQ-008, REQ-009, REQ-010
+
+### 関連設計
+
+- `ui-design.md` / SCR-001: 支出記録
+- `api-design.md` / GET・POST・PATCH `/expenses`
+
+### 実装パス
+
+- `src/features/expense-management/frontend/src/api.ts`
+- `src/features/expense-management/frontend/src/views/ExpensesView.vue`
+
+### 内容
+
+`api.ts` の `Expense` / `ExpenseInput` に `budget_period_id: number | null` を追加し、`budget_item_id` を `number | null` にする。`getExpenses` を、利用日範囲・`budget_period_id`・`unassigned` のいずれかで絞り込めるように変更する。
+
+一覧上部の予算選択に「予算なし」を追加する（すべて／予算なし／直近10件の予算期間）。「すべて」は従来どおり利用日ベースで絞り込み、「予算なし」と個別の予算期間は `budget_period_id`/`unassigned` クエリで絞り込む。一覧の予算区分列は、`budget_item_id` が `null` のとき「予算なし」と表示する。
+
+登録・編集フォームの予算期間選択を「予算選択」（ラベル「予算」、選択肢は「予算なし」＋予算期間）に統合し、常に表示する。新規登録時の既定は、一覧の予算選択が個別の予算期間または「予算なし」ならそれ、「すべて」なら直近の予算期間。編集時の既定は対象の支出記録が持つ `budget_period_id`（API から直接取得する。予算項目からの逆引きはしない）。予算選択で予算期間を選ぶとその予算期間の予算項目が予算区分の選択肢になり、「予算なし」を選ぶと予算区分の入力欄を隠し値を `null` にする。
+
+### 完了条件
+
+- [ ] 一覧の予算選択に「予算なし」が出る。選ぶと予算なしの記録だけが一覧に出る
+- [ ] 個別の予算期間を選ぶと、その予算が設定されている記録だけが一覧に出る（利用日に関わらず）
+- [ ] 予算なしの記録は、一覧の予算区分列に「予算なし」と表示される
+- [ ] 新規登録フォームに常に予算選択があり、一覧の選択状態に応じた既定値になっている
+- [ ] 編集フォームの予算選択の既定値が、対象の支出記録が実際に持つ予算と一致する
+- [ ] 予算選択で「予算なし」を選ぶと予算区分の入力欄が消え、保存すると予算区分が無い記録になる
+- [ ] 予算選択で予算期間を選ぶと予算区分の選択肢がその期間のものに切り替わる
+- [ ] ブラウザで一連の操作を確認できる
+
+---
+
 ## テスト
 
 ### 単体テスト
@@ -854,11 +948,14 @@ Cookie セッション検証と機能利用可否判定を実装する
 - [ ] 祝日を除外条件にしたときの実際の締め日・実際の支払日の算出を確認する
 - [ ] 締め日0の支出方法で固定値が設定されることを確認する
 - [ ] 予算項目・支出方法の論理削除後も、既存の支出記録の参照が変わらないことを確認する
+- [ ] 予算なし（`budget_period_id` と `budget_item_id` が `null`）の支出記録登録・更新と、その検証（不整合な組合せが 400 になること）を確認する
+- [ ] 予算なしの支出記録が集計（利用日基準・支払発生月基準）から除外されることを確認する
 
 ### 結合テスト
 
 - [ ] 当該機能の uvicorn に対する API テスト（Cookie、401、403、404、409、予算期間・予算項目・支出方法・支出記録の CRUD、集計2種）
 - [ ] 予算期間の複製作成で予算項目がコピーされることを確認する
+- [ ] `GET /expenses` の `budget_period_id`・`unassigned` による絞り込みを確認する
 
 ### 受け入れテスト
 
@@ -880,3 +977,5 @@ Cookie セッション検証と機能利用可否判定を実装する
 | 2026-09-18 | 承認済み | タスク20〜21を承認 |
 | 2026-09-19 | 未承認 | 支払日の自動算出チェックボックスを追加（タスク22） |
 | 2026-09-19 | 承認済み | タスク22を承認 |
+| 2026-09-19 20:14 | 未承認 | 支出記録に予算（`budget_period_id`）を持たせ、一覧・登録・編集を予算の直接紐づけに対応させる（タスク23〜24） |
+| 2026-09-19 20:48 | 承認済み | タスク23〜24を承認 |

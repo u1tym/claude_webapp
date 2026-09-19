@@ -425,8 +425,10 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 
 | 名前 | 必須 | 説明 |
 |------|------|------|
-| `start_date` | 必須 | 利用日の範囲開始 |
-| `end_date` | 必須 | 利用日の範囲終了 |
+| `start_date` | 条件付き必須 | 利用日の範囲開始。`budget_period_id` も `unassigned` も指定しないときに必須 |
+| `end_date` | 条件付き必須 | 利用日の範囲終了。同上 |
+| `budget_period_id` | 任意 | 指定すると、この予算期間を予算として持つ支出記録だけを返す（利用日は問わない） |
+| `unassigned` | 任意（真偽値、既定 false） | `true` のとき、予算が「予算なし」（`budget_period_id` が無い）支出記録だけを返す |
 
 応答: 200
 
@@ -436,6 +438,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
     {
       "id": 100,
       "usage_date": "2026-09-05",
+      "budget_period_id": 5,
       "budget_item_id": 10,
       "purpose": "ランチ代",
       "amount": "980.00",
@@ -448,15 +451,16 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 }
 ```
 
-`items` は削除フラグが立っていない本人の支出記録を、利用日の新しい順に返す。`memo` が無いときは `null`。
+`items` は削除フラグが立っていない本人の支出記録を、利用日の新しい順に返す。`memo` が無いときは `null`。予算が「予算なし」の行は `budget_period_id` と `budget_item_id` がどちらも `null`。
 
-処理概要: 指定した利用日の範囲に含まれる、削除されていない支出記録を返す。
+処理概要: `budget_period_id` または `unassigned=true` を指定したときは、それによる絞り込みを行う（`start_date`/`end_date` は不要で、指定しても無視する）。どちらも指定しないときは、`start_date`〜`end_date` の利用日範囲で絞り込む。
 
 エラー:
 
 | 状況 | 応答 |
 |------|------|
-| クエリが無い、日付でない、`end_date` が `start_date` より前 | 400 |
+| `budget_period_id` と `unassigned=true` を同時に指定した | 400 |
+| `budget_period_id` も `unassigned=true` も指定が無く、`start_date`/`end_date` も無い、日付でない、`end_date` が `start_date` より前 | 400 |
 
 ### POST `/expenses`
 
@@ -467,6 +471,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 ```json
 {
   "usage_date": "2026-09-05",
+  "budget_period_id": 5,
   "budget_item_id": 10,
   "purpose": "ランチ代",
   "amount": "980.00",
@@ -476,6 +481,8 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 }
 ```
 
+予算が「予算なし」のときは `budget_period_id` と `budget_item_id` をどちらも `null` にする。
+
 応答: 201（登録内容。形式は GET `/expenses` の `items` の要素と同じ。`created_at` はシステムが設定）
 
 エラー:
@@ -483,7 +490,9 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | 状況 | 応答 |
 |------|------|
 | `purpose` が空、`amount` が負、必須項目が無い | 400 |
-| `budget_item_id` が本人の未削除の予算項目でない | 400 |
+| `budget_period_id` が `null` でなく、本人の予算期間でない | 400 |
+| `budget_period_id` が `null` なのに `budget_item_id` が `null` でない | 400 |
+| `budget_period_id` が `null` でないのに、`budget_item_id` が `null`、本人の未削除の予算項目でない、またはその `budget_period_id` の予算項目でない | 400 |
 | `payment_method_id` が本人の未削除の支出方法でない | 400 |
 
 処理概要: 支出記録を登録する。`payment_date` はフロントが `GET /payment-methods/{id}/estimated-payment-date` で算出・表示した値（ユーザが修正した場合はその値）をそのまま受け取り保存する。`created_at` は現在時刻を自動設定する。
@@ -604,3 +613,5 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | 2026-09-18 | 承認済み | PATCH /budget-periods/{budget_period_id} の追加を承認 |
 | 2026-09-18 | 未承認 | `exclusion_kind` に `holiday`（日本の国民の祝日）を追加 |
 | 2026-09-18 | 承認済み | `exclusion_kind` への `holiday` 追加を承認 |
+| 2026-09-19 20:14 | 未承認 | POST・PATCH `/expenses` に `budget_period_id` を追加（`null` で「予算なし」）。`budget_item_id` を `null` 許容に変更。GET `/expenses` に `budget_period_id`・`unassigned` クエリを追加し、指定時は利用日範囲でなく予算の一致で絞り込む |
+| 2026-09-19 20:48 | 承認済み | `/expenses` の `budget_period_id` 対応を承認 |

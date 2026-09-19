@@ -15,7 +15,8 @@ router = APIRouter(prefix="/expenses")
 
 class ExpenseBody(BaseModel):
     usage_date: date
-    budget_item_id: int
+    budget_period_id: int | None = None
+    budget_item_id: int | None = None
     purpose: str
     amount: str
     payment_method_id: int
@@ -25,6 +26,7 @@ class ExpenseBody(BaseModel):
     def to_input(self) -> ExpenseInput:
         return ExpenseInput(
             usage_date=self.usage_date,
+            budget_period_id=self.budget_period_id,
             budget_item_id=self.budget_item_id,
             purpose=self.purpose,
             amount=self.amount,
@@ -36,11 +38,21 @@ class ExpenseBody(BaseModel):
 
 @router.get("")
 def list_expenses(
-    start_date: date = Query(...),
-    end_date: date = Query(...),
+    start_date: date | None = Query(None),
+    end_date: date | None = Query(None),
+    budget_period_id: int | None = Query(None),
+    unassigned: bool = Query(False),
     auth: AuthContext = Depends(get_current_user),
 ) -> dict[str, list[dict[str, object]]]:
     try:
+        if unassigned and budget_period_id is not None:
+            raise InvalidInputError("クエリが不正")
+        if unassigned:
+            return {"items": expense_service.list_unassigned(auth.user.id)}
+        if budget_period_id is not None:
+            return {"items": expense_service.list_for_budget(auth.user.id, budget_period_id)}
+        if start_date is None or end_date is None:
+            raise InvalidInputError("クエリが不正")
         return {"items": expense_service.list_for_range(auth.user.id, start_date, end_date)}
     except InvalidInputError:
         raise HTTPException(status_code=400, detail="入力が不正です") from None

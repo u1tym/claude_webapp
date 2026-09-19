@@ -66,7 +66,8 @@ export type PaymentMethod = {
 export type Expense = {
   id: number;
   usage_date: string;
-  budget_item_id: number;
+  budget_period_id: number | null;
+  budget_item_id: number | null;
   purpose: string;
   amount: string;
   payment_method_id: number;
@@ -333,8 +334,22 @@ export async function getEstimatedPaymentDate(
   throw new Error("estimated-payment-date");
 }
 
-export async function getExpenses(startDate: string, endDate: string): Promise<Expense[]> {
-  const res = await apiFetch(`/expenses?start_date=${startDate}&end_date=${endDate}`);
+export type ExpenseQuery =
+  | { start_date: string; end_date: string }
+  | { budget_period_id: number }
+  | { unassigned: true };
+
+export async function getExpenses(query: ExpenseQuery): Promise<Expense[]> {
+  const params = new URLSearchParams();
+  if ("start_date" in query) {
+    params.set("start_date", query.start_date);
+    params.set("end_date", query.end_date);
+  } else if ("budget_period_id" in query) {
+    params.set("budget_period_id", String(query.budget_period_id));
+  } else {
+    params.set("unassigned", "true");
+  }
+  const res = await apiFetch(`/expenses?${params.toString()}`);
   throwIfAuthFailed(res);
   if (!res.ok) {
     throw new Error("expenses");
@@ -344,7 +359,8 @@ export async function getExpenses(startDate: string, endDate: string): Promise<E
 
 export type ExpenseInput = {
   usage_date: string;
-  budget_item_id: number;
+  budget_period_id: number | null;
+  budget_item_id: number | null;
   purpose: string;
   amount: string;
   payment_method_id: number;

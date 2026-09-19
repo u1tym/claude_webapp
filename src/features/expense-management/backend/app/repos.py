@@ -45,7 +45,8 @@ class PaymentMethodRow:
 class ExpenseRow:
     id: int
     user_id: int
-    budget_item_id: int
+    budget_period_id: int | None
+    budget_item_id: int | None
     payment_method_id: int
     usage_date: date
     purpose: str
@@ -417,18 +418,35 @@ def _payment_method_from_row(row: dict[str, object]) -> PaymentMethodRow:
     )
 
 
-def list_expenses(user_id: int, start_date: date, end_date: date) -> list[ExpenseRow]:
+def list_expenses(
+    user_id: int,
+    *,
+    start_date: date | None = None,
+    end_date: date | None = None,
+    budget_period_id: int | None = None,
+    unassigned: bool = False,
+) -> list[ExpenseRow]:
+    where = ["user_id = %s", "is_deleted = false"]
+    params: list[object] = [user_id]
+    if unassigned:
+        where.append("budget_period_id IS NULL")
+    elif budget_period_id is not None:
+        where.append("budget_period_id = %s")
+        params.append(budget_period_id)
+    else:
+        where.append("usage_date BETWEEN %s AND %s")
+        params.extend([start_date, end_date])
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT id, user_id, budget_item_id, payment_method_id, usage_date, purpose,
+                f"""
+                SELECT id, user_id, budget_period_id, budget_item_id, payment_method_id, usage_date, purpose,
                        amount, memo, created_at, payment_date, is_deleted
                 FROM expense_management.expenses
-                WHERE user_id = %s AND usage_date BETWEEN %s AND %s AND is_deleted = false
+                WHERE {" AND ".join(where)}
                 ORDER BY usage_date DESC, id DESC
                 """,
-                (user_id, start_date, end_date),
+                params,
             )
             return [_expense_from_row(row) for row in cur.fetchall()]
 
@@ -438,7 +456,7 @@ def get_expense(user_id: int, expense_id: int) -> ExpenseRow | None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, user_id, budget_item_id, payment_method_id, usage_date, purpose,
+                SELECT id, user_id, budget_period_id, budget_item_id, payment_method_id, usage_date, purpose,
                        amount, memo, created_at, payment_date, is_deleted
                 FROM expense_management.expenses
                 WHERE id = %s AND user_id = %s
@@ -451,7 +469,8 @@ def get_expense(user_id: int, expense_id: int) -> ExpenseRow | None:
 
 def insert_expense(
     user_id: int,
-    budget_item_id: int,
+    budget_period_id: int | None,
+    budget_item_id: int | None,
     payment_method_id: int,
     usage_date: date,
     purpose: str,
@@ -464,12 +483,23 @@ def insert_expense(
             cur.execute(
                 """
                 INSERT INTO expense_management.expenses
-                    (user_id, budget_item_id, payment_method_id, usage_date, purpose, amount, memo, payment_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                RETURNING id, user_id, budget_item_id, payment_method_id, usage_date, purpose,
+                    (user_id, budget_period_id, budget_item_id, payment_method_id, usage_date, purpose,
+                     amount, memo, payment_date)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                RETURNING id, user_id, budget_period_id, budget_item_id, payment_method_id, usage_date, purpose,
                           amount, memo, created_at, payment_date, is_deleted
                 """,
-                (user_id, budget_item_id, payment_method_id, usage_date, purpose, amount, memo, payment_date),
+                (
+                    user_id,
+                    budget_period_id,
+                    budget_item_id,
+                    payment_method_id,
+                    usage_date,
+                    purpose,
+                    amount,
+                    memo,
+                    payment_date,
+                ),
             )
             row = cur.fetchone()
             assert row is not None
@@ -479,7 +509,8 @@ def insert_expense(
 def update_expense(
     expense_id: int,
     user_id: int,
-    budget_item_id: int,
+    budget_period_id: int | None,
+    budget_item_id: int | None,
     payment_method_id: int,
     usage_date: date,
     purpose: str,
@@ -492,11 +523,12 @@ def update_expense(
             cur.execute(
                 """
                 UPDATE expense_management.expenses
-                SET budget_item_id = %s, payment_method_id = %s, usage_date = %s, purpose = %s,
-                    amount = %s, memo = %s, payment_date = %s
+                SET budget_period_id = %s, budget_item_id = %s, payment_method_id = %s, usage_date = %s,
+                    purpose = %s, amount = %s, memo = %s, payment_date = %s
                 WHERE id = %s AND user_id = %s AND is_deleted = false
                 """,
                 (
+                    budget_period_id,
                     budget_item_id,
                     payment_method_id,
                     usage_date,
@@ -533,6 +565,7 @@ def sum_expenses_by_budget_item_for_usage_range(
                 SELECT budget_item_id, COALESCE(SUM(amount), 0) AS total
                 FROM expense_management.expenses
                 WHERE user_id = %s AND usage_date BETWEEN %s AND %s AND is_deleted = false
+                      AND budget_item_id IS NOT NULL
                 GROUP BY budget_item_id
                 """,
                 (user_id, start_date, end_date),
@@ -551,6 +584,7 @@ def sum_expenses_by_budget_item_for_payment_month(
                 FROM expense_management.expenses
                 WHERE user_id = %s
                   AND is_deleted = false
+                  AND budget_item_id IS NOT NULL
                   AND EXTRACT(YEAR FROM payment_date) = %s
                   AND EXTRACT(MONTH FROM payment_date) = %s
                 GROUP BY budget_item_id
@@ -564,7 +598,8 @@ def _expense_from_row(row: dict[str, object]) -> ExpenseRow:
     return ExpenseRow(
         id=int(row["id"]),
         user_id=int(row["user_id"]),
-        budget_item_id=int(row["budget_item_id"]),
+        budget_period_id=(None if row["budget_period_id"] is None else int(row["budget_period_id"])),
+        budget_item_id=(None if row["budget_item_id"] is None else int(row["budget_item_id"])),
         payment_method_id=int(row["payment_method_id"]),
         usage_date=row["usage_date"],
         purpose=str(row["purpose"]),

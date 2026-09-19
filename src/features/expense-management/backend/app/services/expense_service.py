@@ -8,6 +8,7 @@ from app.logger import write
 from app.repos import (
     ExpenseRow,
     get_budget_item,
+    get_budget_period,
     get_expense,
     get_payment_method,
     insert_expense,
@@ -21,7 +22,8 @@ class ExpenseInput:
     def __init__(
         self,
         usage_date: date,
-        budget_item_id: int,
+        budget_period_id: int | None,
+        budget_item_id: int | None,
         purpose: str,
         amount: str,
         payment_method_id: int,
@@ -29,6 +31,7 @@ class ExpenseInput:
         payment_date: date,
     ) -> None:
         self.usage_date = usage_date
+        self.budget_period_id = budget_period_id
         self.budget_item_id = budget_item_id
         self.purpose = purpose
         self.amount = amount
@@ -52,9 +55,22 @@ def _validate(user_id: int, data: ExpenseInput) -> tuple[str, Decimal]:
     if trimmed == "":
         raise InvalidInputError("用途が空")
     amount = _parse_amount(data.amount)
-    budget_item = get_budget_item(user_id, data.budget_item_id)
-    if budget_item is None or budget_item.is_deleted:
-        raise InvalidInputError("予算区分が不正")
+    if data.budget_period_id is None:
+        if data.budget_item_id is not None:
+            raise InvalidInputError("予算区分が不正")
+    else:
+        budget_period = get_budget_period(user_id, data.budget_period_id)
+        if budget_period is None:
+            raise InvalidInputError("予算が不正")
+        if data.budget_item_id is None:
+            raise InvalidInputError("予算区分が不正")
+        budget_item = get_budget_item(user_id, data.budget_item_id)
+        if (
+            budget_item is None
+            or budget_item.is_deleted
+            or budget_item.budget_period_id != data.budget_period_id
+        ):
+            raise InvalidInputError("予算区分が不正")
     payment_method = get_payment_method(user_id, data.payment_method_id)
     if payment_method is None or payment_method.is_deleted:
         raise InvalidInputError("支出方法が不正")
@@ -65,6 +81,7 @@ def _body(row: ExpenseRow) -> dict[str, object]:
     return {
         "id": row.id,
         "usage_date": row.usage_date.isoformat(),
+        "budget_period_id": row.budget_period_id,
         "budget_item_id": row.budget_item_id,
         "purpose": row.purpose,
         "amount": f"{row.amount:.2f}",
@@ -79,7 +96,21 @@ def list_for_range(user_id: int, start_date: date, end_date: date) -> list[dict[
     write("INF", f"支出記録一覧要求 user_id={user_id} start_date={start_date} end_date={end_date}")
     if end_date < start_date:
         raise InvalidInputError("終了日が開始日より前")
-    items = [_body(row) for row in list_expenses(user_id, start_date, end_date)]
+    items = [_body(row) for row in list_expenses(user_id, start_date=start_date, end_date=end_date)]
+    write("INF", f"支出記録一覧成功 user_id={user_id} count={len(items)}")
+    return items
+
+
+def list_for_budget(user_id: int, budget_period_id: int) -> list[dict[str, object]]:
+    write("INF", f"支出記録一覧要求 user_id={user_id} budget_period_id={budget_period_id}")
+    items = [_body(row) for row in list_expenses(user_id, budget_period_id=budget_period_id)]
+    write("INF", f"支出記録一覧成功 user_id={user_id} count={len(items)}")
+    return items
+
+
+def list_unassigned(user_id: int) -> list[dict[str, object]]:
+    write("INF", f"支出記録一覧要求 user_id={user_id} unassigned=true")
+    items = [_body(row) for row in list_expenses(user_id, unassigned=True)]
     write("INF", f"支出記録一覧成功 user_id={user_id} count={len(items)}")
     return items
 
@@ -88,11 +119,13 @@ def create_expense(user_id: int, data: ExpenseInput) -> dict[str, object]:
     write(
         "INF",
         f"支出記録登録要求 user_id={user_id} usage_date={data.usage_date} "
-        f"budget_item_id={data.budget_item_id} payment_method_id={data.payment_method_id}",
+        f"budget_period_id={data.budget_period_id} budget_item_id={data.budget_item_id} "
+        f"payment_method_id={data.payment_method_id}",
     )
     trimmed, amount = _validate(user_id, data)
     row = insert_expense(
         user_id,
+        data.budget_period_id,
         data.budget_item_id,
         data.payment_method_id,
         data.usage_date,
@@ -115,6 +148,7 @@ def change_expense(user_id: int, expense_id: int, data: ExpenseInput) -> dict[st
     update_expense(
         expense_id,
         user_id,
+        data.budget_period_id,
         data.budget_item_id,
         data.payment_method_id,
         data.usage_date,

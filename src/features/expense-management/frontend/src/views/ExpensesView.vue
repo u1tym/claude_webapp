@@ -26,8 +26,9 @@ const items = ref<BudgetItem[]>([]);
 const methods = ref<PaymentMethod[]>([]);
 const expenses = ref<Expense[]>([]);
 
-// "all" lists the last 3 months across every budget period; a number scopes the list to one period.
-const selectedFilter = ref<number | "all">("all");
+// "all" lists the last 3 months across every budget period (usage-date based); "none" lists
+// expenses with no budget; a number scopes the list to expenses whose budget is that period.
+const selectedFilter = ref<number | "all" | "none">("all");
 const periodOptions = computed(() => periods.value.slice(0, 10));
 
 const showForm = ref(false);
@@ -43,14 +44,9 @@ const memo = ref("");
 const paymentDate = ref("");
 const autoCalculatePaymentDate = ref(true);
 
-// Editing always lets the user re-pick the budget period. A new record only offers the choice
-// while "all" is selected; starting from a single selected period skips straight to its items.
-const showFormPeriodSelect = computed(() => editingId.value !== null || selectedFilter.value === "all");
-
-const formItems = computed(() => {
-  const periodId = showFormPeriodSelect.value ? formPeriodId.value : selectedFilter.value;
-  return typeof periodId === "number" ? items.value.filter((i) => i.budget_period_id === periodId) : [];
-});
+const formItems = computed(() =>
+  formPeriodId.value === null ? [] : items.value.filter((i) => i.budget_period_id === formPeriodId.value),
+);
 
 function today(): string {
   return new Date().toISOString().slice(0, 10);
@@ -88,15 +84,14 @@ async function loadAllItems(): Promise<void> {
 
 async function loadExpenses(): Promise<void> {
   if (selectedFilter.value === "all") {
-    expenses.value = await getExpenses(threeMonthsAgo(), NO_UPPER_BOUND);
+    expenses.value = await getExpenses({ start_date: threeMonthsAgo(), end_date: NO_UPPER_BOUND });
     return;
   }
-  const period = periods.value.find((p) => p.id === selectedFilter.value);
-  if (!period) {
-    expenses.value = [];
+  if (selectedFilter.value === "none") {
+    expenses.value = await getExpenses({ unassigned: true });
     return;
   }
-  expenses.value = await getExpenses(period.start_date, period.end_date);
+  expenses.value = await getExpenses({ budget_period_id: selectedFilter.value });
 }
 
 watch(selectedFilter, () => {
@@ -106,7 +101,11 @@ watch(selectedFilter, () => {
 // Reassign the budget item only when the newly selected period actually stops matching it,
 // so opening the form (which sets the period and the item together) doesn't clobber the item.
 watch(formPeriodId, (periodId) => {
-  if (!showForm.value || !showFormPeriodSelect.value || periodId === null) return;
+  if (!showForm.value) return;
+  if (periodId === null) {
+    budgetItemId.value = null;
+    return;
+  }
   const current = items.value.find((i) => i.id === budgetItemId.value);
   if (!current || current.budget_period_id !== periodId) {
     budgetItemId.value = formItems.value[0]?.id ?? null;
@@ -126,7 +125,8 @@ onMounted(async () => {
   }
 });
 
-function itemName(id: number): string {
+function itemName(id: number | null): string {
+  if (id === null) return "予算なし";
   return items.value.find((i) => i.id === id)?.name ?? "(不明な予算区分)";
 }
 
@@ -138,7 +138,13 @@ function openCreateForm(): void {
   editingId.value = null;
   formError.value = "";
   usageDate.value = today();
-  formPeriodId.value = selectedFilter.value === "all" ? (periods.value[0]?.id ?? null) : selectedFilter.value;
+  if (selectedFilter.value === "all") {
+    formPeriodId.value = periods.value[0]?.id ?? null;
+  } else if (selectedFilter.value === "none") {
+    formPeriodId.value = null;
+  } else {
+    formPeriodId.value = selectedFilter.value;
+  }
   budgetItemId.value = formItems.value[0]?.id ?? null;
   purpose.value = "";
   amount.value = "";
@@ -154,8 +160,7 @@ function openEditForm(expense: Expense): void {
   editingId.value = expense.id;
   formError.value = "";
   usageDate.value = expense.usage_date;
-  const currentItem = items.value.find((i) => i.id === expense.budget_item_id);
-  formPeriodId.value = currentItem?.budget_period_id ?? null;
+  formPeriodId.value = expense.budget_period_id;
   budgetItemId.value = expense.budget_item_id;
   purpose.value = expense.purpose;
   amount.value = expense.amount;
@@ -193,13 +198,18 @@ watch(autoCalculatePaymentDate, (enabled) => {
 });
 
 async function submitForm(): Promise<void> {
-  if (budgetItemId.value === null || paymentMethodId.value === null) {
-    formError.value = "予算区分と支出方法を選択してください";
+  if (paymentMethodId.value === null) {
+    formError.value = "支出方法を選択してください";
+    return;
+  }
+  if (formPeriodId.value !== null && budgetItemId.value === null) {
+    formError.value = "予算区分を選択してください";
     return;
   }
   const input = {
     usage_date: usageDate.value,
-    budget_item_id: budgetItemId.value,
+    budget_period_id: formPeriodId.value,
+    budget_item_id: formPeriodId.value === null ? null : budgetItemId.value,
     purpose: purpose.value,
     amount: amount.value,
     payment_method_id: paymentMethodId.value,
@@ -250,6 +260,7 @@ const sortedExpenses = computed(() =>
         <label for="budget-select">予算</label>
         <select id="budget-select" v-model="selectedFilter">
           <option value="all">すべて</option>
+          <option value="none">予算なし</option>
           <option v-for="p in periodOptions" :key="p.id" :value="p.id">
             {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
           </option>
@@ -304,9 +315,10 @@ const sortedExpenses = computed(() =>
         <form class="form" @submit.prevent="submitForm">
           <p v-if="formError" class="banner-error">{{ formError }}</p>
           <div class="field-row">
-            <div v-if="showFormPeriodSelect" class="field">
-              <label for="form-period">予算期間</label>
-              <select id="form-period" v-model.number="formPeriodId" required>
+            <div class="field">
+              <label for="form-period">予算</label>
+              <select id="form-period" v-model="formPeriodId">
+                <option :value="null">予算なし</option>
                 <option v-for="p in periods" :key="p.id" :value="p.id">
                   {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
                 </option>
@@ -318,7 +330,7 @@ const sortedExpenses = computed(() =>
             </div>
           </div>
           <div class="field-row">
-            <div class="field">
+            <div v-if="formPeriodId !== null" class="field">
               <label for="budget-item">予算区分</label>
               <select id="budget-item" v-model.number="budgetItemId" required>
                 <option v-for="item in formItems" :key="item.id" :value="item.id">{{ item.name }}</option>

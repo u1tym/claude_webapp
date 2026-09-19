@@ -25,6 +25,7 @@ erDiagram
     users ||--o{ expenses : "id = user_id"
     budget_periods ||--o{ budget_items : "id = budget_period_id"
     payment_methods ||--o{ payment_method_exclusions : "id = payment_method_id"
+    budget_periods ||--o{ expenses : "id = budget_period_id"
     budget_items ||--o{ expenses : "id = budget_item_id"
     payment_methods ||--o{ expenses : "id = payment_method_id"
     users {
@@ -69,6 +70,7 @@ erDiagram
     expenses {
         integer id PK
         integer user_id FK
+        integer budget_period_id FK
         integer budget_item_id FK
         integer payment_method_id FK
         date usage_date
@@ -202,7 +204,8 @@ erDiagram
 |--------|-----|------|------|------|
 | `id` | integer | NOT NULL | シーケンス | PK |
 | `user_id` | integer | NOT NULL | - | 所有者。`public.users.id` |
-| `budget_item_id` | integer | NOT NULL | - | 予算区分。`expense_management.budget_items.id` |
+| `budget_period_id` | integer | NULL | - | 予算。`expense_management.budget_periods.id`。「予算なし」のとき NULL |
+| `budget_item_id` | integer | NULL | - | 予算区分。`expense_management.budget_items.id`。`budget_period_id` が NULL のとき NULL |
 | `payment_method_id` | integer | NOT NULL | - | 支出方法。`expense_management.payment_methods.id` |
 | `usage_date` | date | NOT NULL | - | 利用日 |
 | `purpose` | varchar(255) | NOT NULL | - | 用途。空は置かない |
@@ -217,18 +220,21 @@ erDiagram
 - 主キー: `id`
 - 一意: なし
 - 外部キー: `user_id` → `public.users.id`（ON DELETE RESTRICT）
+- 外部キー: `budget_period_id` → `expense_management.budget_periods.id`（ON DELETE RESTRICT）
 - 外部キー: `budget_item_id` → `expense_management.budget_items.id`（ON DELETE RESTRICT）
 - 外部キー: `payment_method_id` → `expense_management.payment_methods.id`（ON DELETE RESTRICT）
 - 検査: `char_length(purpose) > 0`
 - 検査: `amount >= 0`
+- 検査: `budget_period_id IS NOT NULL OR budget_item_id IS NULL`（予算が「予算なし」のとき、予算区分も持たない）
 
 インデックス:
 
 - `(user_id, usage_date)` のうち `is_deleted = false`（利用日基準の集計・一覧）
 - `(user_id, payment_date)` のうち `is_deleted = false`（支払発生月基準の集計）
+- `(user_id, budget_period_id)` のうち `is_deleted = false`（予算による一覧の絞り込み）
 - `(budget_item_id)` のうち `is_deleted = false`（予算項目ごとの集計）
 
-`budget_item_id` は追加・更新時に本人の未削除の予算項目だけを指定できる。`payment_method_id` は追加・更新時に本人の未削除の支出方法だけを指定できる。削除済みの予算項目・支出方法が既に付いている既存行は残してよい（`budget_item_id` / `payment_method_id` は変えない）。`created_at` は追加時にシステムが設定し、以後変えない。`payment_date` は追加・更新時に自動算出した値を初期値とし、ユーザが上書きできる。物理削除はしない。一覧・集計は `is_deleted = false` の行だけを対象とする。
+`budget_period_id` を指定するときは本人の予算期間だけを指定できる。`budget_item_id` を指定するときは、本人の未削除の予算項目であり、かつその `budget_period_id` に属する予算項目でなければならない。`budget_period_id` が NULL（予算なし）のとき、`budget_item_id` も NULL にする。`payment_method_id` は追加・更新時に本人の未削除の支出方法だけを指定できる。削除済みの予算項目・支出方法が既に付いている既存行は残してよい（`budget_item_id` / `payment_method_id` は変えない）。`created_at` は追加時にシステムが設定し、以後変えない。`payment_date` は追加・更新時に自動算出した値を初期値とし、ユーザが上書きできる。物理削除はしない。一覧・集計は `is_deleted = false` の行だけを対象とする。予算項目ごとの集計（REQ-011・012）は `budget_item_id` が NULL の行を対象に含めない。
 
 ## 関連
 
@@ -236,8 +242,9 @@ erDiagram
 - `users` 1 対 多 `payment_methods`。物理削除しない。
 - `users` 1 対 多 `expenses`。論理削除する（削除フラグ）。
 - `budget_periods` 1 対 多 `budget_items`。予算期間の削除機能は無いため、予算期間削除時の扱いは無い。
+- `budget_periods` 1 対 多 `expenses`（`budget_period_id`）。予算期間の削除機能は無いため、予算期間削除時の扱いは無い。`budget_period_id` は NULL（予算なし）を許容する。
 - `payment_methods` 1 対 多 `payment_method_exclusions`。締め日を0に変更、または支出方法を削除したときに除外条件行を削除してよい。
-- `budget_items` 1 対 多 `expenses`（`budget_item_id`）。予算項目の論理削除では支出記録の `budget_item_id` を維持する。
+- `budget_items` 1 対 多 `expenses`（`budget_item_id`）。予算項目の論理削除では支出記録の `budget_item_id` を維持する。`budget_item_id` は NULL（予算区分なし）を許容する。
 - `payment_methods` 1 対 多 `expenses`（`payment_method_id`）。支出方法の論理削除では支出記録の `payment_method_id` を維持する。
 
 ## 要件トレーサビリティ
@@ -251,9 +258,9 @@ erDiagram
 | REQ-005 | `payment_methods` への挿入。`closing_day = 0` のときの固定値検査。`payment_method_exclusions` への挿入（`target` ごと） |
 | REQ-006 | `payment_methods` の更新・論理削除。`closing_day` を0に変更したときの固定値更新と `payment_method_exclusions` の削除 |
 | REQ-007 | `payment_methods` の一覧（`is_deleted = false`、`display_order` 順） |
-| REQ-008 | `expenses` への挿入。`created_at` の自動設定。`payment_date` の初期値は算出値 |
-| REQ-009 | `expenses` の更新・論理削除（`is_deleted`） |
-| REQ-010 | `expenses` の一覧（`is_deleted = false`） |
+| REQ-008 | `expenses` への挿入（`budget_period_id`・`budget_item_id` を含む。予算なしは両方 NULL）。`created_at` の自動設定。`payment_date` の初期値は算出値 |
+| REQ-009 | `expenses` の更新（`budget_period_id`・`budget_item_id` の変更を含む）・論理削除（`is_deleted`） |
+| REQ-010 | `expenses` の一覧（`is_deleted = false`）。`budget_period_id` による絞り込み（NULL＝予算なしを含む） |
 | REQ-011 | `expenses.usage_date` と `budget_periods` の期間、`budget_items.amount` との集計（`is_deleted = false`） |
 | REQ-012 | `expenses.payment_date` の年月による集計（`is_deleted = false`） |
 | REQ-013 | `payment_methods` の `closing_day` / `closing_day_shift_direction` / `payment_day` / `payment_day_shift_direction`、`payment_method_exclusions`（`target` で締め日用・支払日用を区別）。テーブルとしては保持のみで、算出はバックエンドの `closing_date_service` |
@@ -279,3 +286,5 @@ erDiagram
 | 2026-09-18 | 承認済み | `budget_periods` の更新対応を承認 |
 | 2026-09-18 | 未承認 | `payment_method_exclusions.exclusion_kind` の検査制約に `holiday` を追加。既存DBへは制約のDROP・再ADDで反映（新DDLファイル、`01_expense_management.sql`は変えない） |
 | 2026-09-18 | 承認済み | `exclusion_kind` への `holiday` 追加を承認 |
+| 2026-09-19 20:14 | 未承認 | `expenses` に `budget_period_id`（NULL 可、予算なし＝NULL）を追加。`budget_item_id` を NOT NULL から NULL 許容へ変更し、検査制約 `budget_period_id IS NOT NULL OR budget_item_id IS NULL` を追加。`(user_id, budget_period_id)` のインデックスを追加。既存 DDL は変えず新DDLファイルで反映（既存行は `budget_items.budget_period_id` から `budget_period_id` を補完） |
+| 2026-09-19 20:48 | 承認済み | `expenses.budget_period_id` の追加を承認 |
