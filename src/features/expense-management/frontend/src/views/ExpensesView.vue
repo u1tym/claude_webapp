@@ -252,7 +252,7 @@ const sortedExpenses = computed(() =>
         </select>
       </div>
       <button class="btn-primary push-end" type="button" aria-label="新規登録" @click="openCreateForm">
-        <Icon name="new" />
+        <Icon name="plus" />
       </button>
     </div>
 

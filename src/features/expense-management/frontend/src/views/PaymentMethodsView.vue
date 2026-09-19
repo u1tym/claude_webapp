@@ -185,7 +185,7 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
     <p v-if="errorMessage" class="banner-error">{{ errorMessage }}</p>
     <div class="toolbar">
       <button class="btn-primary" type="button" aria-label="新規登録" @click="openCreateForm">
-        <Icon name="new" />
+        <Icon name="plus" />
       </button>
     </div>
 

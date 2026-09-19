@@ -246,7 +246,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
     <template v-if="view === 'list'">
       <div class="toolbar">
         <button class="btn-primary" type="button" aria-label="新規作成" @click="openCreatePeriodForm">
-          <Icon name="new" />
+          <Icon name="plus" />
         </button>
         <button class="btn-secondary" type="button" :disabled="periods.length === 0" @click="openDuplicatePeriodForm">
           直近から複製作成
@@ -302,7 +302,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
       <div class="toolbar">
         <h2 class="section-title">予算項目</h2>
         <button class="btn-primary" type="button" aria-label="追加" @click="openCreateItemForm">
-          <Icon name="new" />
+          <Icon name="plus" />
         </button>
       </div>
       <div class="panel list">

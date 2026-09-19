@@ -1628,7 +1628,7 @@ onUnmounted(() => {
         </button>
         <div class="modal-actions">
           <button class="btn-primary" type="button" aria-label="New" :disabled="busy" @click="openCategoryAdd">
-            <Icon name="new" />
+            <Icon name="plus" />
           </button>
           <button class="btn-secondary" type="button" aria-label="Close" @click="categoryPanel = false">
             <Icon name="close" />

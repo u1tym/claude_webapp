@@ -137,7 +137,7 @@ async function confirmUnassign(): Promise<void> {
     <section class="panel list-panel">
       <div class="actions">
         <button class="btn-primary" type="button" aria-label="新規" :disabled="loading" @click="startCreate">
-          <Icon name="new" />
+          <Icon name="plus" />
         </button>
       </div>
       <div class="list">
