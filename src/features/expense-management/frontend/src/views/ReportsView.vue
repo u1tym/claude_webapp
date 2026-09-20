@@ -113,47 +113,51 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="panel list">
+    <div class="panel">
       <template v-if="mode === 'usage-date'">
         <p v-if="periods.length === 0" class="empty">データがありません</p>
         <p v-else-if="!usageReport || usageReport.items.length === 0" class="empty">
           データがありません
         </p>
-        <table v-else>
-          <thead>
-            <tr>
-              <th>予算項目</th>
-              <th>予算金額</th>
-              <th>支出合計</th>
-              <th>差額</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in usageReport.items" :key="item.budget_item_id">
-              <td class="cell-primary"><span class="cell-label">予算項目</span>{{ item.name }}</td>
-              <td class="cell-amount"><span class="cell-label">予算金額</span>{{ formatAmount(item.budget_amount) }}</td>
-              <td class="cell-amount"><span class="cell-label">支出合計</span>{{ formatAmount(item.actual_amount) }}</td>
-              <td class="cell-amount"><span class="cell-label">差額</span>{{ formatAmount(item.difference) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="list">
+          <table>
+            <thead>
+              <tr>
+                <th>予算項目</th>
+                <th>予算金額</th>
+                <th>支出合計</th>
+                <th>差額</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in usageReport.items" :key="item.budget_item_id">
+                <td class="cell-primary"><span class="cell-label">予算項目</span>{{ item.name }}</td>
+                <td class="cell-amount"><span class="cell-label">予算金額</span>{{ formatAmount(item.budget_amount) }}</td>
+                <td class="cell-amount"><span class="cell-label">支出合計</span>{{ formatAmount(item.actual_amount) }}</td>
+                <td class="cell-amount"><span class="cell-label">差額</span>{{ formatAmount(item.difference) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </template>
       <template v-else>
         <p v-if="paymentMonthItems.length === 0" class="empty">データがありません</p>
-        <table v-else>
-          <thead>
-            <tr>
-              <th>予算項目</th>
-              <th>支出合計</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in paymentMonthItems" :key="item.budget_item_id">
-              <td class="cell-primary"><span class="cell-label">予算項目</span>{{ item.name }}</td>
-              <td class="cell-amount"><span class="cell-label">支出合計</span>{{ formatAmount(item.actual_amount) }}</td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="list">
+          <table>
+            <thead>
+              <tr>
+                <th>予算項目</th>
+                <th>支出合計</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in paymentMonthItems" :key="item.budget_item_id">
+                <td class="cell-primary"><span class="cell-label">予算項目</span>{{ item.name }}</td>
+                <td class="cell-amount"><span class="cell-label">支出合計</span>{{ formatAmount(item.actual_amount) }}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </template>
     </div>
   </template>

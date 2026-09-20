@@ -271,39 +271,41 @@ const sortedExpenses = computed(() =>
       </button>
     </div>
 
-    <div class="panel list">
+    <div class="panel">
       <p v-if="periods.length === 0" class="empty">データがありません</p>
-      <table v-else class="table-fixed-expenses">
-        <thead>
-          <tr>
-            <th>利用日</th>
-            <th>予算区分</th>
-            <th>用途</th>
-            <th>金額</th>
-            <th>支出方法</th>
-            <th>支払日</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="expense in sortedExpenses" :key="expense.id">
-            <td><span class="cell-label">利用日</span>{{ expense.usage_date }}</td>
-            <td><span class="cell-label">予算区分</span>{{ itemName(expense.budget_item_id) }}</td>
-            <td class="cell-primary"><span class="cell-label">用途</span>{{ expense.purpose }}</td>
-            <td class="cell-amount"><span class="cell-label">金額</span>{{ formatAmount(expense.amount) }}</td>
-            <td><span class="cell-label">支出方法</span>{{ methodName(expense.payment_method_id) }}</td>
-            <td><span class="cell-label">支払日</span>{{ expense.payment_date }}</td>
-            <td class="actions">
-              <button class="btn-text" type="button" aria-label="編集" @click="openEditForm(expense)">
-                <Icon name="edit" />
-              </button>
-              <button class="btn-text danger" type="button" aria-label="削除" @click="removeExpense(expense)">
-                <Icon name="delete" />
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="list">
+        <table class="table-fixed-expenses">
+          <thead>
+            <tr>
+              <th>利用日</th>
+              <th>予算区分</th>
+              <th>用途</th>
+              <th>金額</th>
+              <th>支出方法</th>
+              <th>支払日</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="expense in sortedExpenses" :key="expense.id">
+              <td><span class="cell-label">利用日</span>{{ expense.usage_date }}</td>
+              <td><span class="cell-label">予算区分</span>{{ itemName(expense.budget_item_id) }}</td>
+              <td class="cell-primary"><span class="cell-label">用途</span>{{ expense.purpose }}</td>
+              <td class="cell-amount"><span class="cell-label">金額</span>{{ formatAmount(expense.amount) }}</td>
+              <td><span class="cell-label">支出方法</span>{{ methodName(expense.payment_method_id) }}</td>
+              <td><span class="cell-label">支払日</span>{{ expense.payment_date }}</td>
+              <td class="actions">
+                <button class="btn-text" type="button" aria-label="編集" @click="openEditForm(expense)">
+                  <Icon name="edit" />
+                </button>
+                <button class="btn-text danger" type="button" aria-label="削除" @click="removeExpense(expense)">
+                  <Icon name="delete" />
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
       <p v-if="periods.length > 0 && sortedExpenses.length === 0" class="empty">
         データがありません
       </p>

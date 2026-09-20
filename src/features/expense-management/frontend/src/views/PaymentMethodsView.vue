@@ -189,37 +189,39 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
       </button>
     </div>
 
-    <div class="panel list">
+    <div class="panel">
       <p v-if="methods.length === 0" class="empty">データがありません</p>
-      <table v-else>
-        <thead>
-          <tr>
-            <th>名称</th>
-            <th>締め日</th>
-            <th>支払月オフセット</th>
-            <th>支払日</th>
-            <th>表示順</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="method in methods" :key="method.id">
-            <td class="cell-primary"><span class="cell-label">名称</span>{{ method.name }}</td>
-            <td><span class="cell-label">締め日</span>{{ method.closing_day }}</td>
-            <td><span class="cell-label">支払月オフセット</span>{{ method.payment_month_offset }}</td>
-            <td><span class="cell-label">支払日</span>{{ method.payment_day }}</td>
-            <td><span class="cell-label">表示順</span>{{ method.display_order }}</td>
-            <td class="actions">
-              <button class="btn-text" type="button" aria-label="編集" @click="openEditForm(method)">
-                <Icon name="edit" />
-              </button>
-              <button class="btn-text danger" type="button" aria-label="削除" @click="removeMethod(method)">
-                <Icon name="delete" />
-              </button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="list">
+        <table>
+          <thead>
+            <tr>
+              <th>名称</th>
+              <th>締め日</th>
+              <th>支払月オフセット</th>
+              <th>支払日</th>
+              <th>表示順</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="method in methods" :key="method.id">
+              <td class="cell-primary"><span class="cell-label">名称</span>{{ method.name }}</td>
+              <td><span class="cell-label">締め日</span>{{ method.closing_day }}</td>
+              <td><span class="cell-label">支払月オフセット</span>{{ method.payment_month_offset }}</td>
+              <td><span class="cell-label">支払日</span>{{ method.payment_day }}</td>
+              <td><span class="cell-label">表示順</span>{{ method.display_order }}</td>
+              <td class="actions">
+                <button class="btn-text" type="button" aria-label="編集" @click="openEditForm(method)">
+                  <Icon name="edit" />
+                </button>
+                <button class="btn-text danger" type="button" aria-label="削除" @click="removeMethod(method)">
+                  <Icon name="delete" />
+                </button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <div v-if="showForm" class="modal-back">

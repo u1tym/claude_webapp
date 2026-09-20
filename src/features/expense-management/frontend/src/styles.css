@@ -179,7 +179,12 @@ textarea {
 
 .list {
   flex: 1;
+  min-height: 0;
   overflow: auto;
+  /* No padding of its own: position: sticky on the header computes its offset
+     against this element's padding edge, so any padding here (even inherited
+     via a shared class on the same element as .panel) throws that off and lets
+     the header drift away from the actual top of the scrollport while scrolling. */
 }
 
 .list table {

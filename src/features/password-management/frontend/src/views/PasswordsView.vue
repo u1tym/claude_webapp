@@ -256,27 +256,29 @@ async function confirmDelete(): Promise<void> {
       </button>
     </div>
 
-    <div class="panel list">
+    <div class="panel">
       <p v-if="items.length === 0 && keyword.trim() === ''" class="empty">データがありません</p>
       <p v-else-if="items.length === 0" class="empty">該当するデータがありません</p>
-      <table v-else>
-        <thead>
-          <tr>
-            <th>タイトル</th>
-            <th>ユーザ名</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="item in items" :key="item.id">
-            <td class="cell-primary">
-              <button class="row" type="button" @click="openDetail(item)">{{ item.title }}</button>
-            </td>
-            <td>
-              <button class="row" type="button" @click="openDetail(item)">{{ item.userword }}</button>
-            </td>
-          </tr>
-        </tbody>
-      </table>
+      <div v-else class="list">
+        <table>
+          <thead>
+            <tr>
+              <th>タイトル</th>
+              <th>ユーザ名</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="item in items" :key="item.id">
+              <td class="cell-primary">
+                <button class="row" type="button" @click="openDetail(item)">{{ item.title }}</button>
+              </td>
+              <td>
+                <button class="row" type="button" @click="openDetail(item)">{{ item.userword }}</button>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
     </div>
 
     <div v-if="detailEntry || detailLoading" class="modal-back">

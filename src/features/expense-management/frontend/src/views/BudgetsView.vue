@@ -258,24 +258,26 @@ async function removeItem(item: BudgetItem): Promise<void> {
           複製作成
         </button>
       </div>
-      <div class="panel list">
+      <div class="panel">
         <p v-if="periods.length === 0" class="empty">データがありません</p>
-        <table v-else>
-          <thead>
-            <tr>
-              <th>予算期間</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="p in periods" :key="p.id">
-              <td>
-                <button class="row" type="button" @click="selectPeriod(p)">
-                  {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="list">
+          <table>
+            <thead>
+              <tr>
+                <th>予算期間</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="p in periods" :key="p.id">
+                <td>
+                  <button class="row" type="button" @click="selectPeriod(p)">
+                    {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </template>
 
@@ -311,33 +313,35 @@ async function removeItem(item: BudgetItem): Promise<void> {
           <Icon name="plus" />
         </button>
       </div>
-      <div class="panel list">
+      <div class="panel">
         <p v-if="items.length === 0" class="empty">データがありません</p>
-        <table v-else>
-          <thead>
-            <tr>
-              <th>項目名</th>
-              <th>金額</th>
-              <th>表示順</th>
-              <th></th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in items" :key="item.id">
-              <td class="cell-primary"><span class="cell-label">項目名</span>{{ item.name }}</td>
-              <td class="cell-amount"><span class="cell-label">金額</span>{{ formatAmount(item.amount) }}</td>
-              <td><span class="cell-label">表示順</span>{{ item.display_order }}</td>
-              <td class="actions">
-                <button class="btn-text" type="button" aria-label="編集" @click="openEditItemForm(item)">
-                  <Icon name="edit" />
-                </button>
-                <button class="btn-text danger" type="button" aria-label="削除" @click="removeItem(item)">
-                  <Icon name="delete" />
-                </button>
-              </td>
-            </tr>
-          </tbody>
-        </table>
+        <div v-else class="list">
+          <table>
+            <thead>
+              <tr>
+                <th>項目名</th>
+                <th>金額</th>
+                <th>表示順</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr v-for="item in items" :key="item.id">
+                <td class="cell-primary"><span class="cell-label">項目名</span>{{ item.name }}</td>
+                <td class="cell-amount"><span class="cell-label">金額</span>{{ formatAmount(item.amount) }}</td>
+                <td><span class="cell-label">表示順</span>{{ item.display_order }}</td>
+                <td class="actions">
+                  <button class="btn-text" type="button" aria-label="編集" @click="openEditItemForm(item)">
+                    <Icon name="edit" />
+                  </button>
+                  <button class="btn-text danger" type="button" aria-label="削除" @click="removeItem(item)">
+                    <Icon name="delete" />
+                  </button>
+                </td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </template>
 
