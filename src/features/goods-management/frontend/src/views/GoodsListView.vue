@@ -19,13 +19,13 @@ import {
   renameMedia,
   renamePerson,
   updateArtist,
-  type Artist,
   type ArtistDetail,
   type GoodsListItem,
   type Media,
   type Person,
 } from "../api";
 import Icon from "../components/Icon.vue";
+import { listState } from "../listState";
 
 const router = useRouter();
 const onAuthError = inject<(error: unknown) => void>("onAuthError");
@@ -52,22 +52,13 @@ const errorMessage = ref("");
 const successMessage = ref("");
 
 const persons = ref<Person[]>([]);
-const selectedPersonId = ref<number | null>(null);
-
-const relatedArtists = ref<Artist[]>([]);
-const selectedArtistId = ref<number | "all" | null>(null);
-
-const relatedMediaList = ref<Media[]>([]);
-const selectedMediaId = ref<number | "all" | null>(null);
 
 const goodsLoading = ref(false);
-const goodsList = ref<GoodsListItem[]>([]);
-const titleFilter = ref("");
 
 const filteredGoods = computed(() => {
-  const term = titleFilter.value.trim().toLowerCase();
-  if (!term) return goodsList.value;
-  return goodsList.value.filter((g) => g.title.toLowerCase().includes(term));
+  const term = listState.titleFilter.trim().toLowerCase();
+  if (!term) return listState.goodsList;
+  return listState.goodsList.filter((g) => g.title.toLowerCase().includes(term));
 });
 
 function imageSrc(item: GoodsListItem): string {
@@ -81,8 +72,8 @@ function toEdit(item: GoodsListItem): void {
 
 function toNew(): void {
   const query: Record<string, string> = {};
-  if (typeof selectedArtistId.value === "number") query.artist_id = String(selectedArtistId.value);
-  if (typeof selectedMediaId.value === "number") query.media_id = String(selectedMediaId.value);
+  if (typeof listState.selectedArtistId === "number") query.artist_id = String(listState.selectedArtistId);
+  if (typeof listState.selectedMediaId === "number") query.media_id = String(listState.selectedMediaId);
   router.push({ path: "/goods/new", query });
 }
 
@@ -90,50 +81,64 @@ async function loadPersons(): Promise<void> {
   persons.value = await getPersons();
 }
 
-watch(selectedPersonId, async (id) => {
-  selectedArtistId.value = null;
-  selectedMediaId.value = null;
-  relatedArtists.value = [];
-  relatedMediaList.value = [];
-  goodsList.value = [];
-  errorMessage.value = "";
-  if (id == null) return;
+async function loadRelated(personId: number): Promise<void> {
   try {
-    const [artistsRes, mediaRes] = await Promise.all([getRelatedArtists(id), getRelatedMedia(id)]);
+    const [artistsRes, mediaRes] = await Promise.all([getRelatedArtists(personId), getRelatedMedia(personId)]);
     if (artistsRes === "missing" || mediaRes === "missing") {
       errorMessage.value = "対象がありません";
       return;
     }
-    relatedArtists.value = artistsRes;
-    relatedMediaList.value = mediaRes;
+    listState.relatedArtists = artistsRes;
+    listState.relatedMediaList = mediaRes;
   } catch (err) {
     handleError(err);
   }
-});
+}
 
-watch(selectedArtistId, () => {
-  selectedMediaId.value = null;
-  goodsList.value = [];
-});
+watch(
+  () => listState.selectedPersonId,
+  async (id, previousId) => {
+    if (id === previousId) return;
+    listState.selectedArtistId = null;
+    listState.selectedMediaId = null;
+    listState.relatedArtists = [];
+    listState.relatedMediaList = [];
+    listState.goodsList = [];
+    errorMessage.value = "";
+    if (id != null) await loadRelated(id);
+  },
+);
 
-watch(selectedMediaId, async (mediaId) => {
-  if (selectedPersonId.value == null || selectedArtistId.value === null || mediaId === null) return;
-  await loadGoodsList();
-});
+watch(
+  () => listState.selectedArtistId,
+  (value, previousValue) => {
+    if (value === previousValue) return;
+    listState.selectedMediaId = null;
+    listState.goodsList = [];
+  },
+);
+
+watch(
+  () => listState.selectedMediaId,
+  async (mediaId) => {
+    if (listState.selectedPersonId == null || listState.selectedArtistId === null || mediaId === null) return;
+    await loadGoodsList();
+  },
+);
 
 async function loadGoodsList(): Promise<void> {
-  if (selectedPersonId.value == null) return;
+  if (listState.selectedPersonId == null) return;
   goodsLoading.value = true;
   errorMessage.value = "";
   try {
-    const artistParam = selectedArtistId.value === "all" ? null : (selectedArtistId.value as number | null);
-    const mediaParam = selectedMediaId.value === "all" ? null : (selectedMediaId.value as number | null);
-    const res = await getGoodsList(selectedPersonId.value, artistParam, mediaParam);
+    const artistParam = listState.selectedArtistId === "all" ? null : listState.selectedArtistId;
+    const mediaParam = listState.selectedMediaId === "all" ? null : listState.selectedMediaId;
+    const res = await getGoodsList(listState.selectedPersonId, artistParam, mediaParam);
     if (res === "missing") {
       errorMessage.value = "対象がありません";
-      goodsList.value = [];
+      listState.goodsList = [];
     } else {
-      goodsList.value = res;
+      listState.goodsList = res;
     }
   } catch (err) {
     handleError(err);
@@ -192,13 +197,13 @@ async function loadManagementMedia(): Promise<void> {
 }
 
 async function refreshRelatedForSelectedPerson(): Promise<void> {
-  if (selectedPersonId.value == null) return;
+  if (listState.selectedPersonId == null) return;
   const [artistsRes, mediaRes] = await Promise.all([
-    getRelatedArtists(selectedPersonId.value),
-    getRelatedMedia(selectedPersonId.value),
+    getRelatedArtists(listState.selectedPersonId),
+    getRelatedMedia(listState.selectedPersonId),
   ]);
-  if (artistsRes !== "missing") relatedArtists.value = artistsRes;
-  if (mediaRes !== "missing") relatedMediaList.value = mediaRes;
+  if (artistsRes !== "missing") listState.relatedArtists = artistsRes;
+  if (mediaRes !== "missing") listState.relatedMediaList = mediaRes;
 }
 
 // ---- 人物フォーム ---------------------------------------------------------------
@@ -403,7 +408,7 @@ async function executeDelete(): Promise<void> {
     }
     if (type === "person") {
       await loadPersons();
-      if (selectedPersonId.value === id) selectedPersonId.value = null;
+      if (listState.selectedPersonId === id) listState.selectedPersonId = null;
     } else if (type === "artist") {
       artistDetails.value = artistDetails.value.filter((a) => a.id !== id);
       await refreshRelatedForSelectedPerson();
@@ -424,6 +429,14 @@ onMounted(async () => {
   loading.value = true;
   try {
     await loadPersons();
+    // 詳細・編集画面から戻ってきた場合、選択済みの条件は listState に残っているので
+    // クリアせず、選択肢と一覧だけを最新の内容に更新する。
+    if (listState.selectedPersonId != null) {
+      await loadRelated(listState.selectedPersonId);
+      if (listState.selectedArtistId !== null && listState.selectedMediaId !== null) {
+        await loadGoodsList();
+      }
+    }
   } catch (err) {
     handleError(err);
   } finally {
@@ -440,30 +453,30 @@ onMounted(async () => {
     <div class="toolbar">
       <div class="field">
         <label for="person-select">人物</label>
-        <select id="person-select" v-model="selectedPersonId">
+        <select id="person-select" v-model="listState.selectedPersonId">
           <option :value="null">選択してください</option>
           <option v-for="p in persons" :key="p.id" :value="p.id">{{ p.name }}</option>
         </select>
       </div>
       <div class="field">
         <label for="artist-select">アーティスト</label>
-        <select id="artist-select" v-model="selectedArtistId" :disabled="selectedPersonId == null">
+        <select id="artist-select" v-model="listState.selectedArtistId" :disabled="listState.selectedPersonId == null">
           <option :value="null">選択してください</option>
           <option value="all">すべて</option>
-          <option v-for="a in relatedArtists" :key="a.id" :value="a.id">{{ a.name }}</option>
+          <option v-for="a in listState.relatedArtists" :key="a.id" :value="a.id">{{ a.name }}</option>
         </select>
       </div>
       <div class="field">
         <label for="media-select">媒体</label>
-        <select id="media-select" v-model="selectedMediaId" :disabled="selectedArtistId == null">
+        <select id="media-select" v-model="listState.selectedMediaId" :disabled="listState.selectedArtistId == null">
           <option :value="null">選択してください</option>
           <option value="all">すべて</option>
-          <option v-for="m in relatedMediaList" :key="m.id" :value="m.id">{{ m.name }}</option>
+          <option v-for="m in listState.relatedMediaList" :key="m.id" :value="m.id">{{ m.name }}</option>
         </select>
       </div>
       <div class="field">
         <label for="title-filter">タイトルで絞り込み</label>
-        <input id="title-filter" v-model="titleFilter" type="text" :disabled="goodsList.length === 0" />
+        <input id="title-filter" v-model="listState.titleFilter" type="text" :disabled="listState.goodsList.length === 0" />
       </div>
       <button class="btn-text push-end" type="button" aria-label="設定メニューを開く" @click="openSettings">
         <Icon name="config" />
@@ -471,18 +484,18 @@ onMounted(async () => {
     </div>
 
     <div v-if="loading" class="loading">読み込み中…</div>
-    <template v-else-if="selectedPersonId == null">
+    <template v-else-if="listState.selectedPersonId == null">
       <p class="caption">人物を選ぶと商品を絞り込めます。</p>
     </template>
     <template v-else-if="goodsLoading">
       <div class="loading">読み込み中…</div>
     </template>
-    <template v-else-if="selectedMediaId == null">
+    <template v-else-if="listState.selectedMediaId == null">
       <p class="caption">アーティスト・媒体を選ぶと商品一覧が表示されます。</p>
     </template>
     <div v-else class="panel">
       <div v-if="filteredGoods.length === 0" class="empty">
-        {{ goodsList.length === 0 ? "データがありません" : "絞り込み条件に一致する商品はありません" }}
+        {{ listState.goodsList.length === 0 ? "データがありません" : "絞り込み条件に一致する商品はありません" }}
       </div>
       <ul v-else class="list plain-list">
         <li v-for="g in filteredGoods" :key="g.goods_id" class="list-item">
