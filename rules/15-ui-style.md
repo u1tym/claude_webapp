@@ -115,6 +115,7 @@ Violet   #A78BFA
 Lime     #A0D468
 Orange   #FFA36C
 Magenta  #E58FE0
+Amber    #F2C94C
 ```
 
 テーマカラーを使う箇所
