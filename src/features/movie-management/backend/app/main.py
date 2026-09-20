@@ -1,0 +1,73 @@
+from __future__ import annotations
+
+from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
+from starlette.exceptions import HTTPException as StarletteHTTPException
+
+from app.config import load_config
+from app.errors import AppError
+from app.logger import setup_logging, write
+from app.routers.genres import router as genres_router
+from app.routers.playback import router as playback_router
+from app.routers.playlists import router as playlists_router
+from app.routers.series import router as series_router
+from app.routers.settings import router as settings_router
+from app.routers.video_files import router as video_files_router
+from app.routers.videos import router as videos_router
+
+
+def create_app() -> FastAPI:
+    cfg = load_config()
+    setup_logging()
+    app = FastAPI(title="movie-management", redirect_slashes=False)
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cfg.cors_origins,
+        allow_origin_regex=r"https?://(localhost|127\.0\.0\.1|\[::1\])(:\d+)?$",
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+    app.include_router(settings_router)
+    app.include_router(genres_router)
+    app.include_router(series_router)
+    app.include_router(videos_router)
+    app.include_router(video_files_router)
+    app.include_router(playback_router)
+    app.include_router(playlists_router)
+
+    @app.exception_handler(RequestValidationError)
+    async def on_validation(request: Request, _exc: RequestValidationError) -> JSONResponse:
+        write("WRN", f"入力不正 path={request.url.path}")
+        return JSONResponse(status_code=400, content={"detail": "入力が不正です"})
+
+    @app.exception_handler(AppError)
+    async def on_app_error(request: Request, exc: AppError) -> JSONResponse:
+        level = "ERR" if exc.status_code >= 500 else "WRN"
+        write(level, f"失敗 path={request.url.path} status={exc.status_code} 理由={exc.reason or exc.detail}")
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={"detail": exc.detail},
+            headers=exc.headers,
+        )
+
+    @app.exception_handler(StarletteHTTPException)
+    async def on_http(_request: Request, exc: StarletteHTTPException) -> JSONResponse:
+        detail = exc.detail if isinstance(exc.detail, str) else "サーバエラーです"
+        if exc.status_code == 404:
+            detail = "対象がありません"
+        if exc.status_code == 405:
+            detail = "入力が不正です"
+        return JSONResponse(status_code=exc.status_code, content={"detail": detail})
+
+    @app.exception_handler(Exception)
+    async def on_error(request: Request, exc: Exception) -> JSONResponse:
+        write("ERR", f"想定外の失敗 path={request.url.path} type={type(exc).__name__}")
+        return JSONResponse(status_code=500, content={"detail": "サーバエラーです"})
+
+    return app
+
+
+app = create_app()
