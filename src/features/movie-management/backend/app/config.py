@@ -52,16 +52,24 @@ class Config:
 
 def load_config() -> Config:
     values = dotenv_values(ENV_PATH)
+
+    def db_value(*names: str) -> str | None:
+        # テンプレートの名前（DB_SERVER など）と、他機能の .env の名前（Server など）の両方を受け付ける
+        for name in names:
+            if values.get(name):
+                return values.get(name)
+        return None
+
     cors_raw = values.get("CORS_ORIGINS") or ""
     origins = [part.strip() for part in cors_raw.split(",") if part.strip()]
     origins = _loopback_aliases(origins)
     debug = (values.get("DEBUG_USER") or "").strip() or None
     return Config(
-        db_server=values.get("DB_SERVER") or "localhost",
-        db_name=values.get("DB_DATABASE") or "tstdb",
-        db_port=int(values.get("DB_PORT") or "5432"),
-        db_username=values.get("DB_USERNAME") or "tstuser",
-        db_password=values.get("DB_PASSWORD") or "",
+        db_server=db_value("DB_SERVER", "Server") or "localhost",
+        db_name=db_value("DB_DATABASE", "Database") or "tstdb",
+        db_port=int(db_value("DB_PORT", "Port") or "5432"),
+        db_username=db_value("DB_USERNAME", "Username") or "tstuser",
+        db_password=db_value("DB_PASSWORD", "Password") or "",
         cors_origins=origins,
         session_timeout_minutes=int(values.get("SESSION_TIMEOUT_MINUTES") or "30"),
         debug_user=debug,

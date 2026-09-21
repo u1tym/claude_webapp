@@ -58,8 +58,13 @@ def _get_pool() -> ThreadedConnectionPool:
 def get_conn() -> Iterator[PgConnection]:
     """プールから接続を借りる。正常終了で commit、例外で rollback して返す。"""
     _slots.acquire()
-    pool = _get_pool()
-    conn = pool.getconn()
+    try:
+        pool = _get_pool()
+        conn = pool.getconn()
+    except BaseException:
+        # 接続できないとき（DB の停止・認証失敗など）も、借りた枠を返す。返さないと、失敗が続いたときに全リクエストが待ち続ける
+        _slots.release()
+        raise
     discard = False
     try:
         if conn.closed:

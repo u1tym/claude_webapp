@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import psycopg2
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.middleware.cors import CORSMiddleware
@@ -64,7 +65,12 @@ def create_app() -> FastAPI:
 
     @app.exception_handler(Exception)
     async def on_error(request: Request, exc: Exception) -> JSONResponse:
-        write("ERR", f"想定外の失敗 path={request.url.path} type={type(exc).__name__}")
+        detail = ""
+        if isinstance(exc, psycopg2.Error):
+            # DB の失敗は原因（接続先・認証・権限など）が分かるよう、先頭の 1 行を残す（パスワードは含まれない）
+            lines = str(exc).strip().splitlines()
+            detail = f" 内容={lines[0]}" if lines else ""
+        write("ERR", f"想定外の失敗 path={request.url.path} type={type(exc).__name__}{detail}")
         return JSONResponse(status_code=500, content={"detail": "サーバエラーです"})
 
     return app
