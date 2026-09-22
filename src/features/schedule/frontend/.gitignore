@@ -1,2 +1,5 @@
 .env
+release.bash
+*.tsbuildinfo
+dist/
 node_modules/

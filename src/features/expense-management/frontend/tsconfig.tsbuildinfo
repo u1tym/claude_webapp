@@ -1,1 +1,0 @@
-{"root":["./src/api.ts","./src/env.d.ts","./src/format.ts","./src/main.ts","./src/router.ts","./src/app.vue","./src/components/icon.vue","./src/views/budgetsview.vue","./src/views/expensesview.vue","./src/views/paymentmethodsview.vue","./src/views/reportsview.vue","./vite.config.ts"],"version":"5.7.3"}

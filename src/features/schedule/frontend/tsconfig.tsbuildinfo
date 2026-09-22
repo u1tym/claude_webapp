@@ -1,1 +1,0 @@
-{"root":["./src/api.ts","./src/calendar.ts","./src/category-nav.ts","./src/env.d.ts","./src/holiday-settings.ts","./src/main.ts","./src/month-nav.ts","./src/router.ts","./src/app.vue","./src/views/calendarview.vue","./vite.config.ts"],"version":"5.7.3"}
