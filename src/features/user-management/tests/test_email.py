@@ -36,14 +36,31 @@ def test_user_email_create_update_and_reject(log_dir: Path) -> None:
     assert patched.status_code == 200
     assert patched.json()["email"] == "two@example.com"
 
+    # Email is optional: omitting it, or sending it blank, succeeds with an empty email.
     missing = client.post("/users", json={"username": _unique("noem"), "password": "pw"})
-    assert missing.status_code == 400
+    assert missing.status_code == 201
+    assert missing.json()["email"] == ""
 
     empty = client.post(
         "/users",
         json={"username": _unique("empty"), "password": "pw", "email": ""},
     )
-    assert empty.status_code == 400
+    assert empty.status_code == 201
+    assert empty.json()["email"] == ""
+
+    empty_update = client.patch(
+        f"/users/{created.json()['id']}",
+        json={"username": name, "email": ""},
+    )
+    assert empty_update.status_code == 200
+    assert empty_update.json()["email"] == ""
+
+    # Restore a non-blank email so the later log assertions (email=two@example.com) still hold.
+    restored = client.patch(
+        f"/users/{created.json()['id']}",
+        json={"username": name, "email": "two@example.com"},
+    )
+    assert restored.status_code == 200
 
     bad = client.post(
         "/users",

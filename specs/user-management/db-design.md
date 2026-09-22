@@ -81,8 +81,8 @@ erDiagram
 本機能の扱い:
 
 - 一覧は `is_deleted = false` のみ。`password_hash` は API に出さない。`email` は出す。
-- 追加は `username`、`email`、ハッシュしたパスワードを挿入する。`email` は空にしない。
-- 更新は未削除行の `username` と `email`、指定があるときだけ `password_hash`。`email` は空にしない。
+- 追加は `username`、`email`、ハッシュしたパスワードを挿入する。`email` は任意入力で、未指定・空なら空文字を挿入する。
+- 更新は未削除行の `username` と `email`、指定があるときだけ `password_hash`。`email` は空にできる。
 - 削除は `is_deleted = true` にする。自分自身（操作中ユーザの `id`）は更新しない。
 - 論理削除時は、そのユーザの `sessions` 行を削除する。
 - `email` の一意制約は無い。形式の検査はサービスが行う（テーブルの検査制約は置かない）。
@@ -254,3 +254,5 @@ erDiagram
 | 2026-09-18 | 承認済み | `public.features` のアイコン任意項目化を承認 |
 | 2026-09-19 23:43 | 未承認 | `public.menu_assignments` の `display_order` を更新できるようにする（REQ-014）。列・DDL変更なし |
 | 2026-09-19 23:47 | 承認済み | 表示順更新の追加を承認 |
+| 2026-09-22 13:21 | 未承認 | `email` を任意入力に変更（列・型は変更なし。既存の `NOT NULL DEFAULT ''` のまま、空文字を許容する運用に変更）（REQ-003・004） |
+| 2026-09-22 13:22 | 承認済み | `email` 任意入力化を承認 |

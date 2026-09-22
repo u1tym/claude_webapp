@@ -90,13 +90,14 @@ async function save(): Promise<void> {
   error.value = "";
   success.value = "";
   const nameBlank = username.value.trim() === "";
+  // Email is optional: blank is fine, only a non-blank value is format-checked.
   const mailBlank = email.value.trim() === "";
-  const mailBad = !emailOk(email.value);
+  const mailBad = !mailBlank && !emailOk(email.value);
   const passwordBlank = mode.value === "create" && password.value === "";
   invalidUsername.value = nameBlank;
-  invalidEmail.value = mailBlank || mailBad;
+  invalidEmail.value = mailBad;
   invalidPassword.value = passwordBlank;
-  if (nameBlank || mailBlank || mailBad || passwordBlank) {
+  if (nameBlank || mailBad || passwordBlank) {
     return;
   }
   loading.value = true;
@@ -204,7 +205,6 @@ async function confirmDelete(): Promise<void> {
           aria-label="メールアドレス"
           :class="{ invalid: invalidEmail }"
           :disabled="loading"
-          required
         />
         <input
           v-model="password"

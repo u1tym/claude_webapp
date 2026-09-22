@@ -36,14 +36,14 @@ def email_is_valid(email: str) -> bool:
     return at > 0 and at < len(email) - 1
 
 
-def _require_email(email: str, action: str, username: str) -> str:
-    logged_user = safe_text(username)
-    logged_email = safe_text(email)
+def _normalize_email(email: str, action: str, username: str) -> str:
+    """Email is optional: blank normalizes to "". A non-blank value must be well-formed."""
     stripped = email.strip()
     if stripped == "":
-        write("WRN", f"{action}失敗 username={logged_user} email={logged_email} 理由=空")
-        raise InvalidInputError
+        return ""
     if not email_is_valid(stripped):
+        logged_user = safe_text(username)
+        logged_email = safe_text(email)
         write(
             "WRN",
             f"{action}失敗 username={logged_user} email={logged_email} 理由=メールアドレス形式不正",
@@ -63,7 +63,7 @@ def add_user(username: str, password: str, email: str) -> UserRow:
     logged = safe_text(username)
     logged_email = safe_text(email)
     write("INF", f"ユーザ追加要求 username={logged} email={logged_email}")
-    email = _require_email(email, "ユーザ追加", username)
+    email = _normalize_email(email, "ユーザ追加", username)
     if get_user_by_username(username) is not None:
         write("WRN", f"ユーザ追加失敗 username={logged} email={logged_email} 理由=重複")
         raise DuplicateError
@@ -83,7 +83,7 @@ def change_user(user_id: int, username: str, email: str, password: str | None) -
         "INF",
         f"ユーザ更新要求 id={user_id} username={logged} email={logged_email} password_set={password is not None}",
     )
-    email = _require_email(email, "ユーザ更新", username)
+    email = _normalize_email(email, "ユーザ更新", username)
     current = get_user_by_id(user_id)
     if current is None or current.is_deleted:
         write("WRN", f"ユーザ更新失敗 id={user_id} 理由=対象なし")

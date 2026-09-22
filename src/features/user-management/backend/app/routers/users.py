@@ -11,9 +11,10 @@ router = APIRouter(prefix="/users")
 
 
 def _email_format(value: str) -> str:
+    """Email is optional: blank passes through as-is, only a non-blank value is format-checked."""
     stripped = value.strip()
     if stripped == "":
-        raise ValueError("blank")
+        return ""
     if not user_service.email_is_valid(stripped):
         raise ValueError("email")
     return stripped
@@ -22,7 +23,7 @@ def _email_format(value: str) -> str:
 class UserCreateBody(BaseModel):
     username: str
     password: str
-    email: str
+    email: str = ""
 
     @field_validator("username", "password")
     @classmethod
@@ -33,13 +34,13 @@ class UserCreateBody(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def email_not_blank(cls, value: str) -> str:
+    def email_format(cls, value: str) -> str:
         return _email_format(value)
 
 
 class UserUpdateBody(BaseModel):
     username: str
-    email: str
+    email: str = ""
     password: str | None = None
 
     @field_validator("username")
@@ -51,7 +52,7 @@ class UserUpdateBody(BaseModel):
 
     @field_validator("email")
     @classmethod
-    def email_not_blank(cls, value: str) -> str:
+    def email_format(cls, value: str) -> str:
         return _email_format(value)
 
 
