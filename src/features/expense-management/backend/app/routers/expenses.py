@@ -22,6 +22,7 @@ class ExpenseBody(BaseModel):
     payment_method_id: int
     memo: str | None = None
     payment_date: date
+    payment_date_is_auto: bool = True
 
     def to_input(self) -> ExpenseInput:
         return ExpenseInput(
@@ -33,6 +34,7 @@ class ExpenseBody(BaseModel):
             payment_method_id=self.payment_method_id,
             memo=self.memo,
             payment_date=self.payment_date,
+            payment_date_is_auto=self.payment_date_is_auto,
         )
 
 

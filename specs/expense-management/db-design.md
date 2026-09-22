@@ -48,6 +48,7 @@ erDiagram
         varchar name
         decimal amount
         integer display_order
+        text memo
         bool is_deleted
     }
     payment_methods {
@@ -79,6 +80,7 @@ erDiagram
         text memo
         timestamptz created_at
         date payment_date
+        bool payment_date_is_auto
         bool is_deleted
     }
 ```
@@ -113,7 +115,7 @@ erDiagram
 
 ### expense_management.budget_items
 
-目的: 予算期間に属する予算項目。項目名・金額・表示順を持つ。論理削除する（`expenses.budget_item_id` から参照され続けるため）。
+目的: 予算期間に属する予算項目。項目名・金額・表示順・メモを持つ。論理削除する（`expenses.budget_item_id` から参照され続けるため）。
 
 | カラム | 型 | NULL | 既定 | 説明 |
 |--------|-----|------|------|------|
@@ -123,6 +125,7 @@ erDiagram
 | `name` | varchar(255) | NOT NULL | - | 項目名。空は置かない |
 | `amount` | numeric(12,2) | NOT NULL | - | 予算金額。0以上 |
 | `display_order` | integer | NOT NULL | - | 表示順 |
+| `memo` | text | NULL | - | メモ（複数行可）。任意入力。空は NULL |
 | `is_deleted` | boolean | NOT NULL | false | 論理削除なら true |
 
 制約:
@@ -138,7 +141,7 @@ erDiagram
 
 - `(budget_period_id, display_order)` のうち `is_deleted = false`（一覧の表示順）
 
-`user_id` は `budget_period_id` の所有者と一致させる。物理削除はしない。削除済み項目は一覧に出ない。既存の支出記録が参照する `budget_item_id` は、項目の削除後も変えない。複製作成（REQ-002）では、複製元の未削除の予算項目をコピーして新しい `id` で追加する（`budget_period_id` は複製先）。
+`user_id` は `budget_period_id` の所有者と一致させる。物理削除はしない。削除済み項目は一覧に出ない。既存の支出記録が参照する `budget_item_id` は、項目の削除後も変えない。複製作成（REQ-002）では、複製元の未削除の予算項目の項目名・金額・表示順をコピーして新しい `id` で追加する（`budget_period_id` は複製先）。`memo` はコピーせず、複製後の行は常に NULL とする（REQ-002 の複製対象に含まれないため）。
 
 ### expense_management.payment_methods
 
@@ -213,6 +216,7 @@ erDiagram
 | `memo` | text | NULL | - | メモ。空は NULL |
 | `created_at` | timestamptz | NOT NULL | 現在時刻 | 入力日時。システムが自動記録し、以後変えない |
 | `payment_date` | date | NOT NULL | - | 支払日。登録時は自動算出値、以後はユーザが上書きした値 |
+| `payment_date_is_auto` | boolean | NOT NULL | true | 支払日の自動算出が有効かどうか。ユーザが切り替えた値をそのまま保存する |
 | `is_deleted` | boolean | NOT NULL | false | 削除フラグ。true なら削除済み |
 
 制約:
@@ -234,7 +238,7 @@ erDiagram
 - `(user_id, budget_period_id)` のうち `is_deleted = false`（予算による一覧の絞り込み）
 - `(budget_item_id)` のうち `is_deleted = false`（予算項目ごとの集計）
 
-`budget_period_id` を指定するときは本人の予算期間だけを指定できる。`budget_item_id` を指定するときは、本人の未削除の予算項目であり、かつその `budget_period_id` に属する予算項目でなければならない。`budget_period_id` が NULL（予算なし）のとき、`budget_item_id` も NULL にする。`payment_method_id` は追加・更新時に本人の未削除の支出方法だけを指定できる。削除済みの予算項目・支出方法が既に付いている既存行は残してよい（`budget_item_id` / `payment_method_id` は変えない）。`created_at` は追加時にシステムが設定し、以後変えない。`payment_date` は追加・更新時に自動算出した値を初期値とし、ユーザが上書きできる。物理削除はしない。一覧・集計は `is_deleted = false` の行だけを対象とする。予算項目ごとの集計（REQ-011・012）は `budget_item_id` が NULL の行を対象に含めない。
+`budget_period_id` を指定するときは本人の予算期間だけを指定できる。`budget_item_id` を指定するときは、本人の未削除の予算項目であり、かつその `budget_period_id` に属する予算項目でなければならない。`budget_period_id` が NULL（予算なし）のとき、`budget_item_id` も NULL にする。`payment_method_id` は追加・更新時に本人の未削除の支出方法だけを指定できる。削除済みの予算項目・支出方法が既に付いている既存行は残してよい（`budget_item_id` / `payment_method_id` は変えない）。`created_at` は追加時にシステムが設定し、以後変えない。`payment_date` は追加・更新時に自動算出した値を初期値とし、ユーザが上書きできる。`payment_date_is_auto` は、フロントのチェックボックスの状態をそのまま保存する（算出ロジック自体には使わない。フロントが再算出するかどうかの判断・編集画面を開いたときの初期状態の復元に用いる）。物理削除はしない。一覧・集計は `is_deleted = false` の行だけを対象とする。予算項目ごとの集計（REQ-011・012）は `budget_item_id` が NULL の行を対象に含めない。
 
 ## 関連
 
@@ -253,13 +257,13 @@ erDiagram
 |------|------|
 | REQ-001 | `budget_periods` への挿入（`title` 含む）。重複チェックは行わない |
 | REQ-002 | `budget_periods` への挿入（`title` 含む）、`budget_items` の複製挿入 |
-| REQ-003 | `budget_items` の挿入・更新・論理削除 |
+| REQ-003 | `budget_items` の挿入・更新・論理削除（`memo` を含む） |
 | REQ-004 | `budget_periods` の一覧（`title` 含む）、`budget_items` の `(budget_period_id, display_order)` |
 | REQ-005 | `payment_methods` への挿入。`closing_day = 0` のときの固定値検査。`payment_method_exclusions` への挿入（`target` ごと） |
 | REQ-006 | `payment_methods` の更新・論理削除。`closing_day` を0に変更したときの固定値更新と `payment_method_exclusions` の削除 |
 | REQ-007 | `payment_methods` の一覧（`is_deleted = false`、`display_order` 順） |
-| REQ-008 | `expenses` への挿入（`budget_period_id`・`budget_item_id` を含む。予算なしは両方 NULL）。`created_at` の自動設定。`payment_date` の初期値は算出値 |
-| REQ-009 | `expenses` の更新（`budget_period_id`・`budget_item_id` の変更を含む）・論理削除（`is_deleted`） |
+| REQ-008 | `expenses` への挿入（`budget_period_id`・`budget_item_id` を含む。予算なしは両方 NULL）。`created_at` の自動設定。`payment_date` の初期値は算出値。`payment_date_is_auto` の保存 |
+| REQ-009 | `expenses` の更新（`budget_period_id`・`budget_item_id`・`payment_date_is_auto` の変更を含む）・論理削除（`is_deleted`） |
 | REQ-010 | `expenses` の一覧（`is_deleted = false`）。`budget_period_id` による絞り込み（NULL＝予算なしを含む） |
 | REQ-011 | `expenses.usage_date` と `budget_periods` の期間、`budget_items.amount` との集計（`is_deleted = false`） |
 | REQ-012 | `expenses.payment_date` の年月による集計（`is_deleted = false`） |
@@ -288,3 +292,5 @@ erDiagram
 | 2026-09-18 | 承認済み | `exclusion_kind` への `holiday` 追加を承認 |
 | 2026-09-19 20:14 | 未承認 | `expenses` に `budget_period_id`（NULL 可、予算なし＝NULL）を追加。`budget_item_id` を NOT NULL から NULL 許容へ変更し、検査制約 `budget_period_id IS NOT NULL OR budget_item_id IS NULL` を追加。`(user_id, budget_period_id)` のインデックスを追加。既存 DDL は変えず新DDLファイルで反映（既存行は `budget_items.budget_period_id` から `budget_period_id` を補完） |
 | 2026-09-19 20:48 | 承認済み | `expenses.budget_period_id` の追加を承認 |
+| 2026-09-22 11:37 | 未承認 | `budget_items` に `memo`（text、任意、複製時はコピーしない）を追加。`expenses` に `payment_date_is_auto`（boolean、既定 true）を追加。既存 DDL は変えず新DDLファイルで反映 |
+| 2026-09-22 11:45 | 承認済み | `budget_items.memo` と `expenses.payment_date_is_auto` の追加を承認 |

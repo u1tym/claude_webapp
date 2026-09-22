@@ -171,12 +171,12 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
   "start_date": "2026-10-01",
   "end_date": "2026-10-31",
   "budget_items": [
-    { "id": 10, "name": "食費", "amount": "30000.00", "display_order": 1 }
+    { "id": 10, "name": "食費", "amount": "30000.00", "display_order": 1, "memo": null }
   ]
 }
 ```
 
-処理概要: `budget_period_id` で指定した予算期間（本人の所有、未削除の予算項目のみ）を複製元として、要求の `title`・`start_date`・`end_date` で新しい予算期間を作成し、複製元の予算項目（項目名・金額・表示順）を新しい `id` でコピーする。
+処理概要: `budget_period_id` で指定した予算期間（本人の所有、未削除の予算項目のみ）を複製元として、要求の `title`・`start_date`・`end_date` で新しい予算期間を作成し、複製元の予算項目（項目名・金額・表示順）を新しい `id` でコピーする。`memo` はコピーせず `null` にする。
 
 エラー:
 
@@ -225,12 +225,12 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 ```json
 {
   "items": [
-    { "id": 10, "budget_period_id": 1, "name": "食費", "amount": "30000.00", "display_order": 1 }
+    { "id": 10, "budget_period_id": 1, "name": "食費", "amount": "30000.00", "display_order": 1, "memo": null }
   ]
 }
 ```
 
-`items` は `display_order` の昇順。削除済みは含まない。`budget_period_id` が本人の予算期間でないときは 404。
+`items` は `display_order` の昇順。削除済みは含まない。`budget_period_id` が本人の予算期間でないときは 404。`memo` が無いときは `null`。
 
 処理概要: 指定した予算期間に属する、本人の未削除の予算項目を返す。
 
@@ -241,13 +241,15 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 要求:
 
 ```json
-{ "budget_period_id": 1, "name": "食費", "amount": "30000.00", "display_order": 1 }
+{ "budget_period_id": 1, "name": "食費", "amount": "30000.00", "display_order": 1, "memo": null }
 ```
+
+`memo` は省略、または `null` にできる（任意入力。複数行の文字列を渡せる）。
 
 応答: 201
 
 ```json
-{ "id": 10, "budget_period_id": 1, "name": "食費", "amount": "30000.00", "display_order": 1 }
+{ "id": 10, "budget_period_id": 1, "name": "食費", "amount": "30000.00", "display_order": 1, "memo": null }
 ```
 
 エラー:
@@ -256,7 +258,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 |------|------|
 | `name` が空、`amount` が負、`budget_period_id` が本人の予算期間でない | 400 |
 
-処理概要: 指定した予算期間に予算項目を追加する。
+処理概要: 指定した予算期間に予算項目を追加する。`memo` は空文字・未指定なら `null` として保存する。
 
 ### PATCH `/budget-items/{budget_item_id}`
 
@@ -265,7 +267,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 要求:
 
 ```json
-{ "name": "食費", "amount": "32000.00", "display_order": 1 }
+{ "name": "食費", "amount": "32000.00", "display_order": 1, "memo": "特売の日は多めに買う" }
 ```
 
 応答: 200（更新後の予算項目。形式は POST と同じ）
@@ -277,7 +279,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | `name` が空、`amount` が負 | 400 |
 | 本人の未削除の予算項目でない | 404 |
 
-処理概要: 予算項目の項目名・金額・表示順を更新する。`budget_period_id` は変更できない。
+処理概要: 予算項目の項目名・金額・表示順・メモを更新する。`budget_period_id` は変更できない。
 
 ### DELETE `/budget-items/{budget_item_id}`
 
@@ -445,6 +447,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
       "payment_method_id": 1,
       "memo": null,
       "payment_date": "2026-10-10",
+      "payment_date_is_auto": true,
       "created_at": "2026-09-05T12:30:00+09:00"
     }
   ]
@@ -477,7 +480,8 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
   "amount": "980.00",
   "payment_method_id": 1,
   "memo": null,
-  "payment_date": "2026-10-10"
+  "payment_date": "2026-10-10",
+  "payment_date_is_auto": true
 }
 ```
 
@@ -495,7 +499,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | `budget_period_id` が `null` でないのに、`budget_item_id` が `null`、本人の未削除の予算項目でない、またはその `budget_period_id` の予算項目でない | 400 |
 | `payment_method_id` が本人の未削除の支出方法でない | 400 |
 
-処理概要: 支出記録を登録する。`payment_date` はフロントが `GET /payment-methods/{id}/estimated-payment-date` で算出・表示した値（ユーザが修正した場合はその値）をそのまま受け取り保存する。`created_at` は現在時刻を自動設定する。
+処理概要: 支出記録を登録する。`payment_date` はフロントが `GET /payment-methods/{id}/estimated-payment-date` で算出・表示した値（ユーザが修正した場合はその値）をそのまま受け取り保存する。`payment_date_is_auto` は、フロントの自動算出チェックボックスの状態をそのまま受け取り保存する（バックエンドはこの値を使って `payment_date` を算出し直すことはしない）。`created_at` は現在時刻を自動設定する。
 
 ### PATCH `/expenses/{expense_id}`
 
@@ -512,7 +516,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | POST と同じ入力検査 | 400 |
 | 本人の削除されていない支出記録でない | 404 |
 
-処理概要: 支出記録を更新する。`created_at` は変えない。
+処理概要: 支出記録を更新する。`created_at` は変えない。`payment_date_is_auto` は要求の値でそのまま更新する。
 
 ### DELETE `/expenses/{expense_id}`
 
@@ -615,3 +619,5 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | 2026-09-18 | 承認済み | `exclusion_kind` への `holiday` 追加を承認 |
 | 2026-09-19 20:14 | 未承認 | POST・PATCH `/expenses` に `budget_period_id` を追加（`null` で「予算なし」）。`budget_item_id` を `null` 許容に変更。GET `/expenses` に `budget_period_id`・`unassigned` クエリを追加し、指定時は利用日範囲でなく予算の一致で絞り込む |
 | 2026-09-19 20:48 | 承認済み | `/expenses` の `budget_period_id` 対応を承認 |
+| 2026-09-22 11:46 | 未承認 | `budget-items` の GET/POST/PATCH に `memo` を追加（複製時はコピーせず `null`）。`/expenses` の GET/POST/PATCH に `payment_date_is_auto` を追加 |
+| 2026-09-22 12:09 | 承認済み | `budget-items.memo` と `/expenses.payment_date_is_auto` の追加を承認 |

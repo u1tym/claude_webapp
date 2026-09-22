@@ -167,7 +167,7 @@ function openEditForm(expense: Expense): void {
   paymentMethodId.value = expense.payment_method_id;
   memo.value = expense.memo ?? "";
   paymentDate.value = expense.payment_date;
-  autoCalculatePaymentDate.value = true;
+  autoCalculatePaymentDate.value = expense.payment_date_is_auto;
   showForm.value = true;
 }
 
@@ -215,6 +215,7 @@ async function submitForm(): Promise<void> {
     payment_method_id: paymentMethodId.value,
     memo: memo.value.trim() === "" ? null : memo.value,
     payment_date: paymentDate.value,
+    payment_date_is_auto: autoCalculatePaymentDate.value,
   };
   try {
     const result =

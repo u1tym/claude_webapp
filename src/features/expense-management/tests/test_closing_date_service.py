@@ -90,6 +90,69 @@ def test_estimate_payment_date_basic_offset() -> None:
     assert result == date(2026, 10, 10)
 
 
+def test_estimate_payment_date_usage_after_closing_day_rolls_to_next_month() -> None:
+    # Usage on the 22nd with a closing day of 15 falls after this month's cutoff,
+    # so it is settled by *next* month's closing day (Oct 15), not this month's.
+    result = estimate_payment_date(
+        usage_date=date(2026, 9, 22),
+        closing_day=15,
+        closing_day_shift_direction="later",
+        closing_day_exclusions=frozenset(),
+        payment_month_offset=1,
+        payment_day=13,
+        payment_day_shift_direction="later",
+        payment_day_exclusions=frozenset(),
+    )
+    # Closing: Oct 15, 2026. Payment target month: Oct + 1 offset = Nov, day 13.
+    assert result == date(2026, 11, 13)
+
+
+def test_estimate_payment_date_usage_on_closing_day_stays_in_same_month() -> None:
+    result = estimate_payment_date(
+        usage_date=date(2026, 9, 15),
+        closing_day=15,
+        closing_day_shift_direction="later",
+        closing_day_exclusions=frozenset(),
+        payment_month_offset=1,
+        payment_day=13,
+        payment_day_shift_direction="later",
+        payment_day_exclusions=frozenset(),
+    )
+    # Usage lands exactly on the cutoff, so it still closes within September.
+    assert result == date(2026, 10, 13)
+
+
+def test_estimate_payment_date_rollover_crosses_year_boundary() -> None:
+    result = estimate_payment_date(
+        usage_date=date(2026, 12, 20),
+        closing_day=15,
+        closing_day_shift_direction="later",
+        closing_day_exclusions=frozenset(),
+        payment_month_offset=1,
+        payment_day=5,
+        payment_day_shift_direction="later",
+        payment_day_exclusions=frozenset(),
+    )
+    # Usage after Dec 15 rolls to the Jan 2027 closing date; +1 month payment is Feb 2027.
+    assert result == date(2027, 2, 5)
+
+
+def test_estimate_payment_date_rollover_respects_clamped_closing_day() -> None:
+    # closing_day=31 in a 30-day month (September) clamps to Sep 30 as the cutoff,
+    # so usage on the 30th still closes within September, not October.
+    result = estimate_payment_date(
+        usage_date=date(2026, 9, 30),
+        closing_day=31,
+        closing_day_shift_direction="later",
+        closing_day_exclusions=frozenset(),
+        payment_month_offset=0,
+        payment_day=10,
+        payment_day_shift_direction="later",
+        payment_day_exclusions=frozenset(),
+    )
+    assert result == date(2026, 9, 10)
+
+
 def test_estimate_payment_date_crosses_year_boundary() -> None:
     result = estimate_payment_date(
         usage_date=date(2026, 12, 20),

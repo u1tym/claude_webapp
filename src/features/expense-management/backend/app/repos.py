@@ -24,6 +24,7 @@ class BudgetItemRow:
     name: str
     amount: Decimal
     display_order: int
+    memo: str | None
     is_deleted: bool
 
 
@@ -54,6 +55,7 @@ class ExpenseRow:
     memo: str | None
     created_at: datetime
     payment_date: date
+    payment_date_is_auto: bool
     is_deleted: bool
 
 
@@ -126,7 +128,7 @@ def list_budget_items(
     user_id: int, budget_period_id: int, include_deleted: bool = False
 ) -> list[BudgetItemRow]:
     query = """
-        SELECT id, user_id, budget_period_id, name, amount, display_order, is_deleted
+        SELECT id, user_id, budget_period_id, name, amount, display_order, memo, is_deleted
         FROM expense_management.budget_items
         WHERE user_id = %s AND budget_period_id = %s
     """
@@ -144,7 +146,7 @@ def get_budget_item(user_id: int, budget_item_id: int) -> BudgetItemRow | None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, user_id, budget_period_id, name, amount, display_order, is_deleted
+                SELECT id, user_id, budget_period_id, name, amount, display_order, memo, is_deleted
                 FROM expense_management.budget_items
                 WHERE id = %s AND user_id = %s
                 """,
@@ -160,17 +162,18 @@ def insert_budget_item(
     name: str,
     amount: Decimal,
     display_order: int,
+    memo: str | None,
 ) -> BudgetItemRow:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 INSERT INTO expense_management.budget_items
-                    (user_id, budget_period_id, name, amount, display_order)
-                VALUES (%s, %s, %s, %s, %s)
-                RETURNING id, user_id, budget_period_id, name, amount, display_order, is_deleted
+                    (user_id, budget_period_id, name, amount, display_order, memo)
+                VALUES (%s, %s, %s, %s, %s, %s)
+                RETURNING id, user_id, budget_period_id, name, amount, display_order, memo, is_deleted
                 """,
-                (user_id, budget_period_id, name, amount, display_order),
+                (user_id, budget_period_id, name, amount, display_order, memo),
             )
             row = cur.fetchone()
             assert row is not None
@@ -183,16 +186,17 @@ def update_budget_item(
     name: str,
     amount: Decimal,
     display_order: int,
+    memo: str | None,
 ) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 UPDATE expense_management.budget_items
-                SET name = %s, amount = %s, display_order = %s
+                SET name = %s, amount = %s, display_order = %s, memo = %s
                 WHERE id = %s AND user_id = %s
                 """,
-                (name, amount, display_order, budget_item_id, user_id),
+                (name, amount, display_order, memo, budget_item_id, user_id),
             )
 
 
@@ -227,6 +231,7 @@ def _budget_item_from_row(row: dict[str, object]) -> BudgetItemRow:
         name=str(row["name"]),
         amount=Decimal(row["amount"]),
         display_order=int(row["display_order"]),
+        memo=(None if row["memo"] is None else str(row["memo"])),
         is_deleted=bool(row["is_deleted"]),
     )
 
@@ -441,7 +446,7 @@ def list_expenses(
             cur.execute(
                 f"""
                 SELECT id, user_id, budget_period_id, budget_item_id, payment_method_id, usage_date, purpose,
-                       amount, memo, created_at, payment_date, is_deleted
+                       amount, memo, created_at, payment_date, payment_date_is_auto, is_deleted
                 FROM expense_management.expenses
                 WHERE {" AND ".join(where)}
                 ORDER BY usage_date DESC, id DESC
@@ -457,7 +462,7 @@ def get_expense(user_id: int, expense_id: int) -> ExpenseRow | None:
             cur.execute(
                 """
                 SELECT id, user_id, budget_period_id, budget_item_id, payment_method_id, usage_date, purpose,
-                       amount, memo, created_at, payment_date, is_deleted
+                       amount, memo, created_at, payment_date, payment_date_is_auto, is_deleted
                 FROM expense_management.expenses
                 WHERE id = %s AND user_id = %s
                 """,
@@ -477,6 +482,7 @@ def insert_expense(
     amount: Decimal,
     memo: str | None,
     payment_date: date,
+    payment_date_is_auto: bool,
 ) -> ExpenseRow:
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -484,10 +490,10 @@ def insert_expense(
                 """
                 INSERT INTO expense_management.expenses
                     (user_id, budget_period_id, budget_item_id, payment_method_id, usage_date, purpose,
-                     amount, memo, payment_date)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                     amount, memo, payment_date, payment_date_is_auto)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, user_id, budget_period_id, budget_item_id, payment_method_id, usage_date, purpose,
-                          amount, memo, created_at, payment_date, is_deleted
+                          amount, memo, created_at, payment_date, payment_date_is_auto, is_deleted
                 """,
                 (
                     user_id,
@@ -499,6 +505,7 @@ def insert_expense(
                     amount,
                     memo,
                     payment_date,
+                    payment_date_is_auto,
                 ),
             )
             row = cur.fetchone()
@@ -517,6 +524,7 @@ def update_expense(
     amount: Decimal,
     memo: str | None,
     payment_date: date,
+    payment_date_is_auto: bool,
 ) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -524,7 +532,7 @@ def update_expense(
                 """
                 UPDATE expense_management.expenses
                 SET budget_period_id = %s, budget_item_id = %s, payment_method_id = %s, usage_date = %s,
-                    purpose = %s, amount = %s, memo = %s, payment_date = %s
+                    purpose = %s, amount = %s, memo = %s, payment_date = %s, payment_date_is_auto = %s
                 WHERE id = %s AND user_id = %s AND is_deleted = false
                 """,
                 (
@@ -536,6 +544,7 @@ def update_expense(
                     amount,
                     memo,
                     payment_date,
+                    payment_date_is_auto,
                     expense_id,
                     user_id,
                 ),
@@ -607,5 +616,6 @@ def _expense_from_row(row: dict[str, object]) -> ExpenseRow:
         memo=(None if row["memo"] is None else str(row["memo"])),
         created_at=row["created_at"],
         payment_date=row["payment_date"],
+        payment_date_is_auto=bool(row["payment_date_is_auto"]),
         is_deleted=bool(row["is_deleted"]),
     )

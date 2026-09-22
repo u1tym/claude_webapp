@@ -418,3 +418,149 @@ def test_payment_method_exclusion_holiday(client) -> None:
         },
     )
     assert invalid.status_code == 400
+
+
+def test_budget_item_memo(client) -> None:
+    r = client.post(
+        "/budget-periods",
+        json={"title": "メモ確認用", "start_date": "2032-01-01", "end_date": "2032-01-31"},
+    )
+    period = r.json()
+
+    # memo is optional; omitting it stores null.
+    r = client.post(
+        "/budget-items",
+        json={"budget_period_id": period["id"], "name": "無メモ項目", "amount": "1000.00", "display_order": 1},
+    )
+    assert r.status_code == 201
+    assert r.json()["memo"] is None
+
+    # A multi-line memo round-trips through create and the list endpoint.
+    multiline_memo = "特売の日は多めに買う\n単価が高い時は控える"
+    r = client.post(
+        "/budget-items",
+        json={
+            "budget_period_id": period["id"],
+            "name": "食費",
+            "amount": "30000.00",
+            "display_order": 2,
+            "memo": multiline_memo,
+        },
+    )
+    assert r.status_code == 201
+    item = r.json()
+    assert item["memo"] == multiline_memo
+
+    r = client.get("/budget-items", params={"budget_period_id": period["id"]})
+    assert r.status_code == 200
+    listed = next(i for i in r.json()["items"] if i["id"] == item["id"])
+    assert listed["memo"] == multiline_memo
+
+    # An all-whitespace memo is normalized to null (matches expenses.memo's trim rule).
+    r = client.patch(
+        f"/budget-items/{item['id']}",
+        json={"name": "食費", "amount": "30000.00", "display_order": 2, "memo": "   "},
+    )
+    assert r.status_code == 200
+    assert r.json()["memo"] is None
+
+    # Updating with a real memo (and omitting it entirely) both work as expected.
+    r = client.patch(
+        f"/budget-items/{item['id']}",
+        json={"name": "食費", "amount": "30000.00", "display_order": 2, "memo": "更新後のメモ"},
+    )
+    assert r.status_code == 200
+    assert r.json()["memo"] == "更新後のメモ"
+
+    r = client.patch(
+        f"/budget-items/{item['id']}",
+        json={"name": "食費", "amount": "30000.00", "display_order": 2},
+    )
+    assert r.status_code == 200
+    assert r.json()["memo"] is None
+
+    # Duplicating a budget period never copies memo (REQ-002 only carries name/amount/display_order).
+    r = client.patch(
+        f"/budget-items/{item['id']}",
+        json={"name": "食費", "amount": "30000.00", "display_order": 2, "memo": "複製されないはず"},
+    )
+    assert r.status_code == 200
+
+    r = client.post(
+        f"/budget-periods/{period['id']}/duplicate",
+        json={"title": "メモ確認用(複製)", "start_date": "2032-02-01", "end_date": "2032-02-29"},
+    )
+    assert r.status_code == 201
+    duplicated_items = r.json()["budget_items"]
+    assert all(i["memo"] is None for i in duplicated_items)
+    assert any(i["name"] == "食費" for i in duplicated_items)
+
+
+def test_expense_payment_date_is_auto_flag(client) -> None:
+    r = client.post(
+        "/payment-methods",
+        json={
+            "name": "自動計算確認用カード",
+            "closing_day": 15,
+            "closing_day_shift_direction": "later",
+            "payment_month_offset": 1,
+            "payment_day": 13,
+            "payment_day_shift_direction": "later",
+            "display_order": 1,
+        },
+    )
+    method = r.json()
+
+    # Omitting payment_date_is_auto defaults to true.
+    r = client.post(
+        "/expenses",
+        json={
+            "usage_date": "2032-03-01",
+            "purpose": "既定値の確認",
+            "amount": "500.00",
+            "payment_method_id": method["id"],
+            "payment_date": "2032-04-13",
+        },
+    )
+    assert r.status_code == 201
+    default_expense = r.json()
+    assert default_expense["payment_date_is_auto"] is True
+
+    # An explicit false is stored and returned unchanged (the backend never recomputes payment_date from it).
+    r = client.post(
+        "/expenses",
+        json={
+            "usage_date": "2032-03-01",
+            "purpose": "自動計算オフ",
+            "amount": "700.00",
+            "payment_method_id": method["id"],
+            "payment_date": "2032-03-01",
+            "payment_date_is_auto": False,
+        },
+    )
+    assert r.status_code == 201
+    manual_expense = r.json()
+    assert manual_expense["payment_date_is_auto"] is False
+    assert manual_expense["payment_date"] == "2032-03-01"
+
+    r = client.get("/expenses", params={"start_date": "2032-03-01", "end_date": "2032-03-01"})
+    listed = {i["id"]: i for i in r.json()["items"]}
+    assert listed[manual_expense["id"]]["payment_date_is_auto"] is False
+
+    # Editing can flip the flag back to true (matching the UI's "re-enable auto-calc" path).
+    r = client.patch(
+        f"/expenses/{manual_expense['id']}",
+        json={
+            "usage_date": "2032-03-01",
+            "purpose": "自動計算オフ",
+            "amount": "700.00",
+            "payment_method_id": method["id"],
+            "payment_date": "2032-03-01",
+            "payment_date_is_auto": True,
+        },
+    )
+    assert r.status_code == 200
+    assert r.json()["payment_date_is_auto"] is True
+
+    client.delete(f"/expenses/{default_expense['id']}")
+    client.delete(f"/expenses/{manual_expense['id']}")

@@ -480,6 +480,7 @@ textarea {
 .modal-back {
   position: fixed;
   inset: 0;
+  z-index: 10;
   background: rgb(0 0 0 / 50%);
   display: flex;
   align-items: center;

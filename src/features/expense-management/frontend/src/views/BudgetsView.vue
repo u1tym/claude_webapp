@@ -44,6 +44,7 @@ const itemFormError = ref("");
 const itemName = ref("");
 const itemAmount = ref("");
 const itemDisplayOrder = ref(1);
+const itemMemo = ref("");
 
 function handleError(err: unknown): void {
   if (err instanceof Error && err.message === "unauth") {
@@ -195,6 +196,7 @@ function openCreateItemForm(): void {
   itemName.value = "";
   itemAmount.value = "";
   itemDisplayOrder.value = items.value.length + 1;
+  itemMemo.value = "";
   showItemForm.value = true;
 }
 
@@ -204,6 +206,7 @@ function openEditItemForm(item: BudgetItem): void {
   itemName.value = item.name;
   itemAmount.value = item.amount;
   itemDisplayOrder.value = item.display_order;
+  itemMemo.value = item.memo ?? "";
   showItemForm.value = true;
 }
 
@@ -214,10 +217,23 @@ function closeItemForm(): void {
 async function submitItemForm(): Promise<void> {
   if (selectedPeriodId.value === null) return;
   try {
+    const trimmedMemo = itemMemo.value.trim() === "" ? null : itemMemo.value;
     const result =
       editingItemId.value === null
-        ? await createBudgetItem(selectedPeriodId.value, itemName.value, itemAmount.value, itemDisplayOrder.value)
-        : await updateBudgetItem(editingItemId.value, itemName.value, itemAmount.value, itemDisplayOrder.value);
+        ? await createBudgetItem(
+            selectedPeriodId.value,
+            itemName.value,
+            itemAmount.value,
+            itemDisplayOrder.value,
+            trimmedMemo,
+          )
+        : await updateBudgetItem(
+            editingItemId.value,
+            itemName.value,
+            itemAmount.value,
+            itemDisplayOrder.value,
+            trimmedMemo,
+          );
     if (result === "invalid") {
       itemFormError.value = "入力内容を確認してください";
       return;
@@ -404,6 +420,10 @@ async function removeItem(item: BudgetItem): Promise<void> {
               <label for="item-order">表示順</label>
               <input id="item-order" v-model.number="itemDisplayOrder" type="number" min="0" required />
             </div>
+          </div>
+          <div class="field">
+            <label for="item-memo">メモ</label>
+            <textarea id="item-memo" v-model="itemMemo" rows="3"></textarea>
           </div>
           <div class="actions">
             <button class="btn-primary" type="submit" aria-label="保存">

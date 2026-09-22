@@ -29,6 +29,7 @@ class ExpenseInput:
         payment_method_id: int,
         memo: str | None,
         payment_date: date,
+        payment_date_is_auto: bool = True,
     ) -> None:
         self.usage_date = usage_date
         self.budget_period_id = budget_period_id
@@ -38,6 +39,7 @@ class ExpenseInput:
         self.payment_method_id = payment_method_id
         self.memo = memo
         self.payment_date = payment_date
+        self.payment_date_is_auto = payment_date_is_auto
 
 
 def _parse_amount(value: str) -> Decimal:
@@ -88,6 +90,7 @@ def _body(row: ExpenseRow) -> dict[str, object]:
         "payment_method_id": row.payment_method_id,
         "memo": row.memo,
         "payment_date": row.payment_date.isoformat(),
+        "payment_date_is_auto": row.payment_date_is_auto,
         "created_at": row.created_at.isoformat(),
     }
 
@@ -133,6 +136,7 @@ def create_expense(user_id: int, data: ExpenseInput) -> dict[str, object]:
         amount,
         (data.memo.strip() or None) if data.memo is not None else None,
         data.payment_date,
+        data.payment_date_is_auto,
     )
     write("INF", f"支出記録登録成功 user_id={user_id} expense_id={row.id}")
     return _body(row)
@@ -156,6 +160,7 @@ def change_expense(user_id: int, expense_id: int, data: ExpenseInput) -> dict[st
         amount,
         (data.memo.strip() or None) if data.memo is not None else None,
         data.payment_date,
+        data.payment_date_is_auto,
     )
     updated = get_expense(user_id, expense_id)
     assert updated is not None

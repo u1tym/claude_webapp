@@ -57,7 +57,15 @@ def _item_body(row: BudgetItemRow) -> dict[str, object]:
         "name": row.name,
         "amount": format_amount(row.amount),
         "display_order": row.display_order,
+        "memo": row.memo,
     }
+
+
+def _normalize_memo(memo: str | None) -> str | None:
+    if memo is None:
+        return None
+    trimmed = memo.strip()
+    return trimmed or None
 
 
 def _validate_period_range(start_date: date, end_date: date) -> None:
@@ -119,8 +127,9 @@ def duplicate_period(
     new_period = insert_budget_period(user_id, trimmed_title, start_date, end_date)
     copied_items: list[dict[str, object]] = []
     for source_item in list_budget_items(user_id, source.id):
+        # memo is deliberately not copied (REQ-002 only duplicates name/amount/display_order).
         new_item = insert_budget_item(
-            user_id, new_period.id, source_item.name, source_item.amount, source_item.display_order
+            user_id, new_period.id, source_item.name, source_item.amount, source_item.display_order, None
         )
         copied_items.append(_item_body(new_item))
     write(
@@ -157,7 +166,12 @@ def _validate_item_input(name: str, amount_raw: str, display_order: int) -> tupl
 
 
 def add_item(
-    user_id: int, budget_period_id: int, name: str, amount_raw: str, display_order: int
+    user_id: int,
+    budget_period_id: int,
+    name: str,
+    amount_raw: str,
+    display_order: int,
+    memo: str | None = None,
 ) -> dict[str, object]:
     write(
         "INF",
@@ -165,13 +179,18 @@ def add_item(
     )
     require_own_period(user_id, budget_period_id)
     trimmed, amount = _validate_item_input(name, amount_raw, display_order)
-    row = insert_budget_item(user_id, budget_period_id, trimmed, amount, display_order)
+    row = insert_budget_item(user_id, budget_period_id, trimmed, amount, display_order, _normalize_memo(memo))
     write("INF", f"予算項目追加成功 user_id={user_id} budget_item_id={row.id}")
     return _item_body(row)
 
 
 def change_item(
-    user_id: int, budget_item_id: int, name: str, amount_raw: str, display_order: int
+    user_id: int,
+    budget_item_id: int,
+    name: str,
+    amount_raw: str,
+    display_order: int,
+    memo: str | None = None,
 ) -> dict[str, object]:
     write("INF", f"予算項目更新要求 user_id={user_id} budget_item_id={budget_item_id}")
     existing = get_budget_item(user_id, budget_item_id)
@@ -179,7 +198,7 @@ def change_item(
         write("WRN", f"予算項目更新失敗 user_id={user_id} budget_item_id={budget_item_id} 理由=対象なし")
         raise NotFoundError()
     trimmed, amount = _validate_item_input(name, amount_raw, display_order)
-    update_budget_item(budget_item_id, user_id, trimmed, amount, display_order)
+    update_budget_item(budget_item_id, user_id, trimmed, amount, display_order, _normalize_memo(memo))
     updated = get_budget_item(user_id, budget_item_id)
     assert updated is not None
     write("INF", f"予算項目更新成功 user_id={user_id} budget_item_id={budget_item_id}")

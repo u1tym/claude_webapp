@@ -15,12 +15,14 @@ class BudgetItemCreateBody(BaseModel):
     name: str
     amount: str
     display_order: int
+    memo: str | None = None
 
 
 class BudgetItemUpdateBody(BaseModel):
     name: str
     amount: str
     display_order: int
+    memo: str | None = None
 
 
 @router.get("")
@@ -41,7 +43,7 @@ def create_budget_item(
 ) -> dict[str, object]:
     try:
         return budget_service.add_item(
-            auth.user.id, body.budget_period_id, body.name, body.amount, body.display_order
+            auth.user.id, body.budget_period_id, body.name, body.amount, body.display_order, body.memo
         )
     except InvalidInputError:
         raise HTTPException(status_code=400, detail="入力が不正です") from None
@@ -57,7 +59,7 @@ def patch_budget_item(
 ) -> dict[str, object]:
     try:
         return budget_service.change_item(
-            auth.user.id, budget_item_id, body.name, body.amount, body.display_order
+            auth.user.id, budget_item_id, body.name, body.amount, body.display_order, body.memo
         )
     except InvalidInputError:
         raise HTTPException(status_code=400, detail="入力が不正です") from None

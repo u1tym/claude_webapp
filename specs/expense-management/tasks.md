@@ -972,6 +972,172 @@ Cookie セッション検証と機能利用可否判定を実装する
 
 ---
 
+## タスク 26
+
+### タイトル
+
+実際の締め日の算出対象月を、利用日と締め日の前後関係で決める（バグ修正）。予算項目の追加ダイアログが一覧のヘッダ行の背後に出る表示崩れを直す
+
+### 見積もり
+
+1時間
+
+### 関連要件
+
+- REQ-013
+
+### 関連設計
+
+- `design.md` / バックエンド設計 / 業務ロジック（実際の締め日・実際の支払日の算出）
+- `requirements.md` / 用語「締め対象月」、REQ-013
+
+### 実装パス
+
+- `src/features/expense-management/backend/app/services/closing_date_service.py`
+- `src/features/expense-management/tests/test_closing_date_service.py`
+- `src/features/expense-management/frontend/src/styles.css`
+
+### 内容
+
+`estimate_payment_date` が、実際の締め日を常に利用日と同じ月で算出していた不具合を直す。利用日が締め日（当月に存在しない日はその月の末日とみなして比較）以前なら利用日と同じ月、締め日より後なら翌月を、実際の締め日を算出する対象月（締め対象月）とする関数（`_closing_period`）を追加し、`estimate_payment_date` から使う。
+
+`.modal-back`（ダイアログの背景）に `z-index` が無く、一覧の `position: sticky` なヘッダ（`.list th`、`z-index: 1`）が、DOM順序によってはダイアログより手前に描画される不具合を直す。`.modal-back` に `.list th` より大きい `z-index`（10）を設定する。
+
+### 完了条件
+
+- [ ] 締め日15日・支払月オフセット1・支払日13日・利用日9月22日で、支払日が11月13日になる
+- [ ] 利用日が締め日と同じ日、または締め日以前のときは、従来どおり当月が締め対象月になる
+- [ ] 締め日が当月に存在しない日（例: 31日で30日までの月）でも、月の末日を締め日とみなして前後関係を判定する
+- [ ] 予算項目の追加・編集ダイアログが、一覧をスクロールした状態で開いても、一覧のヘッダ行より前面に表示される
+- [ ] 既存の単体テスト・結合テストが通る
+
+---
+
+## タスク 27
+
+### タイトル
+
+予算項目にメモ（複数行可、任意）を追加する（バックエンド）
+
+### 見積もり
+
+2時間
+
+### 関連要件
+
+- REQ-003
+
+### 関連設計
+
+- `db-design.md` / `expense_management.budget_items`
+- `api-design.md` / GET・POST・PATCH `/budget-items`、POST `/budget-periods/{budget_period_id}/duplicate`
+
+### 実装パス
+
+- `src/features/expense-management/backend/sql/`
+- `src/features/expense-management/backend/app/repos.py`
+- `src/features/expense-management/backend/app/services/budget_service.py`
+- `src/features/expense-management/backend/app/routers/budget_items.py`
+- `src/features/expense-management/tests/`
+
+### 内容
+
+新しい DDL ファイル（`budget_items` に `memo text NULL` を追加する `ALTER TABLE`）を追加する。既存の DDL ファイルは変えない。
+
+`budget_items` の一覧取得・登録・更新の入出力に `memo` を追加する。登録・更新時、空文字・未指定は `NULL` として保存する。予算期間の複製作成（`POST /budget-periods/{budget_period_id}/duplicate`）では、`memo` はコピーせず、複製後の行は `NULL` にする。
+
+### 完了条件
+
+- [ ] 新しい DDL を適用済みの開発用DBに、未適用の状態から適用でき、既存データが壊れない
+- [ ] `POST`・`PATCH /budget-items` で `memo` を保存・更新でき、`GET /budget-items` の応答に含まれる
+- [ ] `memo` を省略、または空文字で送ると `null` として保存される
+- [ ] 複製作成した予算項目の `memo` は常に `null` になる
+- [ ] 本人以外の予算項目に対する操作は404のまま（既存の認可を壊さない）
+
+---
+
+## タスク 28
+
+### タイトル
+
+支出記録の支払日の自動算出フラグを保存する（バックエンド）
+
+### 見積もり
+
+1.5時間
+
+### 関連要件
+
+- REQ-008, REQ-009
+
+### 関連設計
+
+- `db-design.md` / `expense_management.expenses`
+- `api-design.md` / GET・POST・PATCH `/expenses`
+
+### 実装パス
+
+- `src/features/expense-management/backend/sql/`
+- `src/features/expense-management/backend/app/repos.py`
+- `src/features/expense-management/backend/app/services/expense_service.py`
+- `src/features/expense-management/backend/app/routers/expenses.py`
+- `src/features/expense-management/tests/`
+
+### 内容
+
+新しい DDL ファイル（`expenses` に `payment_date_is_auto boolean NOT NULL DEFAULT true` を追加する `ALTER TABLE`）を追加する。既存の DDL ファイルは変えない。
+
+`expenses` の一覧取得・登録・更新の入出力に `payment_date_is_auto` を追加する。バックエンドはこの値をそのまま保存するだけで、`payment_date` の算出には使わない（算出は既存の `GET /payment-methods/{id}/estimated-payment-date` とフロントの制御による）。
+
+### 完了条件
+
+- [ ] 新しい DDL を、既存データを壊さず適用できる（既定値 `true` で既存行が埋まる）
+- [ ] `POST`・`PATCH /expenses` で `payment_date_is_auto` を保存・更新でき、`GET /expenses` の応答に含まれる
+- [ ] `payment_date_is_auto` の値は `payment_date` の算出結果に影響しない（バックエンド側では再計算しない）
+
+---
+
+## タスク 29
+
+### タイトル
+
+予算項目のメモ入力欄と、支払日の自動算出チェックボックスの状態保存をフロントに反映する
+
+### 見積もり
+
+2時間
+
+### 関連要件
+
+- REQ-003, REQ-008, REQ-009
+
+### 関連設計
+
+- `ui-design.md` / SCR-001: 支出記録（支払日の自動算出チェックボックス）
+- `ui-design.md` / SCR-002: 予算管理（予算項目の登録・編集フォーム）
+
+### 実装パス
+
+- `src/features/expense-management/frontend/src/api.ts`
+- `src/features/expense-management/frontend/src/views/BudgetsView.vue`
+- `src/features/expense-management/frontend/src/views/ExpensesView.vue`
+
+### 内容
+
+`api.ts` の `BudgetItem`/`BudgetItemInput` に `memo: string | null` を追加する。`BudgetsView.vue` の予算項目の登録・編集フォームに、複数行のメモ入力欄（`textarea`、任意入力）を追加する。一覧には表示しない。
+
+`api.ts` の `Expense`/`ExpenseInput` に `payment_date_is_auto: boolean` を追加する。`ExpensesView.vue` の `submitForm` が送る `input` に `payment_date_is_auto: autoCalculatePaymentDate.value` を含める。`openEditForm` で、`autoCalculatePaymentDate.value` を固定の `true` ではなく、対象の支出記録が持つ `payment_date_is_auto` の値で初期化する。
+
+### 完了条件
+
+- [ ] 予算項目の登録・編集フォームでメモを複数行入力・保存でき、再度編集フォームを開くと保存した内容が表示される
+- [ ] 予算項目の一覧にはメモを表示しない
+- [ ] 支払日の自動算出チェックボックスをオフにして保存した支出記録を、編集フォームで開き直すとオフの状態で表示される
+- [ ] オンのまま保存した支出記録を開き直すとオンの状態で表示される
+- [ ] ブラウザで一連の操作を確認できる
+
+---
+
 ## テスト
 
 ### 単体テスト
@@ -985,6 +1151,9 @@ Cookie セッション検証と機能利用可否判定を実装する
 - [ ] 予算項目・支出方法の論理削除後も、既存の支出記録の参照が変わらないことを確認する
 - [ ] 予算なし（`budget_period_id` と `budget_item_id` が `null`）の支出記録登録・更新と、その検証（不整合な組合せが 400 になること）を確認する
 - [ ] 予算なしの支出記録が集計（利用日基準・支払発生月基準）から除外されることを確認する
+- [ ] 利用日が締め日より後のとき、実際の締め日が翌月になり、支払日もそれに応じて算出されることを確認する（締め対象月の判定）
+- [ ] 予算項目の `memo` の保存・更新・複製時の `null` 化を確認する
+- [ ] 支出記録の `payment_date_is_auto` の保存・更新を確認する
 
 ### 結合テスト
 
@@ -1016,3 +1185,5 @@ Cookie セッション検証と機能利用可否判定を実装する
 | 2026-09-19 20:48 | 承認済み | タスク23〜24を承認 |
 | 2026-09-19 21:25 | 未承認 | 予算管理画面の複製作成で複製元の予算期間を選べるようにする（タスク25） |
 | 2026-09-19 21:30 | 承認済み | タスク25を承認 |
+| 2026-09-22 12:10 | 未承認 | 実際の締め日の算出対象月のバグ修正と予算項目ダイアログの表示崩れ修正（タスク26。実施済み）、予算項目のメモ追加（タスク27・29）、支出記録の支払日自動算出フラグの保存（タスク28・29）を追加 |
+| 2026-09-22 12:20 | 承認済み | タスク26〜29を承認 |

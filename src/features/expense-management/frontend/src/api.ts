@@ -44,6 +44,7 @@ export type BudgetItem = {
   name: string;
   amount: string;
   display_order: number;
+  memo: string | null;
 };
 
 export type ExclusionItem = {
@@ -73,6 +74,7 @@ export type Expense = {
   payment_method_id: number;
   memo: string | null;
   payment_date: string;
+  payment_date_is_auto: boolean;
   created_at: string;
 };
 
@@ -191,6 +193,7 @@ export async function createBudgetItem(
   name: string,
   amount: string,
   displayOrder: number,
+  memo: string | null = null,
 ): Promise<BudgetItem | "invalid"> {
   const res = await apiFetch("/budget-items", {
     method: "POST",
@@ -199,6 +202,7 @@ export async function createBudgetItem(
       name,
       amount,
       display_order: displayOrder,
+      memo,
     }),
   });
   throwIfAuthFailed(res);
@@ -216,10 +220,11 @@ export async function updateBudgetItem(
   name: string,
   amount: string,
   displayOrder: number,
+  memo: string | null = null,
 ): Promise<BudgetItem | "invalid" | "missing"> {
   const res = await apiFetch(`/budget-items/${budgetItemId}`, {
     method: "PATCH",
-    body: JSON.stringify({ name, amount, display_order: displayOrder }),
+    body: JSON.stringify({ name, amount, display_order: displayOrder, memo }),
   });
   throwIfAuthFailed(res);
   if (res.status === 200) {
@@ -366,6 +371,7 @@ export type ExpenseInput = {
   payment_method_id: number;
   memo: string | null;
   payment_date: string;
+  payment_date_is_auto: boolean;
 };
 
 export async function createExpense(input: ExpenseInput): Promise<Expense | "invalid"> {

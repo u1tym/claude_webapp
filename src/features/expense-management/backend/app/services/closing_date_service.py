@@ -62,6 +62,21 @@ def compute_actual_date(
         day_was_nonexistent = False
 
 
+def _closing_period(usage_date: date, closing_day: int) -> tuple[int, int]:
+    """Resolve the (year, month) whose closing_day this usage_date is settled under.
+
+    `closing_day` marks the cutoff for each month's period: usage on or before
+    that day (clamped to the month's last day, for bases like 31 that don't
+    exist in every month) closes within the usage month itself; usage after it
+    rolls over to be settled by the following month's closing day instead.
+    """
+    days_in_month = _days_in_month(usage_date.year, usage_date.month)
+    clamped_closing_day = min(closing_day, days_in_month)
+    if usage_date.day <= clamped_closing_day:
+        return usage_date.year, usage_date.month
+    return add_months(usage_date.year, usage_date.month, 1)
+
+
 def estimate_payment_date(
     usage_date: date,
     closing_day: int,
@@ -75,8 +90,9 @@ def estimate_payment_date(
     if closing_day == 0:
         return usage_date
 
+    closing_year, closing_month = _closing_period(usage_date, closing_day)
     actual_closing_date = compute_actual_date(
-        usage_date.year, usage_date.month, closing_day, closing_day_exclusions, closing_day_shift_direction
+        closing_year, closing_month, closing_day, closing_day_exclusions, closing_day_shift_direction
     )
     payment_year, payment_month = add_months(
         actual_closing_date.year, actual_closing_date.month, payment_month_offset
