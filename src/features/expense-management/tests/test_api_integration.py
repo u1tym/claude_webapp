@@ -236,6 +236,49 @@ def test_budget_period_and_item_flow(client) -> None:
     assert r.status_code == 404
 
 
+def test_budget_period_total_amount(client) -> None:
+    r = client.post(
+        "/budget-periods",
+        json={"title": "合計確認用", "start_date": "2031-01-01", "end_date": "2031-01-31"},
+    )
+    assert r.status_code == 201
+    period = r.json()
+
+    def total_for(period_id: int) -> str:
+        r = client.get("/budget-periods")
+        assert r.status_code == 200
+        matching = [p for p in r.json()["items"] if p["id"] == period_id]
+        assert len(matching) == 1
+        return matching[0]["total_amount"]
+
+    assert total_for(period["id"]) == "0.00"
+
+    r = client.post(
+        "/budget-items",
+        json={"budget_period_id": period["id"], "name": "食費", "amount": "20000.00", "display_order": 1},
+    )
+    assert r.status_code == 201
+    item1 = r.json()
+
+    r = client.post(
+        "/budget-items",
+        json={"budget_period_id": period["id"], "name": "交通費", "amount": "5000.50", "display_order": 2},
+    )
+    assert r.status_code == 201
+    item2 = r.json()
+
+    assert total_for(period["id"]) == "25000.50"
+
+    # A logically-deleted budget item is excluded from the total.
+    r = client.delete(f"/budget-items/{item2['id']}")
+    assert r.status_code == 204
+    assert total_for(period["id"]) == "20000.00"
+
+    r = client.delete(f"/budget-items/{item1['id']}")
+    assert r.status_code == 204
+    assert total_for(period["id"]) == "0.00"
+
+
 def test_payment_method_and_expense_and_report_flow(client) -> None:
     r = client.post(
         "/payment-methods",

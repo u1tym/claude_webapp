@@ -293,7 +293,7 @@ const sortedExpenses = computed(() =>
               <td><span class="cell-label">予算区分</span>{{ itemName(expense.budget_item_id) }}</td>
               <td class="cell-primary"><span class="cell-label">用途</span>{{ expense.purpose }}</td>
               <td class="cell-amount"><span class="cell-label">金額</span>{{ formatAmount(expense.amount) }}</td>
-              <td><span class="cell-label">支出方法</span>{{ methodName(expense.payment_method_id) }}</td>
+              <td class="cell-center"><span class="cell-label">支出方法</span>{{ methodName(expense.payment_method_id) }}</td>
               <td><span class="cell-label">支払日</span>{{ expense.payment_date }}</td>
               <td class="actions">
                 <button class="btn-text" type="button" aria-label="編集" @click="openEditForm(expense)">

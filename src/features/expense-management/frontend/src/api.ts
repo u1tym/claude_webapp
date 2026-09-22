@@ -36,6 +36,7 @@ export type BudgetPeriod = {
   title: string;
   start_date: string;
   end_date: string;
+  total_amount: string;
 };
 
 export type BudgetItem = {

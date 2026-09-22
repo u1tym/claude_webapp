@@ -74,6 +74,22 @@ def list_budget_periods(user_id: int) -> list[BudgetPeriodRow]:
             return [_budget_period_from_row(row) for row in cur.fetchall()]
 
 
+def list_budget_period_totals(user_id: int) -> dict[int, Decimal]:
+    """Sum of amounts of non-deleted budget items, grouped by budget_period_id, for this user."""
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT budget_period_id, COALESCE(SUM(amount), 0) AS total
+                FROM expense_management.budget_items
+                WHERE user_id = %s AND is_deleted = false
+                GROUP BY budget_period_id
+                """,
+                (user_id,),
+            )
+            return {int(row["budget_period_id"]): Decimal(row["total"]) for row in cur.fetchall()}
+
+
 def get_budget_period(user_id: int, budget_period_id: int) -> BudgetPeriodRow | None:
     with get_conn() as conn:
         with conn.cursor() as cur:

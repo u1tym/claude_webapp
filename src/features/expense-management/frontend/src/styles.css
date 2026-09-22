@@ -250,6 +250,10 @@ textarea {
 }
 
 .list button.row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--space) * 2);
   width: 100%;
   text-align: left;
   background: none;
@@ -259,12 +263,52 @@ textarea {
   cursor: pointer;
 }
 
+.row-total {
+  flex-shrink: 0;
+  color: var(--color-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.items-total {
+  text-align: right;
+  font-weight: 600;
+  padding: var(--space) calc(var(--space) * 2) 0;
+}
+
 .cell-label {
   display: none;
 }
 
 .cell-amount {
   text-align: right;
+}
+
+.cell-center {
+  text-align: center;
+}
+
+/* Table row actions (edit/delete icons) hug the right edge of the row,
+   staying on one line instead of wrapping into a narrow actions column. */
+.list td.actions {
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+}
+
+/* Fixed column widths so the amount/order columns stay narrow. */
+.table-fixed-budget-items {
+  table-layout: fixed;
+}
+
+.table-fixed-budget-items th:nth-child(2) {
+  width: 18%;
+}
+
+.table-fixed-budget-items th:nth-child(3) {
+  width: 10%;
+}
+
+.table-fixed-budget-items th:nth-child(4) {
+  width: 20%;
 }
 
 .form {

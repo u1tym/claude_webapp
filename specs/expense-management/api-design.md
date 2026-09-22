@@ -119,14 +119,14 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 ```json
 {
   "items": [
-    { "id": 1, "title": "2026年9月分", "start_date": "2026-09-01", "end_date": "2026-09-30" }
+    { "id": 1, "title": "2026年9月分", "start_date": "2026-09-01", "end_date": "2026-09-30", "total_amount": "30000.00" }
   ]
 }
 ```
 
-`items` は本人の予算期間を `start_date` の新しい順に返す。0 件なら空配列。同一ユーザ内で期間が重なる予算期間も、それぞれ独立した行として返す。
+`items` は本人の予算期間を `start_date` の新しい順に返す。0 件なら空配列。同一ユーザ内で期間が重なる予算期間も、それぞれ独立した行として返す。`total_amount` は、その予算期間に属する、削除されていない予算項目の金額の合計（0 件なら `"0.00"`）。
 
-処理概要: ログイン中ユーザの予算期間を一覧で返す。
+処理概要: ログイン中ユーザの予算期間を、それぞれの予算項目の金額合計とともに一覧で返す。
 
 ### POST `/budget-periods`
 
@@ -621,3 +621,5 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | 2026-09-19 20:48 | 承認済み | `/expenses` の `budget_period_id` 対応を承認 |
 | 2026-09-22 11:46 | 未承認 | `budget-items` の GET/POST/PATCH に `memo` を追加（複製時はコピーせず `null`）。`/expenses` の GET/POST/PATCH に `payment_date_is_auto` を追加 |
 | 2026-09-22 12:09 | 承認済み | `budget-items.memo` と `/expenses.payment_date_is_auto` の追加を承認 |
+| 2026-09-22 12:55 | 未承認 | `GET /budget-periods` の応答に `total_amount`（削除されていない予算項目の金額合計）を追加（REQ-004） |
+| 2026-09-22 12:56 | 承認済み | `total_amount` の追加を承認 |

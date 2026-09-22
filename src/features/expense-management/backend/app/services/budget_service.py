@@ -13,6 +13,7 @@ from app.repos import (
     insert_budget_item,
     insert_budget_period,
     list_budget_items,
+    list_budget_period_totals,
     list_budget_periods,
     logical_delete_budget_item,
     update_budget_item,
@@ -41,6 +42,12 @@ def _period_body(row: BudgetPeriodRow) -> dict[str, object]:
         "start_date": row.start_date.isoformat(),
         "end_date": row.end_date.isoformat(),
     }
+
+
+def _period_body_with_total(row: BudgetPeriodRow, total_amount: Decimal) -> dict[str, object]:
+    body = _period_body(row)
+    body["total_amount"] = format_amount(total_amount)
+    return body
 
 
 def _validate_title(title: str) -> str:
@@ -75,7 +82,9 @@ def _validate_period_range(start_date: date, end_date: date) -> None:
 
 def list_periods(user_id: int) -> list[dict[str, object]]:
     write("INF", f"予算期間一覧要求 user_id={user_id}")
-    items = [_period_body(row) for row in list_budget_periods(user_id)]
+    periods = list_budget_periods(user_id)
+    totals = list_budget_period_totals(user_id)
+    items = [_period_body_with_total(row, totals.get(row.id, Decimal("0"))) for row in periods]
     write("INF", f"予算期間一覧成功 user_id={user_id} count={len(items)}")
     return items
 

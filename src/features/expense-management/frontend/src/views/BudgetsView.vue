@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
-import { formatAmount } from "../format";
+import { computed, onMounted, ref } from "vue";
+import { formatAmount, sumAmounts } from "../format";
 import {
   type BudgetItem,
   type BudgetPeriod,
@@ -22,6 +22,7 @@ const errorMessage = ref("");
 const periods = ref<BudgetPeriod[]>([]);
 const selectedPeriodId = ref<number | null>(null);
 const items = ref<BudgetItem[]>([]);
+const itemsTotal = computed(() => sumAmounts(items.value.map((item) => item.amount)));
 // The screen shows either the full-width period list or the selected period's detail, never both at once.
 const view = ref<"list" | "detail">("list");
 
@@ -287,7 +288,8 @@ async function removeItem(item: BudgetItem): Promise<void> {
               <tr v-for="p in periods" :key="p.id">
                 <td>
                   <button class="row" type="button" @click="selectPeriod(p)">
-                    {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
+                    <span>{{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）</span>
+                    <span class="row-total">合計 {{ formatAmount(p.total_amount) }}</span>
                   </button>
                 </td>
               </tr>
@@ -332,7 +334,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
       <div class="panel">
         <p v-if="items.length === 0" class="empty">データがありません</p>
         <div v-else class="list">
-          <table>
+          <table class="table-fixed-budget-items">
             <thead>
               <tr>
                 <th>項目名</th>
@@ -345,7 +347,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
               <tr v-for="item in items" :key="item.id">
                 <td class="cell-primary"><span class="cell-label">項目名</span>{{ item.name }}</td>
                 <td class="cell-amount"><span class="cell-label">金額</span>{{ formatAmount(item.amount) }}</td>
-                <td><span class="cell-label">表示順</span>{{ item.display_order }}</td>
+                <td class="cell-center"><span class="cell-label">表示順</span>{{ item.display_order }}</td>
                 <td class="actions">
                   <button class="btn-text" type="button" aria-label="編集" @click="openEditItemForm(item)">
                     <Icon name="edit" />
@@ -358,6 +360,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
             </tbody>
           </table>
         </div>
+        <p v-if="items.length > 0" class="items-total">合計 {{ formatAmount(itemsTotal) }}</p>
       </div>
     </template>
 
