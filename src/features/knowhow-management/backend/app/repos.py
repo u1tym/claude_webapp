@@ -674,3 +674,54 @@ def search_knowhows(user_id: int, keywords: list[str]) -> list[KnowhowSearchRow]
                 )
                 for row in cur.fetchall()
             ]
+
+
+
+# ---- api_keys（api-key-management が作成する。読み取りと last_used_at の更新だけ行う） ----
+
+
+@dataclass(frozen=True)
+class ApiKeyAuthRow:
+    id: int
+    user_id: int
+    key_prefix: str
+    expires_at: datetime | None
+    revoked_at: datetime | None
+    username: str
+    user_is_deleted: bool
+
+
+def find_api_key_by_hash(key_hash: str) -> ApiKeyAuthRow | None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT k.id, k.user_id, k.key_prefix, k.expires_at, k.revoked_at,
+                       u.username, u.is_deleted
+                FROM public.api_keys k
+                JOIN public.users u ON u.id = k.user_id
+                WHERE k.key_hash = %s
+                """,
+                (key_hash,),
+            )
+            row = cur.fetchone()
+            if row is None:
+                return None
+            return ApiKeyAuthRow(
+                id=int(row["id"]),
+                user_id=int(row["user_id"]),
+                key_prefix=str(row["key_prefix"]),
+                expires_at=row["expires_at"],
+                revoked_at=row["revoked_at"],
+                username=str(row["username"]),
+                user_is_deleted=bool(row["is_deleted"]),
+            )
+
+
+def touch_api_key_last_used(api_key_id: int) -> None:
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE public.api_keys SET last_used_at = now() WHERE id = %s",
+                (api_key_id,),
+            )

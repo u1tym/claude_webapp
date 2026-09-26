@@ -79,8 +79,8 @@
 | `app/config.py` | `.env` から接続情報、CORS、セッション有効期間、`DEBUG_USER`、ログのローテーションを読む |
 | `app/logger.py` | ファイルログの初期化と出力。サイズによるローテーション |
 | `app/db.py` | PostgreSQL への接続 |
-| `app/security.py` | セッション Cookie の参照 |
-| `app/deps.py` | 要求からログイン中ユーザを特定し、本機能の割当を判定する。未ログイン・期限切れは未ログイン。割当なしは権限なし |
+| `app/security.py` | セッション Cookie の参照、API キーのハッシュ化（SHA-256） |
+| `app/deps.py` | 要求からログイン中ユーザを特定し、本機能の割当を判定する。未ログイン・期限切れは未ログイン。割当なしは権限なし。`Authorization` ヘッダ（Bearer）があるときは、`public.api_keys` を参照して API キーで判定し、許可時に最終利用日時を更新する |
 | `app/errors.py` | 業務エラー（入力不正、対象なし、重複）の例外クラス |
 | `app/repos.py` | `knowhow_management.major_categories` / `middle_categories` / `knowhows` への CRUD・検索の実装 |
 | `app/routers/major_categories.py` | 大項目の登録・名称変更・削除・一覧 |
@@ -139,6 +139,14 @@ Cookie ベースのセッション認証を用いる。ログイン API は持�
 - `DEBUG_USER` があるときだけ、Cookie がなくてもそのユーザ名として処理してよい。本番では空にする。その場合も、当該ユーザに本機能が割り当てられていることを判定する。
 - 他機能の API を認証・利用可否判定に使わない。
 
+API キーによる認証も受け付ける（他システム連携用。詳細は `specs/api-key-management/design.md` の「対象機能の認証の変更」）。
+
+- 要求に `Authorization` ヘッダ（Bearer 方式）があるときは、API キーで判定する。無いときは上記の Cookie（または `DEBUG_USER`）で判定する。API キーの判定に失敗したとき、Cookie・`DEBUG_USER` へは戻らない。
+- キーの SHA-256 ハッシュで `public.api_keys` を検索する。該当なし・失効済み・有効期限切れ・持ち主が論理削除済みは未ログインとする。持ち主に本機能が割り当てられていない、または本機能が論理削除済みのときは権限なしとする（Cookie と同じ割当判定）。
+- 許可したときは、持ち主をログイン中ユーザとして処理し、`public.api_keys` の最終利用日時を更新する。セッションの期限は延ばさない。以降の `user_id` による絞り込みは変わらない。
+- 判定の結果（許可・拒否と理由、ユーザ名、API キーの識別子と識別用の先頭部分）をログに出す。API キー全体とそのハッシュは出さない。
+- `api-key-management` の Python は import しない。
+
 ## 外部連携
 
 なし。別サーバ版からのデータ移行は、本機能とは別のスクリプト（`src/features/knowhow-management/backend/scripts/`）として提供し、本設計・SPEC の対象外とする。
@@ -178,3 +186,5 @@ Cookie ベースのセッション認証を用いる。ログイン API は持�
 |------|------|----------|
 | 2026-09-20 10:40 | 未承認 | 初版 |
 | 2026-09-20 10:41 | 承認済み | 初版を承認 |
+| 2026-09-26 00:43 | 未承認 | API キーによる認証（`Authorization` ヘッダの Bearer）を追加。`deps` で `public.api_keys` を参照し、許可時に最終利用日時を更新 |
+| 2026-09-26 00:44 | 承認済み | API キー認証への対応を承認 |

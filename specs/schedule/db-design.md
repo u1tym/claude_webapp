@@ -6,6 +6,7 @@
 
 - スキーマ: `schedule`。カテゴリ、スケジュール、ユーザ休日、ルーチン、表示設定を置く。
 - ユーザ、セッション、システム設定、機能マスタ、メニュー割当はスキーマ `public` を読む。複製しない。列は増やさない。表の作成は `portal` が担う。
+- API キー（`public.api_keys`）は、API キーによる認証のために読み、許可したときに最終利用日時（`last_used_at`）だけを更新する。複製しない。列は増やさない。表の作成は `api-key-management` が担う（列と制約は `specs/api-key-management/db-design.md`）。
 - 日本の祝日は算出し、テーブルには置かない。ユーザ休日はテーブルに置く。
 - ログはファイルへ出す。テーブルには置かない。
 
@@ -22,6 +23,7 @@ mermaid の erDiagram は `boolean` と `bytea` を型として書くとパー�
 ```mermaid
 erDiagram
     users ||--o{ sessions : "id = user_id"
+    users ||--o{ api_keys : "id = user_id"
     users ||--o{ menu_assignments : "id = user_id"
     features ||--o{ menu_assignments : "id = feature_id"
     users ||--o{ categories : "id = user_id"
@@ -504,6 +506,34 @@ erDiagram
 
 本機能の扱い: `user_id` が操作中ユーザ、`feature_id = 'schedule'`、かつユーザと機能が未削除のときだけ許可する。
 
+### public.api_keys
+
+目的: 他システム連携用の API キー。本機能は API キーによる認証のために読み、許可したときに `last_used_at` だけを更新する。発行・失効・削除はしない。列と制約は `specs/api-key-management/db-design.md` のとおり（表の作成は `api-key-management`）。
+
+| カラム | 型 | NULL | 既定 | 説明 |
+|--------|-----|------|------|------|
+| `id` | bigint | NOT NULL | IDENTITY | API キーの識別子。PK |
+| `user_id` | integer | NOT NULL | - | 持ち主。`users.id` |
+| `key_hash` | char(64) | NOT NULL | - | キー全体の SHA-256（16 進小文字）。一意 |
+| `key_prefix` | varchar(12) | NOT NULL | - | 識別用の先頭部分（ログに使う） |
+| `expires_at` | timestamptz | NULL | - | 有効期限。NULL は無期限 |
+| `last_used_at` | timestamptz | NULL | - | 最終利用日時。本機能が更新する |
+| `revoked_at` | timestamptz | NULL | - | 失効日時。NULL は未失効 |
+
+本機能が使う列だけを示す（`name`、`created_at` も存在する）。
+
+制約:
+
+- 主キー: `id`
+- 一意: `key_hash`
+- 外部キー: `user_id` → `public.users.id`（ON DELETE RESTRICT）
+
+インデックス:
+
+- `key_hash`（一意制約に付随）
+
+本機能の扱い: `Authorization` ヘッダのキーの SHA-256 で `key_hash` を検索する。行が無い、`revoked_at` がある、`expires_at` を過ぎている、持ち主が論理削除済みは未ログイン。その後の割当判定は Cookie と同じ（`public.features`・`public.menu_assignments`）。許可したときだけ `last_used_at = now()` に更新する。
+
 ## 関連
 
 - `users` 1 対 多 `categories`。ユーザを物理削除しない。カテゴリも物理削除しない。
@@ -520,13 +550,14 @@ erDiagram
 - `routines` 1 対 多 `routine_exclusions`。除外調整が有のとき 1 件以上。無のときは 0 件。更新時は置き換える。
 - `users` 1 対 多 `sessions`。本機能はセッション行を削除しない。
 - `users` 1 対 多 `menu_assignments`。本機能は割当行を変更しない。
+- `users` 1 対 多 `api_keys`。本機能は `last_used_at` の更新だけを行う。
 - 本機能が物理削除するのは、非表示を解除するときの `hidden_categories` 行と、ルーチン更新時に置き換える `routine_months` / `routine_exclusions` の不要行である。
 
 ## 要件トレーサビリティ
 
 | 要件 | 設計 |
 |------|------|
-| REQ-001 | `public.sessions`、`public.users`、`public.features`（`id = 'schedule'`）、`public.menu_assignments` |
+| REQ-001 | `public.sessions`、`public.users`、`public.features`（`id = 'schedule'`）、`public.menu_assignments`、`public.api_keys`（API キーによる認証、`last_used_at` の更新） |
 | REQ-002 | `schedule.categories.user_id`、`schedule.schedules.user_id`、`schedule.preferences.user_id`、`schedule.hidden_categories.user_id`、`schedule.user_holidays.user_id`、`schedule.routines.user_id` |
 | REQ-003 | `schedule.schedules.kind`、`is_completed` |
 | REQ-004 | `schedule.schedules` のタイトル・開始終了・カテゴリ・場所・詳細・粒度・種別・`needs_notification`・`routine_id` |
@@ -583,3 +614,5 @@ erDiagram
 | 2026-08-30 00:23 | 承認済み | ルーチン項目の更新と反映月・除外の置き換えを承認 |
 | 2026-08-30 08:00 | 未承認 | `schedules` と `routines` に `needs_notification`（boolean、既定 false）を追加 |
 | 2026-08-30 08:01 | 承認済み | `schedules` と `routines` の `needs_notification` を承認 |
+| 2026-09-26 00:43 | 未承認 | `public.api_keys` の参照と `last_used_at` の更新を追加（API キーによる認証）。本機能の DDL 変更なし |
+| 2026-09-26 00:44 | 承認済み | API キー認証への対応を承認 |

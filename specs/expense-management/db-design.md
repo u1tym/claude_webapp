@@ -6,6 +6,7 @@
 
 - スキーマ: `expense_management`。予算期間、予算項目、支出方法、支出方法の除外条件、支出記録を置く。
 - ユーザ、セッション、機能マスタ、メニュー割当はスキーマ `public` を読む。複製しない。列は増やさない。表の作成は `portal` が担う。
+- API キー（`public.api_keys`）は、API キーによる認証のために読み、許可したときに最終利用日時（`last_used_at`）だけを更新する。複製しない。列は増やさない。表の作成は `api-key-management` が担う（列と制約は `specs/api-key-management/db-design.md`）。
 - ログはファイルへ出す。テーブルには置かない。
 
 関連ドキュメント:
@@ -294,3 +295,5 @@ erDiagram
 | 2026-09-19 20:48 | 承認済み | `expenses.budget_period_id` の追加を承認 |
 | 2026-09-22 11:37 | 未承認 | `budget_items` に `memo`（text、任意、複製時はコピーしない）を追加。`expenses` に `payment_date_is_auto`（boolean、既定 true）を追加。既存 DDL は変えず新DDLファイルで反映 |
 | 2026-09-22 11:45 | 承認済み | `budget_items.memo` と `expenses.payment_date_is_auto` の追加を承認 |
+| 2026-09-26 00:43 | 未承認 | `public.api_keys` の参照と `last_used_at` の更新を追加（API キーによる認証）。本機能の DDL 変更なし |
+| 2026-09-26 00:44 | 承認済み | API キー認証への対応を承認 |

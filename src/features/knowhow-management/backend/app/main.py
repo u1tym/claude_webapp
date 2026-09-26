@@ -38,7 +38,9 @@ def create_app() -> FastAPI:
     @app.exception_handler(HTTPException)
     async def on_http(_request: Request, exc: HTTPException) -> JSONResponse:
         detail = exc.detail if isinstance(exc.detail, str) else "サーバエラーです"
-        return JSONResponse(status_code=exc.status_code, content={"detail": detail})
+        return JSONResponse(
+            status_code=exc.status_code, content={"detail": detail}, headers=exc.headers
+        )
 
     @app.exception_handler(Exception)
     async def on_error(_request: Request, exc: Exception) -> JSONResponse:
