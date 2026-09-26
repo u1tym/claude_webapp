@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { useRouter } from "vue-router";
 import { errorMessage, getLastPlayback, listGenres, listSeries, listVideos } from "../api";
 import Icon from "../components/Icon.vue";
@@ -28,6 +28,9 @@ const sort = ref<NonNullable<ListVideosQuery["sort"]>>("created_at");
 const order = ref<NonNullable<ListVideosQuery["order"]>>("desc");
 const page = ref(1);
 const filtersOpen = ref(false);
+// スマートフォンでは続きから視聴パネルを既定で閉じる（開閉は保存しない）
+const resumeOpen = ref(false);
+const hasLast = computed(() => Boolean(last.value?.video || last.value?.playlist));
 
 const filtered = () =>
   appliedQuery.value !== "" || genreId.value !== null || seriesId.value !== null || status.value !== "ready";
@@ -99,7 +102,7 @@ onMounted(async () => {
       </button>
     </div>
 
-    <div v-if="last && (last.video || last.playlist)" class="resume-panel">
+    <div v-if="last && hasLast" class="resume-panel collapsible" :class="{ open: resumeOpen }">
       <div v-if="last.video" class="resume-card">
         <div class="body">
           <span class="caption">続きから視聴（動画）</span>
@@ -134,6 +137,15 @@ onMounted(async () => {
           <Icon name="close" />
         </button>
       </form>
+      <button
+        v-if="hasLast"
+        class="btn-secondary mobile-only"
+        type="button"
+        :aria-expanded="resumeOpen"
+        @click="resumeOpen = !resumeOpen"
+      >
+        続きから
+      </button>
       <button
         class="btn-secondary mobile-only"
         type="button"
