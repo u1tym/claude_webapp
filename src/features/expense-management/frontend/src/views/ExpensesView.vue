@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch } from "vue";
-import { formatAmount } from "../format";
+import { formatAmount, toApiAmount, toIntegerAmount } from "../format";
 import {
   type BudgetItem,
   type BudgetPeriod,
@@ -163,7 +163,7 @@ function openEditForm(expense: Expense): void {
   formPeriodId.value = expense.budget_period_id;
   budgetItemId.value = expense.budget_item_id;
   purpose.value = expense.purpose;
-  amount.value = expense.amount;
+  amount.value = toIntegerAmount(expense.amount);
   paymentMethodId.value = expense.payment_method_id;
   memo.value = expense.memo ?? "";
   paymentDate.value = expense.payment_date;
@@ -173,6 +173,10 @@ function openEditForm(expense: Expense): void {
 
 function closeForm(): void {
   showForm.value = false;
+}
+
+function onAmountInput(event: Event): void {
+  amount.value = (event.target as HTMLInputElement).value.replace(/[^0-9]/g, "");
 }
 
 async function refreshEstimate(): Promise<void> {
@@ -211,7 +215,7 @@ async function submitForm(): Promise<void> {
     budget_period_id: formPeriodId.value,
     budget_item_id: formPeriodId.value === null ? null : budgetItemId.value,
     purpose: purpose.value,
-    amount: amount.value,
+    amount: toApiAmount(amount.value),
     payment_method_id: paymentMethodId.value,
     memo: memo.value.trim() === "" ? null : memo.value,
     payment_date: paymentDate.value,
@@ -355,7 +359,7 @@ const sortedExpenses = computed(() =>
             </div>
             <div class="field field-grow">
               <label for="amount">金額</label>
-              <input id="amount" v-model="amount" type="text" inputmode="decimal" placeholder="0.00" required />
+              <input id="amount" :value="amount" @input="onAmountInput" type="text" inputmode="numeric" placeholder="0" required />
             </div>
           </div>
           <div class="field">

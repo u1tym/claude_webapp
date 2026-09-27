@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
-import { formatAmount, sumAmounts } from "../format";
+import { formatAmount, sumAmounts, toApiAmount, toIntegerAmount } from "../format";
 import {
   type BudgetItem,
   type BudgetPeriod,
@@ -205,7 +205,7 @@ function openEditItemForm(item: BudgetItem): void {
   editingItemId.value = item.id;
   itemFormError.value = "";
   itemName.value = item.name;
-  itemAmount.value = item.amount;
+  itemAmount.value = toIntegerAmount(item.amount);
   itemDisplayOrder.value = item.display_order;
   itemMemo.value = item.memo ?? "";
   showItemForm.value = true;
@@ -213,6 +213,10 @@ function openEditItemForm(item: BudgetItem): void {
 
 function closeItemForm(): void {
   showItemForm.value = false;
+}
+
+function onItemAmountInput(event: Event): void {
+  itemAmount.value = (event.target as HTMLInputElement).value.replace(/[^0-9]/g, "");
 }
 
 async function submitItemForm(): Promise<void> {
@@ -224,14 +228,14 @@ async function submitItemForm(): Promise<void> {
         ? await createBudgetItem(
             selectedPeriodId.value,
             itemName.value,
-            itemAmount.value,
+            toApiAmount(itemAmount.value),
             itemDisplayOrder.value,
             trimmedMemo,
           )
         : await updateBudgetItem(
             editingItemId.value,
             itemName.value,
-            itemAmount.value,
+            toApiAmount(itemAmount.value),
             itemDisplayOrder.value,
             trimmedMemo,
           );
@@ -417,7 +421,7 @@ async function removeItem(item: BudgetItem): Promise<void> {
           <div class="field-row">
             <div class="field field-narrow">
               <label for="item-amount">金額</label>
-              <input id="item-amount" v-model="itemAmount" type="text" inputmode="decimal" placeholder="0.00" required />
+              <input id="item-amount" :value="itemAmount" @input="onItemAmountInput" type="text" inputmode="numeric" placeholder="0" required />
             </div>
             <div class="field field-narrow">
               <label for="item-order">表示順</label>

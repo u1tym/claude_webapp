@@ -25,3 +25,17 @@ export function formatAmount(value: string): string {
   const withCommas = digits.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
   return negative ? `-${withCommas}` : withCommas;
 }
+
+/** Converts an API decimal-string amount (e.g. "980.00") to a plain integer string for an editable
+ *  amount field (e.g. "980"), rounding to the nearest yen. Amounts are never negative here. */
+export function toIntegerAmount(value: string): string {
+  const [intPart, fracPart] = value.split(".");
+  const roundedUp = fracPart !== undefined && fracPart.length > 0 && Number(fracPart[0]) >= 5;
+  return roundedUp ? String(BigInt(intPart) + 1n) : intPart;
+}
+
+/** Converts a plain integer string from an amount field back to the API's decimal-string format
+ *  (e.g. "980" -> "980.00"). */
+export function toApiAmount(value: string): string {
+  return `${value}.00`;
+}
