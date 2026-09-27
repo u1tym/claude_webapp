@@ -27,6 +27,23 @@ const EXCLUSION_LABELS: Record<string, string> = {
 const WEEKDAY_EXCLUSION_KINDS = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 const OTHER_EXCLUSION_KINDS = ["holiday", "nonexistent_day"];
 
+type CreditStatus = "normal" | "credit" | "credit_payment";
+const CREDIT_STATUS_LABELS: Record<CreditStatus, string> = {
+  normal: "通常",
+  credit: "売掛",
+  credit_payment: "売掛支払",
+};
+
+function creditStatusOf(method: PaymentMethod): CreditStatus {
+  if (method.is_credit) return "credit";
+  if (method.is_credit_payment) return "credit_payment";
+  return "normal";
+}
+
+function creditStatusLabel(method: PaymentMethod): string {
+  return CREDIT_STATUS_LABELS[creditStatusOf(method)];
+}
+
 const loading = ref(true);
 const errorMessage = ref("");
 const methods = ref<PaymentMethod[]>([]);
@@ -43,6 +60,7 @@ const paymentDay = ref(1);
 const paymentDayShiftDirection = ref<"earlier" | "later">("earlier");
 const paymentDayExclusions = ref<ExclusionItem[]>([]);
 const displayOrder = ref(1);
+const creditStatus = ref<CreditStatus>("normal");
 
 function handleError(err: unknown): void {
   if (err instanceof Error && err.message === "unauth") {
@@ -86,6 +104,7 @@ function openCreateForm(): void {
   paymentDayShiftDirection.value = "earlier";
   paymentDayExclusions.value = [];
   displayOrder.value = methods.value.length + 1;
+  creditStatus.value = "normal";
   showForm.value = true;
 }
 
@@ -101,6 +120,7 @@ function openEditForm(method: PaymentMethod): void {
   paymentDayShiftDirection.value = (method.payment_day_shift_direction as "earlier" | "later") ?? "earlier";
   paymentDayExclusions.value = [...method.payment_day_exclusions];
   displayOrder.value = method.display_order;
+  creditStatus.value = creditStatusOf(method);
   showForm.value = true;
 }
 
@@ -139,6 +159,8 @@ async function submitForm(): Promise<void> {
     name: name.value,
     closing_day: closingDay.value,
     display_order: displayOrder.value,
+    is_credit: creditStatus.value === "credit",
+    is_credit_payment: creditStatus.value === "credit_payment",
   };
   if (closingDay.value > 0) {
     input.closing_day_shift_direction = closingDayShiftDirection.value;
@@ -199,6 +221,7 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
               <th>締め日</th>
               <th>支払月オフセット</th>
               <th>支払日</th>
+              <th>売掛区分</th>
               <th>表示順</th>
               <th></th>
             </tr>
@@ -209,6 +232,7 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
               <td><span class="cell-label">締め日</span>{{ method.closing_day }}</td>
               <td><span class="cell-label">支払月オフセット</span>{{ method.payment_month_offset }}</td>
               <td><span class="cell-label">支払日</span>{{ method.payment_day }}</td>
+              <td><span class="cell-label">売掛区分</span>{{ creditStatusLabel(method) }}</td>
               <td><span class="cell-label">表示順</span>{{ method.display_order }}</td>
               <td class="actions">
                 <button class="btn-text" type="button" aria-label="編集" @click="openEditForm(method)">
@@ -243,6 +267,24 @@ async function removeMethod(method: PaymentMethod): Promise<void> {
           <div class="field field-narrow">
             <label for="pm-closing-day">締め日（0〜31。0は即時支払）</label>
             <input id="pm-closing-day" v-model.number="closingDay" type="number" min="0" max="31" required />
+          </div>
+
+          <div class="field">
+            <label>売掛区分</label>
+            <div class="checkbox-row">
+              <label class="checkbox-label">
+                <input v-model="creditStatus" type="radio" name="pm-credit-status" value="normal" />
+                通常
+              </label>
+              <label class="checkbox-label">
+                <input v-model="creditStatus" type="radio" name="pm-credit-status" value="credit" />
+                売掛
+              </label>
+              <label class="checkbox-label">
+                <input v-model="creditStatus" type="radio" name="pm-credit-status" value="credit_payment" />
+                売掛支払
+              </label>
+            </div>
           </div>
 
           <template v-if="closingDay > 0">

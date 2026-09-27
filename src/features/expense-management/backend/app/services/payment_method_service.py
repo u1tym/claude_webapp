@@ -42,6 +42,8 @@ class PaymentMethodInput:
         payment_day_shift_direction: str | None,
         payment_day_exclusions: list[str],
         display_order: int,
+        is_credit: bool = False,
+        is_credit_payment: bool = False,
     ) -> None:
         self.name = name
         self.closing_day = closing_day
@@ -52,6 +54,8 @@ class PaymentMethodInput:
         self.payment_day_shift_direction = payment_day_shift_direction
         self.payment_day_exclusions = payment_day_exclusions
         self.display_order = display_order
+        self.is_credit = is_credit
+        self.is_credit_payment = is_credit_payment
 
 
 def _validate_exclusion_kinds(kinds: list[str]) -> list[str]:
@@ -73,6 +77,8 @@ def _validate_input(data: PaymentMethodInput) -> None:
         raise InvalidInputError("名称が空")
     if not (0 <= data.closing_day <= 31):
         raise InvalidInputError("締め日が範囲外")
+    if data.is_credit and data.is_credit_payment:
+        raise InvalidInputError("売掛区分不正")
     if data.closing_day == 0:
         return
     if data.payment_month_offset is None or data.payment_month_offset < 0:
@@ -102,6 +108,8 @@ def _body(row: PaymentMethodRow) -> dict[str, object]:
         "payment_day_shift_direction": row.payment_day_shift_direction,
         "payment_day_exclusions": payment,
         "display_order": row.display_order,
+        "is_credit": row.is_credit,
+        "is_credit_payment": row.is_credit_payment,
     }
 
 
@@ -117,7 +125,9 @@ def create_payment_method(user_id: int, data: PaymentMethodInput) -> dict[str, o
     _validate_input(data)
     trimmed = data.name.strip()
     if data.closing_day == 0:
-        row = insert_payment_method(user_id, trimmed, 0, None, 0, 0, None, data.display_order)
+        row = insert_payment_method(
+            user_id, trimmed, 0, None, 0, 0, None, data.display_order, data.is_credit, data.is_credit_payment
+        )
     else:
         row = insert_payment_method(
             user_id,
@@ -128,6 +138,8 @@ def create_payment_method(user_id: int, data: PaymentMethodInput) -> dict[str, o
             data.payment_day or 0,
             data.payment_day_shift_direction,
             data.display_order,
+            data.is_credit,
+            data.is_credit_payment,
         )
         closing_kinds = _validate_exclusion_kinds(data.closing_day_exclusions)
         payment_kinds = _validate_exclusion_kinds(data.payment_day_exclusions)
@@ -148,7 +160,19 @@ def change_payment_method(user_id: int, payment_method_id: int, data: PaymentMet
     _validate_input(data)
     trimmed = data.name.strip()
     if data.closing_day == 0:
-        update_payment_method(payment_method_id, user_id, trimmed, 0, None, 0, 0, None, data.display_order)
+        update_payment_method(
+            payment_method_id,
+            user_id,
+            trimmed,
+            0,
+            None,
+            0,
+            0,
+            None,
+            data.display_order,
+            data.is_credit,
+            data.is_credit_payment,
+        )
         delete_all_exclusions(payment_method_id)
     else:
         update_payment_method(
@@ -161,6 +185,8 @@ def change_payment_method(user_id: int, payment_method_id: int, data: PaymentMet
             data.payment_day or 0,
             data.payment_day_shift_direction,
             data.display_order,
+            data.is_credit,
+            data.is_credit_payment,
         )
         closing_kinds = _validate_exclusion_kinds(data.closing_day_exclusions)
         payment_kinds = _validate_exclusion_kinds(data.payment_day_exclusions)

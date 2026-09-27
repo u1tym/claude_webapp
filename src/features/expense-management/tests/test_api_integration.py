@@ -396,9 +396,12 @@ def test_payment_method_and_expense_and_report_flow(client) -> None:
     assert matching["difference"] == "8200.00"
 
     year_month = estimated[:7]
-    r = client.get("/reports/payment-month", params={"year_month": year_month})
+    r = client.get("/reports/payment-date", params={"year_month": year_month})
     assert r.status_code == 200
-    assert any(i["budget_item_id"] == item["id"] and i["actual_amount"] == "1800.00" for i in r.json()["items"])
+    matching_date = next(i for i in r.json()["items"] if i["payment_date"] == estimated)
+    assert matching_date["normal_amount"] == "2300.00"
+    assert matching_date["credit_amount"] == "0.00"
+    assert matching_date["credit_payment_amount"] == "0.00"
 
     r = client.delete(f"/expenses/{expense['id']}")
     assert r.status_code == 204
@@ -406,6 +409,83 @@ def test_payment_method_and_expense_and_report_flow(client) -> None:
     assert r.status_code == 204
     r = client.get("/expenses", params={"start_date": "2031-01-01", "end_date": "2031-01-31"})
     assert r.json()["items"] == []
+
+
+def test_payment_method_credit_flags_and_reports(client) -> None:
+    r = client.post(
+        "/payment-methods",
+        json={
+            "name": "売掛カード",
+            "closing_day": 15,
+            "closing_day_shift_direction": "earlier",
+            "payment_month_offset": 1,
+            "payment_day": 10,
+            "payment_day_shift_direction": "later",
+            "display_order": 2,
+            "is_credit": True,
+        },
+    )
+    assert r.status_code == 201
+    credit_method = r.json()
+    assert credit_method["is_credit"] is True
+    assert credit_method["is_credit_payment"] is False
+
+    # is_credit and is_credit_payment together is rejected
+    r = client.post(
+        "/payment-methods",
+        json={
+            "name": "不正な支出方法",
+            "closing_day": 0,
+            "display_order": 3,
+            "is_credit": True,
+            "is_credit_payment": True,
+        },
+    )
+    assert r.status_code == 400
+
+    r = client.post(
+        "/budget-periods",
+        json={"title": "2032年1月分", "start_date": "2032-01-01", "end_date": "2032-01-31"},
+    )
+    period = r.json()
+    r = client.post(
+        "/budget-items",
+        json={"budget_period_id": period["id"], "name": "立替費", "amount": "5000.00", "display_order": 1},
+    )
+    item = r.json()
+
+    r = client.post(
+        "/expenses",
+        json={
+            "usage_date": "2032-01-05",
+            "budget_period_id": period["id"],
+            "budget_item_id": item["id"],
+            "purpose": "立替払い",
+            "amount": "3000.00",
+            "payment_method_id": credit_method["id"],
+            "payment_date": "2032-01-05",
+        },
+    )
+    assert r.status_code == 201
+
+    # excluded from usage-date aggregation by default (include_credit=False)
+    r = client.get("/reports/usage-date", params={"budget_period_id": period["id"]})
+    matching = next(i for i in r.json()["items"] if i["budget_item_id"] == item["id"])
+    assert matching["actual_amount"] == "0.00"
+
+    # included when include_credit=True
+    r = client.get(
+        "/reports/usage-date", params={"budget_period_id": period["id"], "include_credit": "true"}
+    )
+    matching = next(i for i in r.json()["items"] if i["budget_item_id"] == item["id"])
+    assert matching["actual_amount"] == "3000.00"
+
+    r = client.get("/reports/payment-date", params={"year_month": "2032-01"})
+    assert r.status_code == 200
+    matching_date = next(i for i in r.json()["items"] if i["payment_date"] == "2032-01-05")
+    assert matching_date["normal_amount"] == "0.00"
+    assert matching_date["credit_amount"] == "3000.00"
+    assert matching_date["credit_payment_amount"] == "0.00"
 
 
 def test_payment_method_exclusion_holiday(client) -> None:

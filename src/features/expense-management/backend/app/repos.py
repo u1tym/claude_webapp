@@ -39,6 +39,8 @@ class PaymentMethodRow:
     payment_day: int
     payment_day_shift_direction: str | None
     display_order: int
+    is_credit: bool
+    is_credit_payment: bool
     is_deleted: bool
 
 
@@ -256,7 +258,7 @@ def list_payment_methods(user_id: int, include_deleted: bool = False) -> list[Pa
     query = """
         SELECT id, user_id, name, closing_day, closing_day_shift_direction,
                payment_month_offset, payment_day, payment_day_shift_direction,
-               display_order, is_deleted
+               display_order, is_credit, is_credit_payment, is_deleted
         FROM expense_management.payment_methods
         WHERE user_id = %s
     """
@@ -276,7 +278,7 @@ def get_payment_method(user_id: int, payment_method_id: int) -> PaymentMethodRow
                 """
                 SELECT id, user_id, name, closing_day, closing_day_shift_direction,
                        payment_month_offset, payment_day, payment_day_shift_direction,
-                       display_order, is_deleted
+                       display_order, is_credit, is_credit_payment, is_deleted
                 FROM expense_management.payment_methods
                 WHERE id = %s AND user_id = %s
                 """,
@@ -295,6 +297,8 @@ def insert_payment_method(
     payment_day: int,
     payment_day_shift_direction: str | None,
     display_order: int,
+    is_credit: bool,
+    is_credit_payment: bool,
 ) -> PaymentMethodRow:
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -302,11 +306,12 @@ def insert_payment_method(
                 """
                 INSERT INTO expense_management.payment_methods
                     (user_id, name, closing_day, closing_day_shift_direction,
-                     payment_month_offset, payment_day, payment_day_shift_direction, display_order)
-                VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                     payment_month_offset, payment_day, payment_day_shift_direction, display_order,
+                     is_credit, is_credit_payment)
+                VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 RETURNING id, user_id, name, closing_day, closing_day_shift_direction,
                           payment_month_offset, payment_day, payment_day_shift_direction,
-                          display_order, is_deleted
+                          display_order, is_credit, is_credit_payment, is_deleted
                 """,
                 (
                     user_id,
@@ -317,6 +322,8 @@ def insert_payment_method(
                     payment_day,
                     payment_day_shift_direction,
                     display_order,
+                    is_credit,
+                    is_credit_payment,
                 ),
             )
             row = cur.fetchone()
@@ -334,6 +341,8 @@ def update_payment_method(
     payment_day: int,
     payment_day_shift_direction: str | None,
     display_order: int,
+    is_credit: bool,
+    is_credit_payment: bool,
 ) -> None:
     with get_conn() as conn:
         with conn.cursor() as cur:
@@ -342,7 +351,8 @@ def update_payment_method(
                 UPDATE expense_management.payment_methods
                 SET name = %s, closing_day = %s, closing_day_shift_direction = %s,
                     payment_month_offset = %s, payment_day = %s,
-                    payment_day_shift_direction = %s, display_order = %s
+                    payment_day_shift_direction = %s, display_order = %s,
+                    is_credit = %s, is_credit_payment = %s
                 WHERE id = %s AND user_id = %s
                 """,
                 (
@@ -353,6 +363,8 @@ def update_payment_method(
                     payment_day,
                     payment_day_shift_direction,
                     display_order,
+                    is_credit,
+                    is_credit_payment,
                     payment_method_id,
                     user_id,
                 ),
@@ -435,6 +447,8 @@ def _payment_method_from_row(row: dict[str, object]) -> PaymentMethodRow:
             None if row["payment_day_shift_direction"] is None else str(row["payment_day_shift_direction"])
         ),
         display_order=int(row["display_order"]),
+        is_credit=bool(row["is_credit"]),
+        is_credit_payment=bool(row["is_credit_payment"]),
         is_deleted=bool(row["is_deleted"]),
     )
 
@@ -581,42 +595,61 @@ def logical_delete_expense(expense_id: int, user_id: int) -> None:
 
 
 def sum_expenses_by_budget_item_for_usage_range(
-    user_id: int, start_date: date, end_date: date
+    user_id: int, start_date: date, end_date: date, include_credit: bool = False
 ) -> dict[int, Decimal]:
+    credit_filter = "" if include_credit else "AND pm.is_credit = false"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                """
-                SELECT budget_item_id, COALESCE(SUM(amount), 0) AS total
-                FROM expense_management.expenses
-                WHERE user_id = %s AND usage_date BETWEEN %s AND %s AND is_deleted = false
-                      AND budget_item_id IS NOT NULL
-                GROUP BY budget_item_id
+                f"""
+                SELECT e.budget_item_id, COALESCE(SUM(e.amount), 0) AS total
+                FROM expense_management.expenses e
+                JOIN expense_management.payment_methods pm ON pm.id = e.payment_method_id
+                WHERE e.user_id = %s AND e.usage_date BETWEEN %s AND %s AND e.is_deleted = false
+                      AND e.budget_item_id IS NOT NULL
+                      AND pm.is_credit_payment = false
+                      {credit_filter}
+                GROUP BY e.budget_item_id
                 """,
                 (user_id, start_date, end_date),
             )
             return {int(row["budget_item_id"]): Decimal(row["total"]) for row in cur.fetchall()}
 
 
-def sum_expenses_by_budget_item_for_payment_month(
+def sum_expenses_by_payment_date(
     user_id: int, year: int, month: int
-) -> dict[int, Decimal]:
+) -> dict[date, dict[str, Decimal]]:
+    """Sum expense amounts grouped by payment_date and credit category, for payment methods with closing_day <> 0."""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT budget_item_id, COALESCE(SUM(amount), 0) AS total
-                FROM expense_management.expenses
-                WHERE user_id = %s
-                  AND is_deleted = false
-                  AND budget_item_id IS NOT NULL
-                  AND EXTRACT(YEAR FROM payment_date) = %s
-                  AND EXTRACT(MONTH FROM payment_date) = %s
-                GROUP BY budget_item_id
+                SELECT e.payment_date, pm.is_credit, pm.is_credit_payment, COALESCE(SUM(e.amount), 0) AS total
+                FROM expense_management.expenses e
+                JOIN expense_management.payment_methods pm ON pm.id = e.payment_method_id
+                WHERE e.user_id = %s
+                  AND e.is_deleted = false
+                  AND pm.closing_day <> 0
+                  AND EXTRACT(YEAR FROM e.payment_date) = %s
+                  AND EXTRACT(MONTH FROM e.payment_date) = %s
+                GROUP BY e.payment_date, pm.is_credit, pm.is_credit_payment
+                ORDER BY e.payment_date ASC
                 """,
                 (user_id, year, month),
             )
-            return {int(row["budget_item_id"]): Decimal(row["total"]) for row in cur.fetchall()}
+            result: dict[date, dict[str, Decimal]] = {}
+            for row in cur.fetchall():
+                payment_date = row["payment_date"]
+                bucket = result.setdefault(
+                    payment_date, {"normal": Decimal("0"), "credit": Decimal("0"), "credit_payment": Decimal("0")}
+                )
+                if row["is_credit"]:
+                    bucket["credit"] += Decimal(row["total"])
+                elif row["is_credit_payment"]:
+                    bucket["credit_payment"] += Decimal(row["total"])
+                else:
+                    bucket["normal"] += Decimal(row["total"])
+            return result
 
 
 def _expense_from_row(row: dict[str, object]) -> ExpenseRow:

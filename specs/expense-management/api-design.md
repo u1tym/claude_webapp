@@ -53,6 +53,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 - `closing_day_shift_direction` / `payment_day_shift_direction`: `earlier`（過去）または `later`（未来）
 - `exclusion_kind`: `sunday`、`monday`、`tuesday`、`wednesday`、`thursday`、`friday`、`saturday`、`nonexistent_day`、`holiday`（日本の国民の祝日）
 - 除外条件は `{ "exclusion_kind": "..." }` の配列で表す（締め日用・支払日用を別々の配列で持つ）
+- `is_credit` / `is_credit_payment`: 真偽値。支出方法の売掛区分を表す（両方 `false` なら通常、`is_credit` だけ `true` なら売掛、`is_credit_payment` だけ `true` なら売掛支払）。両方 `true` にはできない
 
 ### エラー（共通）
 
@@ -89,7 +90,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | PATCH | `/expenses/{expense_id}` | 要 | REQ-009 |
 | DELETE | `/expenses/{expense_id}` | 要 | REQ-009 |
 | GET | `/reports/usage-date` | 要 | REQ-011 |
-| GET | `/reports/payment-month` | 要 | REQ-012 |
+| GET | `/reports/payment-date` | 要 | REQ-012 |
 
 ## エンドポイント詳細
 
@@ -330,7 +331,9 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
       "payment_day": 10,
       "payment_day_shift_direction": "later",
       "payment_day_exclusions": [{ "exclusion_kind": "nonexistent_day" }],
-      "display_order": 1
+      "display_order": 1,
+      "is_credit": false,
+      "is_credit_payment": false
     }
   ]
 }
@@ -356,11 +359,13 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
   "payment_day": 10,
   "payment_day_shift_direction": "later",
   "payment_day_exclusions": [{ "exclusion_kind": "nonexistent_day" }],
-  "display_order": 1
+  "display_order": 1,
+  "is_credit": false,
+  "is_credit_payment": false
 }
 ```
 
-`closing_day = 0` のときは、`payment_month_offset` / `payment_day` / 両ずらし方向 / 両除外条件配列を省略できる（送っても無視し、固定値で登録する）。
+`closing_day = 0` のときは、`payment_month_offset` / `payment_day` / 両ずらし方向 / 両除外条件配列を省略できる（送っても無視し、固定値で登録する）。`is_credit` / `is_credit_payment` は省略すると両方 `false`（通常）として登録する。
 
 応答: 201（登録内容。形式は GET `/payment-methods` の `items` の要素と同じ）
 
@@ -370,8 +375,9 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 |------|------|
 | `name` が空、`closing_day` が 0〜31 の範囲外 | 400 |
 | `closing_day` が1以上で、`payment_month_offset` / `payment_day` / いずれかのずらし方向が未指定、または `payment_day` が1〜31の範囲外 | 400 |
+| `is_credit` と `is_credit_payment` がどちらも `true` | 400 |
 
-処理概要: 支出方法を登録する。`closing_day = 0` のときは支払月オフセット・支払日・ずらし方向・除外条件を即時支払を表す固定値にする。
+処理概要: 支出方法を登録する。`closing_day = 0` のときは支払月オフセット・支払日・ずらし方向・除外条件を即時支払を表す固定値にする。`is_credit` / `is_credit_payment` は締め日の値に関わらず、指定どおり保存する。
 
 ### PATCH `/payment-methods/{payment_method_id}`
 
@@ -385,10 +391,10 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 
 | 状況 | 応答 |
 |------|------|
-| POST と同じ入力検査 | 400 |
+| POST と同じ入力検査（`is_credit` と `is_credit_payment` がどちらも `true` の場合を含む） | 400 |
 | 本人の未削除の支出方法でない | 404 |
 
-処理概要: 支出方法を更新する。`closing_day` を 0 に変更したときは、支払月オフセット・支払日・ずらし方向を固定値にし、除外条件をすべて削除する。
+処理概要: 支出方法を更新する。`closing_day` を 0 に変更したときは、支払月オフセット・支払日・ずらし方向を固定値にし、除外条件をすべて削除する（`is_credit` / `is_credit_payment` はこの更新の影響を受けない）。
 
 ### DELETE `/payment-methods/{payment_method_id}`
 
@@ -555,6 +561,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | 名前 | 必須 | 説明 |
 |------|------|------|
 | `budget_period_id` | 必須 | 集計対象の予算期間 |
+| `include_credit` | 任意（真偽値、既定 `false`） | `true` のとき、売掛区分が売掛の支出記録も集計に含める |
 
 応答: 200
 
@@ -573,7 +580,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 }
 ```
 
-`items` は当該予算期間に属する予算項目（表示順）ごとに、その予算項目を予算区分とする、利用日が当該予算期間内かつ削除フラグが立っていない支出記録の金額を合計する。`difference` は `budget_amount - actual_amount`。
+`items` は当該予算期間に属する予算項目（表示順）ごとに、その予算項目を予算区分とする、利用日が当該予算期間内かつ削除フラグが立っていない支出記録の金額を合計する。`difference` は `budget_amount - actual_amount`。集計対象は、支出方法の売掛区分が通常の支出記録を常に含め、売掛支払の支出記録を常に除外し、売掛の支出記録は `include_credit=true` のときだけ含める。
 
 処理概要: 予算期間を選択した利用日基準の予算対実績集計を返す。
 
@@ -583,7 +590,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 |------|------|
 | `budget_period_id` が本人の予算期間でない | 404 |
 
-### GET `/reports/payment-month`
+### GET `/reports/payment-date`
 
 対応 REQ: REQ-012
 
@@ -598,14 +605,19 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 ```json
 {
   "items": [
-    { "budget_item_id": 10, "name": "食費", "actual_amount": "8000.00" }
+    {
+      "payment_date": "2026-10-05",
+      "normal_amount": "12000.00",
+      "credit_amount": "3000.00",
+      "credit_payment_amount": "0.00"
+    }
   ]
 }
 ```
 
-`items` は、支払日の年月が `year_month` と一致し、削除フラグが立っていない本人の支出記録を、`budget_item_id` ごとに合計する。対象の予算項目（論理削除済みを含む）の名称を付す。金額が0より大きい予算項目のみを含む。
+`items` は、支払日の年月が `year_month` と一致し、削除フラグが立っていない、締め日が0以外の支出方法による本人の支出記録を、支払日ごとに集計して支払日の昇順で返す。`normal_amount`・`credit_amount`・`credit_payment_amount` は、その支払日における、支出方法の売掛区分が通常・売掛・売掛支払それぞれの金額の合計（該当が無ければ `"0.00"`）。予算項目による内訳は持たない。
 
-処理概要: 年月を選択した支払発生月基準の集計を返す。
+処理概要: 年月を選択した支払日毎・売掛区分ごとの集計を返す。
 
 エラー:
 
@@ -637,3 +649,5 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | 2026-09-22 12:56 | 承認済み | `total_amount` の追加を承認 |
 | 2026-09-26 00:43 | 未承認 | 共通の認証に API キーによる認証（`Authorization: Bearer`）を追加。エンドポイントの変更なし |
 | 2026-09-26 00:44 | 承認済み | API キー認証への対応を承認 |
+| 2026-09-27 | 未承認 | `/payment-methods` の GET/POST/PATCH に `is_credit`・`is_credit_payment` を追加（両方 `true` は400）。`GET /reports/usage-date` に `include_credit` クエリを追加。`GET /reports/payment-month` を廃止し、`GET /reports/payment-date` を追加（支払日ごと・売掛区分ごとの合計金額を返す） |
+| 2026-09-27 | 承認済み | `is_credit`・`is_credit_payment` の追加と `/reports/payment-date` への置き換えを承認 |

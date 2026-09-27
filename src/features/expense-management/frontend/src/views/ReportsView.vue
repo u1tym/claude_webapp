@@ -3,10 +3,10 @@ import { onMounted, ref, watch } from "vue";
 import { formatAmount } from "../format";
 import {
   type BudgetPeriod,
-  type PaymentMonthReportItem,
+  type PaymentDateReportItem,
   type UsageDateReport,
   getBudgetPeriods,
-  getPaymentMonthReport,
+  getPaymentDateReport,
   getUsageDateReport,
 } from "../api";
 
@@ -14,10 +14,11 @@ const emit = defineEmits<{ unauth: []; forbidden: [] }>();
 
 const loading = ref(true);
 const errorMessage = ref("");
-const mode = ref<"usage-date" | "payment-month">("usage-date");
+const mode = ref<"usage-date" | "payment-date">("usage-date");
 
 const periods = ref<BudgetPeriod[]>([]);
 const selectedPeriodId = ref<number | null>(null);
+const includeCredit = ref(false);
 const usageReport = ref<UsageDateReport | null>(null);
 
 function currentYearMonth(): string {
@@ -26,7 +27,7 @@ function currentYearMonth(): string {
 }
 
 const yearMonth = ref(currentYearMonth());
-const paymentMonthItems = ref<PaymentMonthReportItem[]>([]);
+const paymentDateItems = ref<PaymentDateReportItem[]>([]);
 
 function handleError(err: unknown): void {
   if (err instanceof Error && err.message === "unauth") {
@@ -45,22 +46,22 @@ async function loadUsageReport(): Promise<void> {
     usageReport.value = null;
     return;
   }
-  usageReport.value = await getUsageDateReport(selectedPeriodId.value);
+  usageReport.value = await getUsageDateReport(selectedPeriodId.value, includeCredit.value);
 }
 
-async function loadPaymentMonthReport(): Promise<void> {
-  paymentMonthItems.value = await getPaymentMonthReport(yearMonth.value);
+async function loadPaymentDateReport(): Promise<void> {
+  paymentDateItems.value = await getPaymentDateReport(yearMonth.value);
 }
 
-watch(selectedPeriodId, () => {
+watch([selectedPeriodId, includeCredit], () => {
   if (mode.value === "usage-date") {
     loadUsageReport().catch(handleError);
   }
 });
 
 watch(yearMonth, () => {
-  if (mode.value === "payment-month") {
-    loadPaymentMonthReport().catch(handleError);
+  if (mode.value === "payment-date") {
+    loadPaymentDateReport().catch(handleError);
   }
 });
 
@@ -68,7 +69,7 @@ watch(mode, () => {
   if (mode.value === "usage-date") {
     loadUsageReport().catch(handleError);
   } else {
-    loadPaymentMonthReport().catch(handleError);
+    loadPaymentDateReport().catch(handleError);
   }
 });
 
@@ -96,17 +97,32 @@ onMounted(async () => {
         <label for="mode-select">集計基準</label>
         <select id="mode-select" v-model="mode">
           <option value="usage-date">利用日基準</option>
-          <option value="payment-month">支払発生月基準</option>
+          <option value="payment-date">支払日毎</option>
         </select>
       </div>
-      <div v-if="mode === 'usage-date'" class="field">
-        <label for="period-select">予算期間</label>
-        <select id="period-select" v-model.number="selectedPeriodId">
-          <option v-for="p in periods" :key="p.id" :value="p.id">
-            {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
-          </option>
-        </select>
-      </div>
+      <template v-if="mode === 'usage-date'">
+        <div class="field">
+          <label for="period-select">予算期間</label>
+          <select id="period-select" v-model.number="selectedPeriodId">
+            <option v-for="p in periods" :key="p.id" :value="p.id">
+              {{ p.title }}（{{ p.start_date }} 〜 {{ p.end_date }}）
+            </option>
+          </select>
+        </div>
+        <div class="field">
+          <label>集計対象</label>
+          <div class="checkbox-row">
+            <label class="checkbox-label">
+              <input v-model="includeCredit" type="radio" name="credit-scope" :value="true" />
+              売掛を含めて、売掛支払を含めない
+            </label>
+            <label class="checkbox-label">
+              <input v-model="includeCredit" type="radio" name="credit-scope" :value="false" />
+              売掛を含めずに、売掛支払を含めない
+            </label>
+          </div>
+        </div>
+      </template>
       <div v-else class="field">
         <label for="year-month">年月</label>
         <input id="year-month" v-model="yearMonth" type="month" />
@@ -141,19 +157,25 @@ onMounted(async () => {
         </div>
       </template>
       <template v-else>
-        <p v-if="paymentMonthItems.length === 0" class="empty">データがありません</p>
+        <p v-if="paymentDateItems.length === 0" class="empty">データがありません</p>
         <div v-else class="list">
           <table>
             <thead>
               <tr>
-                <th>予算項目</th>
-                <th>支出合計</th>
+                <th>支払日</th>
+                <th>通常</th>
+                <th>売掛</th>
+                <th>売掛支払</th>
               </tr>
             </thead>
             <tbody>
-              <tr v-for="item in paymentMonthItems" :key="item.budget_item_id">
-                <td class="cell-primary"><span class="cell-label">予算項目</span>{{ item.name }}</td>
-                <td class="cell-amount"><span class="cell-label">支出合計</span>{{ formatAmount(item.actual_amount) }}</td>
+              <tr v-for="item in paymentDateItems" :key="item.payment_date">
+                <td class="cell-primary"><span class="cell-label">支払日</span>{{ item.payment_date }}</td>
+                <td class="cell-amount"><span class="cell-label">通常</span>{{ formatAmount(item.normal_amount) }}</td>
+                <td class="cell-amount"><span class="cell-label">売掛</span>{{ formatAmount(item.credit_amount) }}</td>
+                <td class="cell-amount">
+                  <span class="cell-label">売掛支払</span>{{ formatAmount(item.credit_payment_amount) }}
+                </td>
               </tr>
             </tbody>
           </table>

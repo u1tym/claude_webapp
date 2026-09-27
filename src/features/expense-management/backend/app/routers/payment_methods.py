@@ -28,6 +28,8 @@ class PaymentMethodBody(BaseModel):
     payment_day_shift_direction: str | None = None
     payment_day_exclusions: list[ExclusionItem] = Field(default_factory=list)
     display_order: int
+    is_credit: bool = False
+    is_credit_payment: bool = False
 
     def to_input(self) -> PaymentMethodInput:
         return PaymentMethodInput(
@@ -40,6 +42,8 @@ class PaymentMethodBody(BaseModel):
             payment_day_shift_direction=self.payment_day_shift_direction,
             payment_day_exclusions=[item.exclusion_kind for item in self.payment_day_exclusions],
             display_order=self.display_order,
+            is_credit=self.is_credit,
+            is_credit_payment=self.is_credit_payment,
         )
 
 

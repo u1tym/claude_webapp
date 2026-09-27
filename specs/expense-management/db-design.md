@@ -62,6 +62,8 @@ erDiagram
         smallint payment_day
         varchar payment_day_shift_direction
         integer display_order
+        bool is_credit
+        bool is_credit_payment
         bool is_deleted
     }
     payment_method_exclusions {
@@ -159,6 +161,8 @@ erDiagram
 | `payment_day` | smallint | NOT NULL | - | 支払日（基準値）。1〜31。`closing_day = 0` のときは固定値 0（利用日と同日を表す） |
 | `payment_day_shift_direction` | varchar(16) | NULL | - | 支払日用のずらし方向。`earlier`（過去）または `later`（未来）。`closing_day = 0` のときは NULL |
 | `display_order` | integer | NOT NULL | - | 表示順 |
+| `is_credit` | boolean | NOT NULL | false | 売掛フラグ。true なら売掛（実際の支払いより先に費用が発生し、後日精算される） |
+| `is_credit_payment` | boolean | NOT NULL | false | 売掛支払フラグ。true なら売掛支払（売掛として計上した支出の精算） |
 | `is_deleted` | boolean | NOT NULL | false | 論理削除なら true |
 
 制約:
@@ -169,12 +173,13 @@ erDiagram
 - 検査: `closing_day` は 0〜31
 - 検査: `closing_day = 0` のとき `payment_month_offset = 0` かつ `payment_day = 0` かつ `closing_day_shift_direction IS NULL` かつ `payment_day_shift_direction IS NULL`
 - 検査: `closing_day > 0` のとき `payment_month_offset >= 0` かつ `payment_day` は 1〜31 かつ `closing_day_shift_direction IN ('earlier', 'later')` かつ `payment_day_shift_direction IN ('earlier', 'later')`
+- 検査: `is_credit` と `is_credit_payment` を同時に true にしない（`NOT (is_credit AND is_credit_payment)`）。既定は両方 false（通常）
 
 インデックス:
 
 - `(user_id, display_order)` のうち `is_deleted = false`（一覧の表示順）
 
-物理削除はしない。削除済みの支出方法は一覧・選択肢に出ない。既存の支出記録が参照する `payment_method_id` は、削除後も変えない。`closing_day` を 0 に変更したときは、`payment_month_offset` / `payment_day` を固定値（0, 0）に更新し、`closing_day_shift_direction` / `payment_day_shift_direction` を NULL にし、`payment_method_exclusions` の行をすべて削除する。
+物理削除はしない。削除済みの支出方法は一覧・選択肢に出ない。既存の支出記録が参照する `payment_method_id` は、削除後も変えない。`closing_day` を 0 に変更したときは、`payment_month_offset` / `payment_day` を固定値（0, 0）に更新し、`closing_day_shift_direction` / `payment_day_shift_direction` を NULL にし、`payment_method_exclusions` の行をすべて削除する（`is_credit` / `is_credit_payment` は締め日の値と独立しており、この更新では変えない）。`is_credit` と `is_credit_payment` は「通常（両方 false）」「売掛（`is_credit` のみ true）」「売掛支払（`is_credit_payment` のみ true）」の3択として登録・編集時に設定する。既存の行は追加時に両方 false（通常）とする。
 
 ### expense_management.payment_method_exclusions
 
@@ -260,14 +265,14 @@ erDiagram
 | REQ-002 | `budget_periods` への挿入（`title` 含む）、`budget_items` の複製挿入 |
 | REQ-003 | `budget_items` の挿入・更新・論理削除（`memo` を含む） |
 | REQ-004 | `budget_periods` の一覧（`title` 含む）、`budget_items` の `(budget_period_id, display_order)` |
-| REQ-005 | `payment_methods` への挿入。`closing_day = 0` のときの固定値検査。`payment_method_exclusions` への挿入（`target` ごと） |
-| REQ-006 | `payment_methods` の更新・論理削除。`closing_day` を0に変更したときの固定値更新と `payment_method_exclusions` の削除 |
-| REQ-007 | `payment_methods` の一覧（`is_deleted = false`、`display_order` 順） |
+| REQ-005 | `payment_methods` への挿入（`is_credit`・`is_credit_payment` を含む。既定は両方 false）。`closing_day = 0` のときの固定値検査。`payment_method_exclusions` への挿入（`target` ごと） |
+| REQ-006 | `payment_methods` の更新・論理削除（`is_credit`・`is_credit_payment` の更新を含む）。`closing_day` を0に変更したときの固定値更新と `payment_method_exclusions` の削除 |
+| REQ-007 | `payment_methods` の一覧（`is_deleted = false`、`display_order` 順、`is_credit`・`is_credit_payment` を含む） |
 | REQ-008 | `expenses` への挿入（`budget_period_id`・`budget_item_id` を含む。予算なしは両方 NULL）。`created_at` の自動設定。`payment_date` の初期値は算出値。`payment_date_is_auto` の保存 |
 | REQ-009 | `expenses` の更新（`budget_period_id`・`budget_item_id`・`payment_date_is_auto` の変更を含む）・論理削除（`is_deleted`） |
 | REQ-010 | `expenses` の一覧（`is_deleted = false`）。`budget_period_id` による絞り込み（NULL＝予算なしを含む） |
-| REQ-011 | `expenses.usage_date` と `budget_periods` の期間、`budget_items.amount` との集計（`is_deleted = false`） |
-| REQ-012 | `expenses.payment_date` の年月による集計（`is_deleted = false`） |
+| REQ-011 | `expenses.usage_date` と `budget_periods` の期間、`budget_items.amount` との集計（`is_deleted = false`）。`payment_methods.is_credit`・`is_credit_payment` による集計対象の絞り込みを含む |
+| REQ-012 | `expenses.payment_date` の年月による、支払日ごと・`payment_methods.is_credit`・`is_credit_payment` ごとの集計（`is_deleted = false`、`closing_day <> 0` の支出方法のみ） |
 | REQ-013 | `payment_methods` の `closing_day` / `closing_day_shift_direction` / `payment_day` / `payment_day_shift_direction`、`payment_method_exclusions`（`target` で締め日用・支払日用を区別）。テーブルとしては保持のみで、算出はバックエンドの `closing_date_service` |
 | REQ-014 | `budget_periods` の `title` / `start_date` / `end_date` の更新（`user_id` が一致する行のみ）。重複チェックは行わない |
 
@@ -297,3 +302,5 @@ erDiagram
 | 2026-09-22 11:45 | 承認済み | `budget_items.memo` と `expenses.payment_date_is_auto` の追加を承認 |
 | 2026-09-26 00:43 | 未承認 | `public.api_keys` の参照と `last_used_at` の更新を追加（API キーによる認証）。本機能の DDL 変更なし |
 | 2026-09-26 00:44 | 承認済み | API キー認証への対応を承認 |
+| 2026-09-27 | 未承認 | `payment_methods` に `is_credit`（売掛フラグ）・`is_credit_payment`（売掛支払フラグ）を追加し、両方を同時に true にしない検査制約を追加。既定は両方 false（通常）。既存 DDL は変えず新DDLファイルで反映。REQ-011・012 のトレーサビリティを更新（REQ-012 は支払日毎・売掛区分ごとの集計に変更） |
+| 2026-09-27 | 承認済み | `is_credit`・`is_credit_payment` の追加を承認 |

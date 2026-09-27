@@ -1183,6 +1183,208 @@ Cookie セッション検証と機能利用可否判定を実装する
 
 ---
 
+## タスク 31
+
+### タイトル
+
+支出方法に売掛区分（`is_credit`・`is_credit_payment`）を追加する（バックエンド）
+
+### 見積もり
+
+3時間
+
+### 関連要件
+
+- REQ-005, REQ-006, REQ-007
+
+### 関連設計
+
+- `db-design.md` / `expense_management.payment_methods`
+- `design.md` / バックエンド設計 / `app/services/payment_method_service.py`
+- `api-design.md` / GET・POST・PATCH `/payment-methods`
+
+### 実装パス
+
+- `src/features/expense-management/backend/sql/`（新規ファイル）
+- `src/features/expense-management/backend/app/repos.py`
+- `src/features/expense-management/backend/app/services/payment_method_service.py`
+- `src/features/expense-management/backend/app/routers/payment_methods.py`
+- `src/features/expense-management/tests/`
+
+### 内容
+
+新しい DDL ファイル（`payment_methods` に `is_credit boolean NOT NULL DEFAULT false`・`is_credit_payment boolean NOT NULL DEFAULT false` を追加する `ALTER TABLE` と、両方を同時に `true` にしない検査制約）を追加する。既存の DDL ファイルは変えない。
+
+`PaymentMethodRow` / `PaymentMethodInput` に `is_credit`・`is_credit_payment` を追加し、`repos.py` の一覧・登録・更新クエリに反映する。`payment_method_service._validate_input` で、`is_credit` と `is_credit_payment` が同時に `true` のとき `InvalidInputError`（400）にする。`list_for_user`・`create_payment_method`・`change_payment_method` の応答に `is_credit`・`is_credit_payment` を含める。`closing_day` を0に変更する既存の固定値更新処理は、`is_credit`・`is_credit_payment` を変更しない。`routers/payment_methods.py` の `PaymentMethodBody` に `is_credit: bool = False`・`is_credit_payment: bool = False` を追加し、`to_input` で渡す。
+
+### 完了条件
+
+- [ ] 新しい DDL を既存 DB に適用でき、既存の支出方法は `is_credit`・`is_credit_payment` がともに `false` になる
+- [ ] `POST`・`PATCH /payment-methods` で `is_credit`・`is_credit_payment` を指定して登録・更新でき、`GET /payment-methods` の応答に含まれる
+- [ ] `is_credit` と `is_credit_payment` を同時に `true` で送ると 400 になる
+- [ ] `closing_day` を0に変更しても `is_credit`・`is_credit_payment` は変わらない
+- [ ] `is_credit`・`is_credit_payment` を省略すると `false`/`false` で登録される
+
+---
+
+## タスク 32
+
+### タイトル
+
+利用日基準の集計に、売掛を含めるかどうかの集計対象選択を追加する（バックエンド）
+
+### 見積もり
+
+2時間
+
+### 関連要件
+
+- REQ-011
+
+### 関連設計
+
+- `design.md` / バックエンド設計 / `app/services/report_service.py`
+- `api-design.md` / GET `/reports/usage-date`
+- `db-design.md` / `expense_management.payment_methods`（`is_credit`・`is_credit_payment`）
+
+### 実装パス
+
+- `src/features/expense-management/backend/app/repos.py`
+- `src/features/expense-management/backend/app/services/report_service.py`
+- `src/features/expense-management/backend/app/routers/reports.py`
+- `src/features/expense-management/tests/`
+
+### 内容
+
+`repos.sum_expenses_by_budget_item_for_usage_range` に、`payment_methods` と結合した売掛区分による絞り込みを追加する。`is_credit_payment = true` の支出方法による支出記録は常に除外し、`include_credit` が `false` のときは `is_credit = true` の支出方法による支出記録も除外する（`is_credit`・`is_credit_payment` がともに `false` の行は常に含める）。`report_service.usage_date_report` に `include_credit: bool` 引数を追加してこの絞り込みに渡す。`routers/reports.py` の `GET /reports/usage-date` に `include_credit: bool = Query(False)` を追加する。
+
+### 完了条件
+
+- [ ] `include_credit` を指定しない、または `false` のとき、売掛区分が売掛の支出記録は集計から除外される
+- [ ] `include_credit=true` のとき、売掛区分が売掛の支出記録が集計に含まれる
+- [ ] 売掛区分が売掛支払の支出記録は `include_credit` の値に関わらず常に集計から除外される
+- [ ] 売掛区分が通常の支出記録は `include_credit` の値に関わらず常に集計に含まれる
+
+---
+
+## タスク 33
+
+### タイトル
+
+支払発生月基準の集計を廃止し、支払日毎の集計 API を実装する（バックエンド）
+
+### 見積もり
+
+3時間
+
+### 関連要件
+
+- REQ-012
+
+### 関連設計
+
+- `design.md` / バックエンド設計 / `app/services/report_service.py`
+- `api-design.md` / GET `/reports/payment-date`
+- `db-design.md` / `expense_management.expenses`, `expense_management.payment_methods`
+
+### 実装パス
+
+- `src/features/expense-management/backend/app/repos.py`
+- `src/features/expense-management/backend/app/services/report_service.py`
+- `src/features/expense-management/backend/app/routers/reports.py`
+- `src/features/expense-management/tests/`
+
+### 内容
+
+`repos.py` の `sum_expenses_by_budget_item_for_payment_month` を廃止し、支払日ごとの集計用の関数を追加する。指定した年月と支払日の年月が一致し、削除フラグが立っていない、締め日が0以外の支出方法による本人の支出記録を、支払日・売掛区分（`is_credit`・`is_credit_payment` の組み合わせ）ごとに合計するクエリを実装する。`report_service.py` の `payment_month_report` を、支払日ごとに `normal_amount`・`credit_amount`・`credit_payment_amount` をまとめて返す処理に置き換える。`routers/reports.py` の `GET /reports/payment-month` を `GET /reports/payment-date` に置き換える。
+
+### 完了条件
+
+- [ ] `GET /reports/payment-date` が、指定年月に支払日を持つ支出記録を支払日ごとに集計して返す（支払日の昇順）
+- [ ] 締め日が0の支出方法による支出記録が集計に含まれない
+- [ ] 通常・売掛・売掛支払それぞれの金額が支払日ごとに区別して返る（該当が無ければ `"0.00"`）
+- [ ] 削除フラグが立っている支出記録は集計に含まれない
+- [ ] `GET /reports/payment-month` が廃止されている
+
+---
+
+## タスク 34
+
+### タイトル
+
+支出方法管理画面（SCR-003）に売掛区分の選択・表示を追加する
+
+### 見積もり
+
+2時間
+
+### 関連要件
+
+- REQ-005, REQ-006, REQ-007
+
+### 関連設計
+
+- `ui-design.md` / SCR-003: 支出方法管理
+- `api-design.md` / GET・POST・PATCH `/payment-methods`
+
+### 実装パス
+
+- `src/features/expense-management/frontend/src/api.ts`
+- `src/features/expense-management/frontend/src/views/PaymentMethodsView.vue`
+
+### 内容
+
+`api.ts` の `PaymentMethod`/`PaymentMethodInput` に `is_credit: boolean`・`is_credit_payment: boolean` を追加する。登録・編集フォームに、ラジオボタンで「通常」「売掛」「売掛支払」の3択（既定は通常）を選ぶ項目を、締め日の値に関わらず常に表示する項目として追加する。選択した値から `is_credit`・`is_credit_payment` を組み立てて送信する。支出方法一覧に売掛区分（通常/売掛/売掛支払）の列を追加する。
+
+### 完了条件
+
+- [ ] 登録・編集フォームにラジオボタンで売掛区分（通常/売掛/売掛支払）を選べる。既定は通常
+- [ ] 締め日の値に関わらず売掛区分の項目が表示される
+- [ ] 選んだ売掛区分どおりに `is_credit`・`is_credit_payment` が送信・保存される
+- [ ] 一覧に売掛区分の列が表示される
+- [ ] ブラウザで一連の操作を確認できる
+
+---
+
+## タスク 35
+
+### タイトル
+
+集計画面（SCR-004）を「支払日毎」に対応させ、利用日基準に集計対象選択を追加する
+
+### 見積もり
+
+3時間
+
+### 関連要件
+
+- REQ-011, REQ-012
+
+### 関連設計
+
+- `ui-design.md` / SCR-004: 集計
+- `api-design.md` / GET `/reports/usage-date`, GET `/reports/payment-date`
+
+### 実装パス
+
+- `src/features/expense-management/frontend/src/api.ts`
+- `src/features/expense-management/frontend/src/views/ReportsView.vue`
+
+### 内容
+
+`api.ts` の `getUsageDateReport` に `include_credit` パラメータを追加する。`getPaymentMonthReport` を `getPaymentDateReport` に置き換え、`GET /reports/payment-date` を呼ぶ。`ReportsView.vue` の集計基準切替を「利用日基準」「支払日毎」に変更する。利用日基準に、ラジオボタンで「売掛を含めて、売掛支払を含めない」「売掛を含めずに、売掛支払を含めない」の2択（既定は含めない）を選ぶ集計対象選択を追加し、選択に応じて `include_credit` を渡す。支払日毎の集計一覧を、支払日ごとに通常・売掛・売掛支払の合計金額を列に持つ表として表示する。
+
+### 完了条件
+
+- [ ] 集計基準切替が「利用日基準」「支払日毎」になっている
+- [ ] 利用日基準に集計対象選択（売掛を含める/含めない）があり、既定は「含めない」
+- [ ] 集計対象選択の変更に応じて集計結果が変わる
+- [ ] 支払日毎で、支払日ごとに通常・売掛・売掛支払の合計金額が表示される
+- [ ] 対象の支払日が無いとき「データがありません」と表示される
+- [ ] ブラウザで一連の操作を確認できる
+
+---
+
 ## テスト
 
 ### 単体テスト
@@ -1200,12 +1402,16 @@ Cookie セッション検証と機能利用可否判定を実装する
 - [ ] 予算項目の `memo` の保存・更新・複製時の `null` 化を確認する
 - [ ] 支出記録の `payment_date_is_auto` の保存・更新を確認する
 - [ ] `GET /budget-periods` の `total_amount`（予算項目の金額合計、削除された予算項目を除く、0件時は `"0.00"`）を確認する
+- [ ] 支出方法の `is_credit`・`is_credit_payment` の登録・更新と、同時に `true` にしたときの400を確認する
+- [ ] 利用日基準集計の `include_credit` による売掛の含有・除外（通常は常に含む、売掛支払は常に除外）を確認する
+- [ ] 支払日毎の集計（支払日・売掛区分ごとの合計、締め日0の支出方法の除外）を確認する
 
 ### 結合テスト
 
 - [ ] 当該機能の uvicorn に対する API テスト（Cookie、401、403、404、409、予算期間・予算項目・支出方法・支出記録の CRUD、集計2種）
 - [ ] 予算期間の複製作成で予算項目がコピーされることを確認する
 - [ ] `GET /expenses` の `budget_period_id`・`unassigned` による絞り込みを確認する
+- [ ] `GET /reports/payment-date` が支払日ごと・売掛区分ごとに正しく集計することを確認する
 
 ### 受け入れテスト
 
@@ -1235,3 +1441,5 @@ Cookie セッション検証と機能利用可否判定を実装する
 | 2026-09-22 12:20 | 承認済み | タスク26〜29を承認 |
 | 2026-09-22 13:00 | 未承認 | 予算期間一覧・予算項目一覧への金額合計表示（タスク30）を追加。単体テストに `total_amount` の確認を追加 |
 | 2026-09-22 13:01 | 承認済み | タスク30を承認 |
+| 2026-09-27 | 未承認 | 支出方法への売掛区分（`is_credit`・`is_credit_payment`）追加（タスク31）、利用日基準集計への集計対象選択追加（タスク32）、支払発生月基準の集計を支払日毎の集計に置き換え（タスク33）、支出方法管理画面・集計画面への反映（タスク34〜35）を追加。単体・結合テストに関連項目を追加 |
+| 2026-09-27 | 承認済み | タスク31〜35を承認 |

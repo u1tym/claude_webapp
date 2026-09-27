@@ -63,6 +63,8 @@ export type PaymentMethod = {
   payment_day_shift_direction: string | null;
   payment_day_exclusions: ExclusionItem[];
   display_order: number;
+  is_credit: boolean;
+  is_credit_payment: boolean;
 };
 
 export type Expense = {
@@ -92,10 +94,11 @@ export type UsageDateReport = {
   items: UsageDateReportItem[];
 };
 
-export type PaymentMonthReportItem = {
-  budget_item_id: number;
-  name: string;
-  actual_amount: string;
+export type PaymentDateReportItem = {
+  payment_date: string;
+  normal_amount: string;
+  credit_amount: string;
+  credit_payment_amount: string;
 };
 
 export async function getSettings(): Promise<Settings> {
@@ -271,6 +274,8 @@ export type PaymentMethodInput = {
   payment_day_shift_direction?: string | null;
   payment_day_exclusions?: ExclusionItem[];
   display_order: number;
+  is_credit: boolean;
+  is_credit_payment: boolean;
 };
 
 export async function createPaymentMethod(
@@ -423,8 +428,13 @@ export async function deleteExpense(expenseId: number): Promise<"ok" | "missing"
   throw new Error("expenses");
 }
 
-export async function getUsageDateReport(budgetPeriodId: number): Promise<UsageDateReport> {
-  const res = await apiFetch(`/reports/usage-date?budget_period_id=${budgetPeriodId}`);
+export async function getUsageDateReport(
+  budgetPeriodId: number,
+  includeCredit: boolean,
+): Promise<UsageDateReport> {
+  const res = await apiFetch(
+    `/reports/usage-date?budget_period_id=${budgetPeriodId}&include_credit=${includeCredit}`,
+  );
   throwIfAuthFailed(res);
   if (!res.ok) {
     throw new Error("reports");
@@ -432,11 +442,11 @@ export async function getUsageDateReport(budgetPeriodId: number): Promise<UsageD
   return (await res.json()) as UsageDateReport;
 }
 
-export async function getPaymentMonthReport(yearMonth: string): Promise<PaymentMonthReportItem[]> {
-  const res = await apiFetch(`/reports/payment-month?year_month=${yearMonth}`);
+export async function getPaymentDateReport(yearMonth: string): Promise<PaymentDateReportItem[]> {
+  const res = await apiFetch(`/reports/payment-date?year_month=${yearMonth}`);
   throwIfAuthFailed(res);
   if (!res.ok) {
     throw new Error("reports");
   }
-  return ((await res.json()) as { items: PaymentMonthReportItem[] }).items;
+  return ((await res.json()) as { items: PaymentDateReportItem[] }).items;
 }
