@@ -670,9 +670,9 @@ async function confirmKnowhowDelete(): Promise<void> {
           <span class="detail-label">キーワード</span>
           <span class="detail-value">{{ detail.keywords || "—" }}</span>
         </div>
-        <div class="detail-row">
+        <div class="detail-row detail-row-body">
           <span class="detail-label">本文</span>
-          <span class="detail-value">{{ detail.content }}</span>
+          <span class="detail-value detail-value-scroll">{{ detail.content }}</span>
         </div>
       </dl>
     </div>
