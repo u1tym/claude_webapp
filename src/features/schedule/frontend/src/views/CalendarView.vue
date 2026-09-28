@@ -107,6 +107,7 @@ const settingsPanel = ref(false);
 const dayMenu = ref<{ iso: string; x: number; y: number } | null>(null);
 const dayMenuEl = ref<HTMLElement | null>(null);
 const dayMenuStyle = ref<Record<string, string>>({});
+const togglingTodoId = ref<number | null>(null);
 
 const prefs = ref<Preferences>({
   week_starts_on: "sunday",
@@ -795,7 +796,7 @@ async function toggleTodo(item: ScheduleItem, event: Event): Promise<void> {
   if (item.kind !== "todo") {
     return;
   }
-  busy.value = true;
+  togglingTodoId.value = item.id;
   try {
     const result = await updateCompletion(item.id, item.is_completed !== true);
     if (result === "missing" || result === "conflict") {
@@ -808,7 +809,7 @@ async function toggleTodo(item: ScheduleItem, event: Event): Promise<void> {
       error.value = "Server error";
     }
   } finally {
-    busy.value = false;
+    togglingTodoId.value = null;
   }
 }
 
@@ -1469,7 +1470,7 @@ onUnmounted(() => {
                       v-if="item.kind === 'todo'"
                       type="checkbox"
                       :checked="item.is_completed === true"
-                      :disabled="busy"
+                      :disabled="togglingTodoId === item.id"
                       @click="toggleTodo(item, $event)"
                     />
                     <span>{{ pcLabel(item, cell.iso) }}</span>
@@ -1576,7 +1577,7 @@ onUnmounted(() => {
             v-if="item.kind === 'todo'"
             type="checkbox"
             :checked="item.is_completed === true"
-            :disabled="busy"
+            :disabled="togglingTodoId === item.id"
             @click="toggleTodo(item, $event)"
           />
           <span>{{ leftoverIso ? pcLabel(item, leftoverIso) : item.title }}</span>
