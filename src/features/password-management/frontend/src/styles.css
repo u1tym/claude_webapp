@@ -386,6 +386,10 @@ button {
   overflow: auto;
 }
 
+.modal-wide {
+  max-width: 80vw;
+}
+
 .section-title {
   margin: 0 0 calc(var(--space) * 2);
   font-size: var(--font-size-title);

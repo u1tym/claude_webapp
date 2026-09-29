@@ -63,9 +63,13 @@ function showSuccess(message: string): void {
   }, 3000);
 }
 
+function sortByTitle(list: PasswordSummary[]): PasswordSummary[] {
+  return [...list].sort((a, b) => a.title.localeCompare(b.title, "ja"));
+}
+
 async function loadList(): Promise<void> {
   try {
-    items.value = await getPasswords(keyword.value);
+    items.value = sortByTitle(await getPasswords(keyword.value));
   } catch (err) {
     handleError(err);
   }
@@ -80,7 +84,7 @@ function onSearchInput(): void {
 
 onMounted(async () => {
   try {
-    items.value = await getPasswords();
+    items.value = sortByTitle(await getPasswords());
   } catch (err) {
     handleError(err);
   } finally {
@@ -355,7 +359,7 @@ async function confirmDelete(): Promise<void> {
     </div>
 
     <div v-if="showForm" class="modal-back">
-      <div class="modal">
+      <div class="modal modal-wide">
         <h2 class="section-title">{{ editingId === null ? "パスワードエントリの登録" : "パスワードエントリの編集" }}</h2>
         <form class="form" @submit.prevent="submitForm">
           <p v-if="formError" class="banner-error">{{ formError }}</p>
