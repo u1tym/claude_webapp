@@ -6,7 +6,7 @@
 
 ## 全体構成
 
-本設計は `requirements.md` の REQ-001〜REQ-008 を満たす。本設計は、本機能そのもの（API キーの発行・一覧・失効）と、対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`）の認証部分の変更の 2 つからなる。
+本設計は `requirements.md` の REQ-001〜REQ-008 を満たす。本設計は、本機能そのもの（API キーの発行・一覧・失効）と、対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`、`room`）の認証部分の変更の 2 つからなる。
 
 - フロントエンド: `src/features/api-key-management/frontend` の Vue（SPA）。Vite `base` は `/portal_api_key_management/`。nginx では dist をドキュメントルートの `features/api-key-management/` に置き、公開 URL `/portal_api_key_management/` へ対応付ける。
 - バックエンド: `src/features/api-key-management/backend` の別プロセスの FastAPI（venv、uvicorn）。開発時のポートは 8010、フロントの開発ポートは 5184（既存機能と重複しない値）。
@@ -19,7 +19,7 @@
 ```
 ブラウザ ── SPA(Vue) ──(Cookie)──▶ api-key-management(FastAPI) ──▶ public.api_keys（発行・一覧・失効）
                                                                        ▲ 読み取り・最終利用日時の更新
-他システム ──(API キー)──▶ 対象機能(FastAPI: goods / expense / knowhow / schedule) ─┘
+他システム ──(API キー)──▶ 対象機能(FastAPI: goods / expense / knowhow / schedule / room) ─┘
 ブラウザ ── 対象機能の SPA ──(Cookie)──▶ 対象機能(FastAPI)   ※従来どおり
 ```
 
@@ -126,7 +126,7 @@
 
 ### 対象機能の認証の変更（REQ-006、REQ-007）
 
-対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`）それぞれの `app/deps.py` の、ログイン中ユーザを特定する処理を、次のように変える。本機能の Python は import せず、各対象機能が `public.api_keys` を直接読む。
+対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`、`room`）それぞれの `app/deps.py` の、ログイン中ユーザを特定する処理を、次のように変える。本機能の Python は import せず、各対象機能が `public.api_keys` を直接読む。
 
 1. 要求に API キー（`Authorization` ヘッダの Bearer 方式）が添えられているときは、API キーで判定する。添えられていないときは、従来どおり（`DEBUG_USER`、Cookie のセッション）で判定する。API キーの判定に失敗したときに、Cookie や `DEBUG_USER` へは戻らない。
 2. API キーの判定:
@@ -224,3 +224,5 @@ Cookie ベースのセッション認証を用いる。ログイン API は持�
 |------|------|----------|
 | 2026-09-26 00:30 | 未承認 | 初版 |
 | 2026-09-26 00:35 | 承認済み | 初版を承認 |
+| 2026-10-01 13:00 | 未承認 | 対象機能に `room`（ROOM）を追加 |
+| 2026-10-01 13:01 | 承認済み | 対象機能に `room`（ROOM）を追加を承認 |

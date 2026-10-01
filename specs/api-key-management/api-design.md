@@ -7,7 +7,7 @@
 本書は次の 2 つの契約を定める。
 
 1. 本機能の FastAPI が公開する HTTP API（API キーの発行・一覧・失効）。
-2. 対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`）の API に共通で追加する、API キーによる認証の契約（「対象機能の API キー認証」の節）。対象機能のエンドポイント自体（パス・要求・応答）は変えない。
+2. 対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`、`room`）の API に共通で追加する、API キーによる認証の契約（「対象機能の API キー認証」の節）。対象機能のエンドポイント自体（パス・要求・応答）は変えない。
 
 ログイン・ログアウトの API は持たない。他機能向けの利用可否判定 API は提供しない。
 
@@ -220,7 +220,7 @@ REQ-006・REQ-007 は、対象機能の API キー認証（後述）で満たす
 
 ## 対象機能の API キー認証
 
-対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`）の、認証を要する全エンドポイントに共通で適用する。各対象機能の `api-design.md` の「認証」節に、本節と同じ内容を追記する（改訂時）。
+対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`、`room`）の、認証を要する全エンドポイントに共通で適用する。各対象機能の `api-design.md` の「認証」節に、本節と同じ内容を追記する（改訂時）。
 
 ### 要求
 
@@ -270,3 +270,5 @@ Authorization: Bearer wak_Ab3dEf7hIjKlMnOpQrStUvWxYz0123456789-_AbCdEfG
 |------|------|----------|
 | 2026-09-26 00:41 | 未承認 | 初版 |
 | 2026-09-26 00:42 | 承認済み | 初版を承認 |
+| 2026-10-01 13:00 | 未承認 | 対象機能に `room`（ROOM）を追加 |
+| 2026-10-01 13:01 | 承認済み | 対象機能に `room`（ROOM）を追加を承認 |

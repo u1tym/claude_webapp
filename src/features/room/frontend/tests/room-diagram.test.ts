@@ -1,0 +1,247 @@
+import { mount, type VueWrapper } from "@vue/test-utils";
+import { describe, expect, it } from "vitest";
+import RoomDiagram from "../src/components/RoomDiagram.vue";
+import type { DeviceKey, DeviceState, Devices } from "../src/room";
+
+function devices(override: Partial<Devices> = {}): Devices {
+  return {
+    ceiling_light: { status: "ok", state: "off", implemented: false },
+    indirect_light: { status: "ok", state: "on" },
+    indoor_speaker: { status: "ok", state: "off" },
+    bedside_speaker: { status: "ok", state: "off" },
+    front_door: { status: "ok", state: "locked", battery: 35 },
+    ...override,
+  };
+}
+
+const ERROR: DeviceState = { status: "error", state: null };
+
+function render(
+  props: { devices?: Devices; switching?: DeviceKey | null; disabled?: boolean } = {},
+): VueWrapper {
+  return mount(RoomDiagram, { props: { devices: props.devices ?? devices(), ...props } });
+}
+
+const part = (wrapper: VueWrapper, key: DeviceKey) => wrapper.get(`[data-device="${key}"]`);
+
+describe("表示", () => {
+  it("5 機器のパーツと、機器名・状態の文言を表示する", () => {
+    const wrapper = render();
+    const texts: Record<DeviceKey, [string, string]> = {
+      ceiling_light: ["電灯", "OFF"],
+      indirect_light: ["間接照明", "ON"],
+      indoor_speaker: ["屋内スピーカー", "OFF"],
+      bedside_speaker: ["枕元スピーカー", "OFF"],
+      front_door: ["玄関ドア", "施錠中"],
+    };
+    for (const [key, [label, state]] of Object.entries(texts) as [DeviceKey, [string, string]][]) {
+      const text = part(wrapper, key).text();
+      expect(text).toContain(label);
+      expect(text).toContain(state);
+    }
+    expect(wrapper.findAll("[data-device]")).toHaveLength(5);
+  });
+
+  it("状態は色だけでなく形（塗り・光線・音波）と文言でも区別する", () => {
+    const on = render({
+      devices: devices({
+        indirect_light: { status: "ok", state: "on" },
+        indoor_speaker: { status: "ok", state: "on" },
+      }),
+    });
+    const off = render();
+
+    // ON: 光線・音波の記号が描かれ、is-on が付く
+    expect(part(on, "indirect_light").classes()).toContain("is-on");
+    expect(part(on, "indirect_light").find(".rd-rays").exists()).toBe(true);
+    expect(part(on, "indoor_speaker").classes()).toContain("is-on");
+    expect(part(on, "indoor_speaker").find(".rd-waves").exists()).toBe(true);
+    // OFF: 記号なし（輪郭のみ）
+    expect(part(off, "indoor_speaker").classes()).not.toContain("is-on");
+    expect(part(off, "indoor_speaker").find(".rd-waves").exists()).toBe(false);
+    expect(part(off, "indoor_speaker").text()).toContain("OFF");
+    expect(part(on, "indoor_speaker").text()).toContain("ON");
+  });
+
+  it("玄関ドアは施錠中と開錠中で錠の形と文言が変わる", () => {
+    const locked = render();
+    const unlocked = render({
+      devices: devices({ front_door: { status: "ok", state: "unlocked", battery: 35 } }),
+    });
+    const shackle = (w: VueWrapper) => part(w, "front_door").get(".rd-shackle").attributes("d");
+    expect(part(locked, "front_door").text()).toContain("施錠中");
+    expect(part(unlocked, "front_door").text()).toContain("開錠中");
+    expect(shackle(locked)).not.toBe(shackle(unlocked));
+    expect(part(locked, "front_door").classes()).toContain("is-on");
+    expect(part(unlocked, "front_door").classes()).not.toContain("is-on");
+  });
+
+  it("電灯は常に OFF で、未実装であることを示す（ON の入力でも OFF にしない）", () => {
+    const wrapper = render();
+    expect(part(wrapper, "ceiling_light").text()).toContain("OFF");
+    expect(part(wrapper, "ceiling_light").text()).toContain("未実装");
+    expect(part(wrapper, "ceiling_light").find(".rd-rays").exists()).toBe(false);
+  });
+
+  it("電池残量を割合と塗りで示す", () => {
+    const wrapper = render();
+    const battery = wrapper.get('[data-part="battery"]');
+    expect(battery.text()).toContain("35%");
+    expect(battery.attributes("aria-label")).toBe("玄関ドアの電池残量 35%");
+    // 満タン 90 に対して 35%（枠の内側 3px ずつを除く）
+    const fill = Number(wrapper.get('[data-testid="battery-fill"]').attributes("width"));
+    expect(fill).toBe(Math.round((90 * 35) / 100) - 6);
+
+    const full = render({
+      devices: devices({ front_door: { status: "ok", state: "locked", battery: 100 } }),
+    });
+    expect(Number(full.get('[data-testid="battery-fill"]').attributes("width"))).toBe(90 - 6);
+    const empty = render({
+      devices: devices({ front_door: { status: "ok", state: "locked", battery: 0 } }),
+    });
+    expect(Number(empty.get('[data-testid="battery-fill"]').attributes("width"))).toBe(0);
+  });
+
+  it("電池残量が取れないときは「不明」", () => {
+    const wrapper = render({
+      devices: devices({ front_door: { status: "ok", state: "locked", battery: null } }),
+    });
+    expect(wrapper.get('[data-part="battery"]').text()).toContain("不明");
+    expect(wrapper.get('[data-part="battery"]').attributes("aria-label")).toBe(
+      "玄関ドアの電池残量 不明",
+    );
+  });
+});
+
+describe("取得できなかった機器", () => {
+  it("「取得できません」と警告の記号を示し、他の機器は妨げない", () => {
+    const wrapper = render({ devices: devices({ indoor_speaker: ERROR }) });
+    const broken = part(wrapper, "indoor_speaker");
+    expect(broken.text()).toContain("⚠ 取得できません");
+    expect(broken.classes()).toContain("is-error");
+    expect(part(wrapper, "indirect_light").text()).toContain("ON");
+    expect(part(wrapper, "indirect_light").classes()).not.toContain("is-error");
+  });
+
+  it("切り替えられない（押しても何も起きず、フォーカスもできない）", async () => {
+    const wrapper = render({ devices: devices({ indoor_speaker: ERROR }) });
+    const broken = part(wrapper, "indoor_speaker");
+    expect(broken.attributes("aria-disabled")).toBe("true");
+    expect(broken.attributes("tabindex")).toBe("-1");
+    expect(broken.attributes("aria-label")).toBe("屋内スピーカー 取得できません");
+    await broken.trigger("click");
+    await broken.trigger("keydown", { key: "Enter" });
+    expect(wrapper.emitted("select")).toBeUndefined();
+  });
+
+  it("玄関ドアが取得できないときは電池残量も「不明」で、操作できない", async () => {
+    const wrapper = render({ devices: devices({ front_door: ERROR }) });
+    expect(wrapper.get('[data-part="battery"]').text()).toContain("不明");
+    await part(wrapper, "front_door").trigger("click");
+    expect(wrapper.emitted("select")).toBeUndefined();
+  });
+});
+
+describe("操作", () => {
+  const operable: DeviceKey[] = ["indirect_light", "indoor_speaker", "bedside_speaker", "front_door"];
+
+  it.each(operable)("%s はボタンとして振る舞い、クリックで select を出す", async (key) => {
+    const wrapper = render();
+    const target = part(wrapper, key);
+    expect(target.attributes("role")).toBe("button");
+    expect(target.attributes("tabindex")).toBe("0");
+    expect(target.attributes("aria-disabled")).toBe("false");
+    await target.trigger("click");
+    expect(wrapper.emitted("select")).toEqual([[key]]);
+  });
+
+  it.each(operable)("%s は Enter と Space でも操作できる", async (key) => {
+    const wrapper = render();
+    await part(wrapper, key).trigger("keydown", { key: "Enter" });
+    await part(wrapper, key).trigger("keydown", { key: " " });
+    expect(wrapper.emitted("select")).toEqual([[key], [key]]);
+  });
+
+  it("他のキーでは操作できない", async () => {
+    const wrapper = render();
+    await part(wrapper, "indirect_light").trigger("keydown", { key: "a" });
+    expect(wrapper.emitted("select")).toBeUndefined();
+  });
+
+  it("電灯はボタンではなく、操作しても何も起きない", async () => {
+    const wrapper = render();
+    const ceiling = part(wrapper, "ceiling_light");
+    expect(ceiling.attributes("role")).toBe("img");
+    expect(ceiling.attributes("tabindex")).toBeUndefined();
+    expect(ceiling.attributes("aria-label")).toBe("電灯 OFF（未実装）");
+    await ceiling.trigger("click");
+    await ceiling.trigger("keydown", { key: "Enter" });
+    expect(wrapper.emitted("select")).toBeUndefined();
+  });
+
+  it("電池残量は操作しても何も起きない", async () => {
+    const wrapper = render();
+    const battery = wrapper.get('[data-part="battery"]');
+    expect(battery.attributes("role")).toBe("img");
+    expect(battery.attributes("tabindex")).toBeUndefined();
+    await battery.trigger("click");
+    expect(wrapper.emitted("select")).toBeUndefined();
+  });
+
+  it("操作できるパーツの aria-label は、機器名・現在の状態・押したときの結果を示す", () => {
+    const wrapper = render();
+    expect(part(wrapper, "indirect_light").attributes("aria-label")).toBe(
+      "間接照明 ON。押すと OFF にします",
+    );
+    expect(part(wrapper, "front_door").attributes("aria-label")).toBe(
+      "玄関ドア 施錠中。押すと開錠の確認を開きます",
+    );
+  });
+
+  it("タップ領域は、スマートフォン幅（約 0.5 倍）でも 44px 以上になる大きさ", () => {
+    const wrapper = render();
+    for (const key of operable) {
+      const hit = part(wrapper, key).get(".rd-hit");
+      expect(Number(hit.attributes("width"))).toBeGreaterThanOrEqual(88);
+      expect(Number(hit.attributes("height"))).toBeGreaterThanOrEqual(88);
+    }
+  });
+});
+
+describe("切替中・取得中", () => {
+  it("切替中のパーツは「切替中…」を示し、すべてのパーツを操作できない", async () => {
+    const wrapper = render({ switching: "indirect_light" });
+    expect(part(wrapper, "indirect_light").text()).toContain("切替中…");
+    expect(part(wrapper, "indirect_light").classes()).toContain("is-switching");
+    for (const key of ["indirect_light", "indoor_speaker", "bedside_speaker", "front_door"] as const) {
+      expect(part(wrapper, key).attributes("aria-disabled")).toBe("true");
+      await part(wrapper, key).trigger("click");
+    }
+    expect(wrapper.emitted("select")).toBeUndefined();
+  });
+
+  it("disabled の間は、どのパーツも操作できない", async () => {
+    const wrapper = render({ disabled: true });
+    for (const key of ["indirect_light", "front_door"] as const) {
+      expect(part(wrapper, key).attributes("aria-disabled")).toBe("true");
+      await part(wrapper, key).trigger("click");
+      await part(wrapper, key).trigger("keydown", { key: "Enter" });
+    }
+    expect(wrapper.emitted("select")).toBeUndefined();
+  });
+
+  it("操作できない間も、状態の文言は読める", () => {
+    const wrapper = render({ disabled: true });
+    expect(part(wrapper, "indirect_light").text()).toContain("ON");
+    expect(part(wrapper, "front_door").text()).toContain("施錠中");
+  });
+});
+
+describe("アクセシビリティ", () => {
+  it("図全体にラベルがあり、飾りは読み上げの対象にしない", () => {
+    const wrapper = render();
+    expect(wrapper.get("svg").attributes("aria-label")).toBe("部屋の図");
+    expect(wrapper.get(".rd-wall").attributes("aria-hidden")).toBe("true");
+    expect(wrapper.get(".rd-bed").attributes("aria-hidden")).toBe("true");
+  });
+});

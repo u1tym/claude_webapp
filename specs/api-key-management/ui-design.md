@@ -7,7 +7,7 @@
 
 本機能の `--color-primary` は **Amber `#F2C94C`** とする。
 
-対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`）の画面は変更しない。
+対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`、`room`）の画面は変更しない。
 
 ## 画面一覧
 
@@ -198,3 +198,5 @@
 |------|------|----------|
 | 2026-09-26 00:38 | 未承認 | 初版 |
 | 2026-09-26 00:38 | 承認済み | 初版を承認 |
+| 2026-10-01 13:00 | 未承認 | 対象機能に `room`（ROOM）を追加 |
+| 2026-10-01 13:01 | 承認済み | 対象機能に `room`（ROOM）を追加を承認 |

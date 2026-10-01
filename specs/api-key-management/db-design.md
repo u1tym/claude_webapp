@@ -5,7 +5,7 @@
 
 ## 概要
 
-本機能の固有スキーマ（`api_key_management`）は作らない。API キーの表は、対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`）も直接読むため、スキーマ `public` に置く（`rules/13-db.md` で `public` に置いてよい表）。
+本機能の固有スキーマ（`api_key_management`）は作らない。API キーの表は、対象機能（`goods-management`、`expense-management`、`knowhow-management`、`schedule`、`room`）も直接読むため、スキーマ `public` に置く（`rules/13-db.md` で `public` に置いてよい表）。
 
 - 本機能が作成し、読み書きする表: `public.api_keys`
 - 本機能・対象機能が読むだけの既存の表: `public.users`、`public.sessions`、`public.system_settings`、`public.features`、`public.menu_assignments`（列・制約は `portal` の DDL のとおり。本設計では変えない）
@@ -154,3 +154,5 @@ API キーとして使えるのは、状態が「有効」で、かつ持ち主�
 |------|------|----------|
 | 2026-09-26 00:40 | 未承認 | 初版 |
 | 2026-09-26 00:40 | 承認済み | 初版を承認 |
+| 2026-10-01 13:00 | 未承認 | 対象機能に `room`（ROOM）を追加 |
+| 2026-10-01 13:01 | 承認済み | 対象機能に `room`（ROOM）を追加を承認 |

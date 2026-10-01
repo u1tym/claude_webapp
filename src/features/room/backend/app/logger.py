@@ -1,0 +1,79 @@
+from __future__ import annotations
+
+import logging
+from datetime import datetime
+from logging.handlers import RotatingFileHandler
+from pathlib import Path
+from typing import Literal
+
+from app.config import BACKEND_DIR, load_config
+
+Level = Literal["INF", "WRN", "ERR", "DBG"]
+Source = Literal["api", "job"]
+
+LOG_NAME = "room"
+LOG_FILE = "room.log"
+
+_logger = logging.getLogger(LOG_NAME)
+_logger.setLevel(logging.INFO)
+_logger.propagate = False
+
+# 出力元（API とジョブは同じフォルダへ出すため、行の中で区別する）
+_source: Source = "api"
+
+
+def set_source(source: Source) -> None:
+    """以降のログ行に付ける出力元を切り替える。"""
+    global _source
+    _source = source
+
+
+def safe_text(value: str) -> str:
+    """1 行に収めるため、改行を空白に置き換える。"""
+    return value.replace("\r", " ").replace("\n", " ")
+
+
+def close_logging() -> None:
+    for handler in list(_logger.handlers):
+        handler.close()
+        _logger.removeHandler(handler)
+
+
+def setup_logging(
+    log_dir: Path | None = None,
+    max_bytes: int | None = None,
+    backup_count: int | None = None,
+) -> Path:
+    """サイズでローテーションするファイルログを初期化し、出力先のパスを返す。"""
+    cfg = load_config()
+    directory = log_dir if log_dir is not None else BACKEND_DIR / "log"
+    directory.mkdir(parents=True, exist_ok=True)
+    path = directory / LOG_FILE
+    size = max_bytes if max_bytes is not None else cfg.log_max_bytes
+    generations = backup_count if backup_count is not None else cfg.log_backup_count
+    close_logging()
+    handler = RotatingFileHandler(
+        path,
+        maxBytes=size,
+        backupCount=generations,
+        encoding="utf-8",
+    )
+    handler.setFormatter(logging.Formatter("%(message)s"))
+    _logger.addHandler(handler)
+    return path
+
+
+def write(level: Level, message: str) -> None:
+    """タイムスタンプ、区分、メッセージの順で 1 行を出す。"""
+    if not _logger.handlers:
+        setup_logging()
+    stamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    _logger.info("%s %s [%s] %s", stamp, level, _source, safe_text(message))
+    for handler in _logger.handlers:
+        handler.flush()
+
+
+def write_config_warnings(warnings: tuple[str, ...]) -> None:
+    """設定値の不正で既定を使った判断を WRN として残す。"""
+    for message in warnings:
+        write("WRN", message)

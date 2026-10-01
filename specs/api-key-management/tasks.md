@@ -5,7 +5,7 @@
 
 ## 概要
 
-対象機能: `api-key-management`（本機能）と、API キー認証を追加する対象機能 `goods-management`、`expense-management`、`knowhow-management`、`schedule`。
+対象機能: `api-key-management`（本機能）と、API キー認証を追加する対象機能 `goods-management`、`expense-management`、`knowhow-management`、`schedule`、`room`。
 
 対象機能の改修は、各対象機能の改訂済み SPEC（`requirements.md` / `design.md` / `db-design.md` / `api-design.md`。2026-09-26 承認）に従う。対象機能の `tasks.md` は改訂せず、改修のタスクは本書に置く。
 
@@ -41,6 +41,7 @@
 | T-012 | knowhow-management の API キー認証 | 同上（knowhow-management の改訂 SPEC） | `src/features/knowhow-management/backend/`、`src/features/knowhow-management/tests/` | 3h | 下記 T-010〜T-013 |
 | T-013 | schedule の API キー認証 | 同上（schedule の改訂 SPEC） | `src/features/schedule/backend/`、`src/features/schedule/tests/` | 3h | 下記 T-010〜T-013 |
 | T-014 | 通しの確認（画面で発行 → 他システム相当から利用 → 失効） | REQ-003〜REQ-007 | なし（確認のみ。不具合は該当タスクのパスで直す） | 2h | 下記 T-014 |
+| T-015 | room の API キー認証（実装済み。`specs/room/` で規定） | REQ-006〜REQ-008 / api-design.md §対象機能の API キー認証、room の design.md §認証 / 認可・api-design.md §共通（認証） | `src/features/room/backend/`、`src/features/room/tests/` | 3h（実装済み） | 下記 T-010〜T-013、T-015 |
 
 ---
 
@@ -224,9 +225,9 @@ pytest と FastAPI の TestClient で、開発用 DB（tstdb）に対して API 
 - [ ] 配置例が `rules/17-nginx-deploy.md` の形（スラッシュなしの 301、`rewrite ... last`、`internal` と `try_files`）になっている
 - [ ] 開発環境の機能マスタに `api-key-management` があり、利用ユーザのメニューから開ける
 
-## T-010〜T-013: 対象機能の API キー認証
+## T-010〜T-013、T-015: 対象機能の API キー認証
 
-4 つの対象機能それぞれに、同じ内容を実装する（1 機能 = 1 タスク）。
+5 つの対象機能それぞれに、同じ内容を実装する（1 機能 = 1 タスク）。`room` は、`specs/room/` の設計・タスク（room の T-003）で、同じ内容を実装済みである。
 
 | No | 対象機能 | 実装パス |
 |----|----------|----------|
@@ -234,6 +235,7 @@ pytest と FastAPI の TestClient で、開発用 DB（tstdb）に対して API 
 | T-011 | `expense-management` | `backend/app/deps.py`、`backend/app/security.py`、`backend/app/repos_shared.py`、`tests/test_api_key_auth.py` |
 | T-012 | `knowhow-management` | `backend/app/deps.py`、`backend/app/security.py`、`backend/app/repos.py`、`tests/test_api_key_auth.py` |
 | T-013 | `schedule` | `backend/app/deps.py`、`backend/app/security.py`、`backend/app/repos.py`、`tests/test_api_key_auth.py` |
+| T-015 | `room` | `backend/app/deps.py`、`backend/app/security.py`、`backend/app/repos.py`、`tests/test_auth.py`（実装済み） |
 
 （パスは `src/features/<対象機能>/` からの相対）
 
@@ -262,13 +264,13 @@ pytest と FastAPI の TestClient で、開発用 DB（tstdb）に対して API 
 
 **内容**
 
-開発環境で、本機能と 4 つの対象機能のバックエンドを起動し、次を確認する。他システムの代わりに `curl` 等で要求を送る。
+開発環境で、本機能と 5 つの対象機能のバックエンドを起動し、次を確認する。他システムの代わりに `curl` 等で要求を送る。
 
 **完了条件**
 
-- [ ] 画面で API キーを発行し、発行結果のダイアログからコピーしたキーで、4 機能それぞれの一覧系 API が 200 になる
+- [ ] 画面で API キーを発行し、発行結果のダイアログからコピーしたキーで、5 機能それぞれの一覧系 API が 200 になる
 - [ ] 画面の一覧で、そのキーの最終利用日時が更新されている
-- [ ] 画面で失効させた直後から、4 機能とも 401 になる
+- [ ] 画面で失効させた直後から、5 機能とも 401 になる
 - [ ] 有効期限を短く設定したキーが、期限後に 401 になり、一覧で「期限切れ」になる
 - [ ] 持ち主から 1 機能の割当を外すと、その機能だけ 403 になる
 - [ ] 対象外の機能（例: `note-management`）にキーだけを送ると 401 になる
@@ -282,3 +284,5 @@ pytest と FastAPI の TestClient で、開発用 DB（tstdb）に対して API 
 |------|------|----------|
 | 2026-09-26 00:46 | 未承認 | 初版 |
 | 2026-09-26 00:46 | 承認済み | 初版を承認 |
+| 2026-10-01 13:00 | 未承認 | 対象機能に `room`（ROOM）を追加 |
+| 2026-10-01 13:01 | 承認済み | 対象機能に `room`（ROOM）を追加を承認 |
