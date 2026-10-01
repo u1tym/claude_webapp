@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
@@ -31,6 +32,19 @@ _PLUG_KEYS: tuple[str, ...] = (INDIRECT_LIGHT, INDOOR_SPEAKER, BEDSIDE_SPEAKER)
 _QUERY_KEYS: tuple[str, ...] = (*_PLUG_KEYS, FRONT_DOOR)
 
 DeviceState = dict[str, Any]
+
+# 切替のあと、実機の反映を待つ間隔（秒）。上限は設定値 ROOM_SETTLE_SECONDS
+SETTLE_INTERVAL_SECONDS = 1.5
+
+
+def _sleep(seconds: float) -> None:
+    """待つ。テストでは、実際には待たないよう差し替える。"""
+    time.sleep(seconds)
+
+
+def settle_step(waited: float, limit: float) -> float:
+    """次に待つ秒数。上限（limit）までの残りが、間隔より短ければ、その残りだけ待つ。上限なら 0。"""
+    return max(0.0, min(SETTLE_INTERVAL_SECONDS, limit - waited))
 
 
 @dataclass(frozen=True)
@@ -161,6 +175,29 @@ def send_switch(
         raise DeviceOperationError() from None
 
 
+def read_settled(
+    active: SwitchBotApi | None, cfg: Config, device: str, target: str
+) -> tuple[DeviceState, int]:
+    """指示のあと、実機の反映を待ちながら、目標の状態になるまで状態を取り直す。
+
+    間隔（SETTLE_INTERVAL_SECONDS）をおいて取得し、目標の状態になったら、そこで返す。
+    待った合計が上限（cfg.switch_settle_seconds）に達しても、ならなければ、最後の値を返す。
+    取得できなかった（error）ときも、上限まで取り直す。上限が 0 なら、待たずに 1 回だけ取得する。
+    """
+    limit = cfg.switch_settle_seconds
+    waited = 0.0
+    reads = 0
+    while True:
+        step = settle_step(waited, limit)
+        if step > 0:
+            _sleep(step)
+            waited += step
+        result = read_device(active, cfg, device)
+        reads += 1
+        if (result["status"] == "ok" and result["state"] == target) or waited >= limit:
+            return result, reads
+
+
 def switch_device(
     device: str,
     target: str | None,
@@ -190,12 +227,13 @@ def switch_device(
     active = client if client is not None else build_client(cfg)
     send_switch(active, cfg, device, target, command, actor)
 
-    # 指示のあとに状態を取得し直す。食い違うときは、取得した値を返す
-    result = read_device(active, cfg, device)
+    # 指示のあとに状態を取得し直す。実機の反映が遅れるため、目標の状態になるまで、
+    # 間隔をおいて取り直す（上限は設定値）。食い違ったままなら、最後に取得した値を返す
+    result, reads = read_settled(active, cfg, device, target)
     outcome = result.get("state")
     write(
         "INF",
-        f"機器切替成功 device={device} target={target} 主体={actor} 取得した状態={outcome}",
+        f"機器切替成功 device={device} target={target} 主体={actor} 取得した状態={outcome} 取得回数={reads}",
     )
     if result["status"] == "ok" and outcome != target:
         write("WRN", f"機器切替の結果が目標と異なる device={device} target={target} 取得した状態={outcome}")

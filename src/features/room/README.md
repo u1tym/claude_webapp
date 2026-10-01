@@ -42,6 +42,7 @@ copy .env.example .env      # 値を埋める（下の表）
 | `ROOM_DEVICE_INDIRECT_LIGHT_ID`、`ROOM_DEVICE_INDOOR_SPEAKER_ID`、`ROOM_DEVICE_BEDSIDE_SPEAKER_ID`、`ROOM_DEVICE_FRONT_DOOR_ID` | 各機器の SwitchBot の deviceId |
 | `ROOM_SCHEDULE_GRACE_MINUTES` | 定期実行の起動遅れの猶予（分。既定 5） |
 | `SWITCHBOT_TIMEOUT_SECONDS` | SwitchBot への呼び出しのタイムアウト（秒。既定 10） |
+| `ROOM_SETTLE_SECONDS` | 機器を切り替えたあと、実機の反映を待って状態を取り直す最大の時間（秒。既定 5。0 は待たない）。実機は、指示してから反映されるまで少し時間がかかるため、1.5 秒おきに、目標の状態になるまで取り直す。切替の応答は、最大でこの時間だけ遅くなる |
 
 `.env` は秘密情報を含むため、リポジトリに含めません（`backend/.gitignore` で除外済み）。
 
@@ -210,6 +211,7 @@ Select-String '\[job\]' backend\log\room.log | Select-Object -Last 20   # ジョ
 | 全機器が「取得できません」 | `SwitchBot の認証情報が未設定`、`機器の識別子が未設定`、`HTTP エラー status=401`（トークン・シークレットの誤り）、`通信失敗 type=…` | `backend/.env` の `SWITCHBOT_TOKEN`、`SWITCHBOT_SECRET`、機器の識別子を確認して、API を再起動する |
 | 一部の機器だけ「取得できません」 | `状態取得失敗 device=<機器> 理由=…`。`API エラー statusCode=161` はデバイスがオフライン、`171` は Hub がオフライン、`190` はデバイス内部エラー | SwitchBot アプリで、その機器の接続を確認する |
 | 玄関ドアだけ「取得できません」 | `施錠の状態が想定外の値`（施錠が不完全な状態など） | ドアの状態を、アプリで確認する |
+| 切替の直後に「状態が変わっていません」と出るが、少しあとに実機は反映されている | 実機の反映が、`ROOM_SETTLE_SECONDS`（既定 5 秒）より遅い。ログの `機器切替成功 … 取得回数=N` と、`機器切替の結果が目標と異なる` で分かる | `ROOM_SETTLE_SECONDS` を増やして、API を再起動する（特に、玄関ドアの施錠・開錠は遅い）。MCP の `WEBAPP_TIMEOUT_SECONDS`（既定 10）も、これより長くしておく |
 | 切替が失敗する | `機器切替失敗 device=<機器> target=… 理由=…`（理由は上の行と同じ） | 同上。SwitchBot は 1 日 10,000 リクエストまで（超えると `HTTP エラー status=429`） |
 | 「この機能は利用できません」 | `認可失敗 username=… 理由=権限なし` | 前節「機能マスタへの登録とメニュー割当」で、機能 `room` の登録と、ユーザへの割当を確認する |
 | ログイン画面へ戻される | `認証失敗 理由=未ログイン`。セッションの期限切れ | 再ログインする。期間は `SESSION_TIMEOUT_MINUTES` |

@@ -4,6 +4,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
+from app.config import Config
 from app.errors import DeviceOperationError, NotFoundError
 from app.logger import write
 from app.services import device_service
@@ -75,6 +76,24 @@ def overall_outcome(results: tuple[DeviceOutcome, ...]) -> str:
     return PARTIAL
 
 
+def settle_snapshot(active: SwitchBotApi | None, cfg: Config, expected: dict[str, str]) -> StateSnapshot:
+    """全機器の状態を取得し、指示が成功した機器（expected）が目標の状態になるまで、間隔をおいて取り直す。"""
+    limit = cfg.switch_settle_seconds
+    waited = 0.0
+    while True:
+        step = device_service.settle_step(waited, limit) if expected else 0.0
+        if step > 0:
+            device_service._sleep(step)
+            waited += step
+        snapshot = device_service.fetch_states(active)
+        settled = all(
+            snapshot.devices[device]["status"] == "ok" and snapshot.devices[device]["state"] == target
+            for device, target in expected.items()
+        )
+        if settled or waited >= limit or not expected:
+            return snapshot
+
+
 def run_scene(
     scene: str,
     actor: str,
@@ -122,5 +141,8 @@ def run_scene(
     level = "INF" if outcome == SUCCESS else "WRN"
     write(level, f"一括切替結果 scene={scene} 主体={actor} 全体={outcome} {detail}")
 
-    snapshot = device_service.fetch_states(active) if refetch else None
+    # 実行のあとに、全機器の状態を取り直す。実機の反映を待ち、指示が成功した機器が目標の状態になるまで、
+    # 間隔をおいて取り直す（上限は設定値）。定期実行（refetch=False）は、取り直さない
+    expected = {r.device: r.target for r in results if r.outcome == SUCCESS}
+    snapshot = settle_snapshot(active, cfg, expected) if refetch else None
     return SceneResult(scene=scene, outcome=outcome, results=results, snapshot=snapshot)

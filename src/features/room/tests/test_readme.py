@@ -16,15 +16,16 @@ CONFIG = (ROOM_DIR / "backend" / "app" / "config.py").read_text(encoding="utf-8"
 def _config_keys() -> list[str]:
     """config.py が .env から読む項目名。"""
     keys = re.findall(r'values\.get\("([A-Za-z_]+)"\)', CONFIG)
-    keys += re.findall(r'_positive_int\(\s*values,\s*"([A-Za-z_]+)"', CONFIG)
+    keys += re.findall(r'_(?:positive_int|non_negative_float)\(\s*values,\s*"([A-Za-z_]+)"', CONFIG)
     return sorted(set(keys))
 
 
 def test_config_が読む項目を取り出せている() -> None:
     keys = _config_keys()
     # 取り出しが壊れて、空のまま検証が通ることを防ぐ
-    assert len(keys) >= 17
+    assert len(keys) >= 18
     assert "SWITCHBOT_TOKEN" in keys and "ROOM_SCHEDULE_GRACE_MINUTES" in keys
+    assert "ROOM_SETTLE_SECONDS" in keys
 
 
 @pytest.mark.parametrize("key", _config_keys())

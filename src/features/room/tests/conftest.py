@@ -43,6 +43,16 @@ def switchbot(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
 
 
 @pytest.fixture(autouse=True)
+def sleeps(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """切替のあとの反映待ちを、実際には待たず、待とうとした秒数を記録する。"""
+    from app.services import device_service
+
+    recorded: list[float] = []
+    monkeypatch.setattr(device_service, "_sleep", recorded.append)
+    return recorded
+
+
+@pytest.fixture(autouse=True)
 def log_dir(tmp_path: Path) -> Iterator[Path]:
     """テスト中のログを一時フォルダへ出す。"""
     from app.logger import close_logging, set_source, setup_logging

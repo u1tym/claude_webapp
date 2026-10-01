@@ -14,6 +14,8 @@ FEATURE_ID = "room"
 # 設定値の既定
 DEFAULT_SCHEDULE_GRACE_MINUTES = 5
 DEFAULT_SWITCHBOT_TIMEOUT_SECONDS = 10
+# 機器を切り替えたあと、実機の反映を待って状態を取り直す最大の時間（秒）。0 は待たない
+DEFAULT_SETTLE_SECONDS = 5.0
 
 
 def _loopback_aliases(origins: list[str]) -> list[str]:
@@ -59,6 +61,26 @@ def _positive_int(
     return number
 
 
+def _non_negative_float(
+    values: dict[str, str | None],
+    key: str,
+    default: float,
+    warnings: list[str],
+) -> float:
+    """0 以上の数として読む（0 を許す）。未設定・空は既定。不正値は既定にして警告を残す。"""
+    raw = (values.get(key) or "").strip()
+    if not raw:
+        return default
+    try:
+        number = float(raw)
+    except ValueError:
+        number = -1.0
+    if not number >= 0 or number == float("inf"):
+        warnings.append(f"設定値が不正のため既定を使用 name={key} 既定={default}")
+        return default
+    return number
+
+
 @dataclass(frozen=True)
 class Config:
     db_server: str
@@ -79,6 +101,8 @@ class Config:
     device_bedside_speaker_id: str
     device_front_door_id: str
     switchbot_timeout_seconds: int
+    # 切替のあと、実機の反映を待って状態を取り直す最大の時間（秒）
+    switch_settle_seconds: float
     schedule_grace_minutes: int
     # 設定値の読み取りで不正値を既定にした判断（起動時にログへ出す）
     warnings: tuple[str, ...] = ()
@@ -115,6 +139,9 @@ def load_config(env_path: Path | None = None) -> Config:
             "SWITCHBOT_TIMEOUT_SECONDS",
             DEFAULT_SWITCHBOT_TIMEOUT_SECONDS,
             warnings,
+        ),
+        switch_settle_seconds=_non_negative_float(
+            values, "ROOM_SETTLE_SECONDS", DEFAULT_SETTLE_SECONDS, warnings
         ),
         schedule_grace_minutes=_positive_int(
             values,
