@@ -25,16 +25,24 @@ const emit = defineEmits<{
 
 type Part = { key: DeviceKey; x: number; y: number; width: number; height: number };
 
-// 部屋を上から見た配置。タップ領域は、スマートフォン幅（約 0.5 倍）でも 44px 以上になる大きさにする
+// 2 列 × 3 行の配置（左 → 右、上 → 下の順。キーボードのフォーカスも、この順に進む）
+//   電灯            間接照明
+//   屋内スピーカー  枕元スピーカー
+//   玄関ドア        電池残量
+// タップ領域は、スマートフォン幅（約 0.5 倍）でも 44px 以上になる大きさにする
+const LEFT_X = 75;
+const RIGHT_X = 335;
+const ROW_Y = [40, 210, 370];
 const PARTS: Part[] = [
-  { key: "indirect_light", x: 30, y: 40, width: 150, height: 150 },
-  { key: "ceiling_light", x: 245, y: 40, width: 150, height: 150 },
-  { key: "bedside_speaker", x: 460, y: 40, width: 150, height: 150 },
-  { key: "indoor_speaker", x: 30, y: 210, width: 150, height: 150 },
-  { key: "front_door", x: 30, y: 370, width: 200, height: 130 },
+  { key: "ceiling_light", x: LEFT_X, y: ROW_Y[0], width: 150, height: 150 },
+  { key: "indirect_light", x: RIGHT_X, y: ROW_Y[0], width: 150, height: 150 },
+  { key: "indoor_speaker", x: LEFT_X, y: ROW_Y[1], width: 150, height: 150 },
+  { key: "bedside_speaker", x: RIGHT_X, y: ROW_Y[1], width: 150, height: 150 },
+  { key: "front_door", x: LEFT_X, y: ROW_Y[2], width: 150, height: 130 },
 ];
 
-const BATTERY = { x: 270, y: 385 };
+// 電池残量は、右の列の中央（ゲージ全体の幅は 97。文字は、ゲージの左端から 45 の位置が中心）に、玄関ドアと同じ行に置く
+const BATTERY = { x: RIGHT_X + 75 - 45, y: ROW_Y[2] + 15 };
 const BATTERY_GAUGE_WIDTH = 90;
 
 const blocked = computed(() => Boolean(props.disabled) || props.switching != null);
@@ -78,19 +86,13 @@ const battery = computed(() => {
 <template>
   <svg
     class="rd"
-    viewBox="0 0 640 540"
+    viewBox="0 0 560 540"
     role="group"
     aria-label="部屋の図"
     preserveAspectRatio="xMidYMid meet"
   >
-    <!-- 部屋の壁と、ベッド（飾り） -->
-    <rect class="rd-wall" x="15" y="15" width="610" height="510" rx="14" aria-hidden="true" />
-    <g class="rd-bed" aria-hidden="true">
-      <rect x="400" y="215" width="210" height="200" rx="10" />
-      <rect x="418" y="228" width="174" height="46" rx="10" />
-    </g>
-    <!-- 玄関の開口部（壁の切れ目） -->
-    <rect class="rd-door-gap" x="55" y="516" width="150" height="18" aria-hidden="true" />
+    <!-- 部屋の壁（飾り） -->
+    <rect class="rd-wall" x="15" y="15" width="530" height="510" rx="14" aria-hidden="true" />
 
     <g
       v-for="part in PARTS"
@@ -162,10 +164,10 @@ const battery = computed(() => {
 
       <!-- 玄関ドア: 施錠中は閉じた錠、開錠中は開いた錠 -->
       <g v-else-if="part.key === 'front_door'" class="rd-icon">
-        <rect class="rd-shape" x="80" y="26" width="40" height="32" rx="5" />
+        <rect class="rd-shape" x="55" y="26" width="40" height="32" rx="5" />
         <path
           class="rd-shackle"
-          :d="isOn(part.key) ? 'M87 26 V16 a13 13 0 0 1 26 0 V26' : 'M87 26 V16 a13 13 0 0 1 26 0 V10'"
+          :d="isOn(part.key) ? 'M62 26 V16 a13 13 0 0 1 26 0 V26' : 'M62 26 V16 a13 13 0 0 1 26 0 V10'"
         />
       </g>
 
@@ -239,16 +241,6 @@ const battery = computed(() => {
   fill: var(--color-surface);
   stroke: var(--color-text-muted);
   stroke-width: 4;
-}
-
-.rd-door-gap {
-  fill: var(--color-bg);
-}
-
-.rd-bed rect {
-  fill: none;
-  stroke: var(--color-border);
-  stroke-width: 3;
 }
 
 .rd-hit {

@@ -242,6 +242,102 @@ describe("アクセシビリティ", () => {
     const wrapper = render();
     expect(wrapper.get("svg").attributes("aria-label")).toBe("部屋の図");
     expect(wrapper.get(".rd-wall").attributes("aria-hidden")).toBe("true");
-    expect(wrapper.get(".rd-bed").attributes("aria-hidden")).toBe("true");
+  });
+});
+
+/** パーツの位置（translate(x y)）を読む。 */
+function positionOf(wrapper: VueWrapper, selector: string): { x: number; y: number } {
+  const match = /translate\(([\d.]+) ([\d.]+)\)/.exec(wrapper.get(selector).attributes("transform") ?? "");
+  expect(match, selector).not.toBeNull();
+  return { x: Number(match![1]), y: Number(match![2]) };
+}
+
+describe("配置（2 列 × 3 行）", () => {
+  //   電灯            間接照明
+  //   屋内スピーカー  枕元スピーカー
+  //   玄関ドア        電池残量
+  it("左の列に 電灯・屋内スピーカー・玄関ドア、右の列に 間接照明・枕元スピーカー・電池残量が並ぶ", () => {
+    const wrapper = render();
+    const at = (key: DeviceKey) => positionOf(wrapper, `[data-device="${key}"]`);
+    const battery = positionOf(wrapper, '[data-part="battery"]');
+
+    // 左の列: 同じ x
+    expect(at("ceiling_light").x).toBe(at("indoor_speaker").x);
+    expect(at("indoor_speaker").x).toBe(at("front_door").x);
+    // 右の列: 間接照明と枕元スピーカーは同じ x。電池残量の中心も、同じ列の中心にそろう
+    expect(at("indirect_light").x).toBe(at("bedside_speaker").x);
+    expect(at("indirect_light").x).toBeGreaterThan(at("ceiling_light").x);
+    // 行: 同じ行は同じ y。上から 電灯・間接照明 → 屋内・枕元 → 玄関ドア・電池残量
+    expect(at("ceiling_light").y).toBe(at("indirect_light").y);
+    expect(at("indoor_speaker").y).toBe(at("bedside_speaker").y);
+    expect(at("ceiling_light").y).toBeLessThan(at("indoor_speaker").y);
+    expect(at("indoor_speaker").y).toBeLessThan(at("front_door").y);
+    // 電池残量は、玄関ドアと同じ行（ゲージの位置は、行の上端からの少しの下がり）
+    expect(battery.y).toBeGreaterThanOrEqual(at("front_door").y);
+    expect(battery.y).toBeLessThan(at("front_door").y + 60);
+    expect(battery.x).toBeGreaterThan(at("front_door").x + 150);
+    // 電池残量の文字の中心（ゲージの左端 + 45）が、右の列のパーツの中心（x + 75）にそろう
+    expect(battery.x + 45).toBe(at("indirect_light").x + 75);
+  });
+
+  it("DOM の順（読み上げ・キーボードのフォーカスの順）も、左 → 右、上 → 下", () => {
+    const wrapper = render();
+    const order = wrapper.findAll("[data-device]").map((g) => g.attributes("data-device"));
+    expect(order).toEqual([
+      "ceiling_light",
+      "indirect_light",
+      "indoor_speaker",
+      "bedside_speaker",
+      "front_door",
+    ]);
+    // 電池残量は、その後ろ
+    const all = wrapper.findAll("[data-device], [data-part='battery']").map(
+      (g) => g.attributes("data-device") ?? g.attributes("data-part"),
+    );
+    expect(all.at(-1)).toBe("battery");
+  });
+
+  it("5 つのパーツと電池残量が、重ならない", () => {
+    const wrapper = render();
+    const boxes = [
+      ...(["ceiling_light", "indirect_light", "indoor_speaker", "bedside_speaker", "front_door"] as const).map(
+        (key) => {
+          const { x, y } = positionOf(wrapper, `[data-device="${key}"]`);
+          const hit = wrapper.get(`[data-device="${key}"] .rd-hit`);
+          return { key, x, y, w: Number(hit.attributes("width")), h: Number(hit.attributes("height")) };
+        },
+      ),
+      { key: "battery", ...positionOf(wrapper, '[data-part="battery"]'), w: 97, h: 100 },
+    ];
+    for (let i = 0; i < boxes.length; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]!;
+        const b = boxes[j]!;
+        const overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h;
+        expect(overlap, `${a.key} と ${b.key}`).toBe(false);
+      }
+    }
+  });
+
+  it("全パーツが、壁の内側に収まる", () => {
+    const wrapper = render();
+    const wall = wrapper.get(".rd-wall");
+    const [wx, wy, ww, wh] = ["x", "y", "width", "height"].map((a) => Number(wall.attributes(a)));
+    for (const key of ["ceiling_light", "indirect_light", "indoor_speaker", "bedside_speaker", "front_door"] as const) {
+      const { x, y } = positionOf(wrapper, `[data-device="${key}"]`);
+      const hit = wrapper.get(`[data-device="${key}"] .rd-hit`);
+      expect(x).toBeGreaterThan(wx!);
+      expect(x + Number(hit.attributes("width"))).toBeLessThan(wx! + ww!);
+      expect(y).toBeGreaterThan(wy!);
+      expect(y + Number(hit.attributes("height"))).toBeLessThanOrEqual(wy! + wh!);
+    }
+  });
+
+  it("ベッドと、玄関の切れ目は描かない（飾りは、壁だけ）", () => {
+    const wrapper = render();
+    expect(wrapper.find(".rd-bed").exists()).toBe(false);
+    expect(wrapper.find(".rd-door-gap").exists()).toBe(false);
+    // 壁の外の、読み上げの対象にならない図形は、壁（rd-wall）だけ
+    expect(wrapper.findAll('[aria-hidden="true"]:not(.icon)').map((e) => e.classes()[0])).toEqual(["rd-wall"]);
   });
 });
