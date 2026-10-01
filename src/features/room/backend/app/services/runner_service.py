@@ -8,7 +8,8 @@ from app.actors import ACTOR_JOB
 from app.config import load_config
 from app.logger import write
 from app.repos import RoomScheduleRow
-from app.services import holiday_service, scene_service
+from app.services import device_service, holiday_service, scene_service
+from app.services.device_service import DeviceOperationError
 from app.services.scene_service import FAILURE, SUCCESS
 from app.switchbot.client import SwitchBotApi
 from app.timeutil import JST, now_jst
@@ -41,19 +42,43 @@ class RunReport:
     reason: str | None = None
 
 
+_DAY_SHIFT_DAYS = {"same": 0, "before": 1, "after": -1}
+_WEEKDAY_NAMES = "月火水木金土日"
+
+
+def base_day(schedule: RoomScheduleRow, run_date: date) -> date:
+    """実行日から、基準日（曜日と祝日の扱いで判定する日）を求める。
+
+    「の前の日」は、翌日が基準日である日に実行するので、基準日は実行日の翌日。
+    「の次の日」は、前日が基準日である日に実行するので、基準日は実行日の前日。
+    """
+    return run_date + timedelta(days=_DAY_SHIFT_DAYS.get(schedule.day_shift, 0))
+
+
 def _condition_matches(schedule: RoomScheduleRow, day: date) -> tuple[bool, str]:
-    """実行条件が、予定の日付に合うかと、合わないときの理由を返す。"""
+    """実行条件が、予定の日付（実行日）に合うかと、合わないときの理由を返す。
+
+    実行日そのものは、曜日や祝日で絞らない。基準日（base_day）で判定する。
+    """
     if schedule.condition_type == "daily":
         return True, ""
-    if schedule.condition_type == "weekdays":
-        if day.isoweekday() in schedule.weekdays:
-            return True, ""
-        return False, f"条件に合わない（曜日 {day.isoweekday()} は指定外）"
-    if schedule.condition_type == "holiday":
-        if holiday_service.is_holiday(day):
-            return True, ""
-        return False, "条件に合わない（祝日でない）"
-    return False, "条件に合わない（実行条件が不明）"
+    if schedule.condition_type != "weekdays":
+        return False, "条件に合わない（実行条件が不明）"
+
+    base = base_day(schedule, day)
+    in_weekdays = base.isoweekday() in schedule.weekdays
+    holiday = holiday_service.is_holiday(base)
+    mode = schedule.holiday_mode
+    if mode == "include":
+        matches = in_weekdays or holiday
+    elif mode == "exclude":
+        matches = in_weekdays and not holiday
+    else:
+        matches = in_weekdays
+    if matches:
+        return True, ""
+    detail = f"基準日 {base}（{_WEEKDAY_NAMES[base.weekday()]}曜{'、祝日' if holiday else ''}）"
+    return False, f"基準日でない（{detail} は条件外 祝日の扱い={mode} 実行日の取り方={schedule.day_shift}）"
 
 
 def select_due(
@@ -97,19 +122,59 @@ def select_due(
     return due, skipped
 
 
+def _action_text(schedule: RoomScheduleRow) -> str:
+    if schedule.action_type == "device":
+        return f"action=device device={schedule.device} state={schedule.target_state}"
+    return f"action=scene scene={schedule.scene}"
+
+
+def _execute_device(
+    schedule: RoomScheduleRow, client: SwitchBotApi | None
+) -> tuple[str, tuple[str, ...]]:
+    """機器 1 つの個別切替を実行する。指示は 1 回だけで、反映待ちの取り直しはしない。
+
+    結果は成功か失敗のみ。電灯は未実装のため、何も指示せず成功として扱う。
+    """
+    device = str(schedule.device)
+    target = str(schedule.target_state)
+    if device == "ceiling_light":
+        write("INF", f"定期実行の個別切替 id={schedule.id} device={device} target={target} 判断=未実装のため何も指示しない")
+        return SUCCESS, ()
+    command = device_service.command_for(device, target)
+    if command is None:
+        write("ERR", f"定期実行の個別切替失敗 id={schedule.id} device={device} target={target} 理由=その機器で取り得ない状態")
+        return FAILURE, (device,)
+    cfg = device_service.load_config()
+    active = client if client is not None else device_service.build_client(cfg)
+    try:
+        device_service.send_switch(active, cfg, device, target, command, ACTOR_JOB)
+    except DeviceOperationError:
+        # 失敗の理由は send_switch がログに残している
+        write("WRN", f"定期実行の個別切替 id={schedule.id} device={device} target={target} 主体={ACTOR_JOB} 結果=failure")
+        return FAILURE, (device,)
+    write("INF", f"定期実行の個別切替 id={schedule.id} device={device} target={target} 主体={ACTOR_JOB} 結果=success")
+    return SUCCESS, ()
+
+
 def _execute(
     item: DueSchedule, client: SwitchBotApi | None
 ) -> tuple[str, tuple[str, ...]]:
-    """一括切替を実行し、最終実行に残す結果と失敗した機器を返す。例外は失敗として扱う。"""
+    """実行内容を実行し、最終実行に残す結果と失敗した機器を返す。例外は失敗として扱う。"""
     schedule = item.schedule
+    if schedule.action_type == "device":
+        try:
+            return _execute_device(schedule, client)
+        except Exception as exc:  # 想定外の失敗でも、他の定期実行は続ける
+            write("ERR", f"定期実行の実行失敗 id={schedule.id} {_action_text(schedule)} 理由={type(exc).__name__}")
+            device = str(schedule.device)
+            return FAILURE, (device,) if device in _RECORDABLE_DEVICES else ()
+    scene = str(schedule.scene)
     try:
-        result = scene_service.run_scene(
-            schedule.scene, actor=ACTOR_JOB, client=client, refetch=False
-        )
+        result = scene_service.run_scene(scene, actor=ACTOR_JOB, client=client, refetch=False)
     except Exception as exc:  # 想定外の失敗でも、他の定期実行は続ける
-        write("ERR", f"定期実行の実行失敗 id={schedule.id} scene={schedule.scene} 理由={type(exc).__name__}")
+        write("ERR", f"定期実行の実行失敗 id={schedule.id} scene={scene} 理由={type(exc).__name__}")
         return FAILURE, tuple(
-            device for device, _ in scene_service.SCENES.get(schedule.scene, ()) if device != "ceiling_light"
+            device for device, _ in scene_service.SCENES.get(scene, ()) if device != "ceiling_light"
         )
     failed = tuple(
         r.device for r in result.results if r.outcome == FAILURE and r.device in _RECORDABLE_DEVICES
@@ -151,15 +216,16 @@ def run_once(
                 continue
             write(
                 "INF",
-                f"定期実行の判定 id={schedule.id} 判断=実行する scene={schedule.scene} "
-                f"条件={schedule.condition_type} 時刻={schedule.run_time.strftime('%H:%M')} 実行日={item.run_date}",
+                f"定期実行の判定 id={schedule.id} 判断=実行する {_action_text(schedule)} "
+                f"条件={schedule.condition_type} 祝日の扱い={schedule.holiday_mode} 実行日の取り方={schedule.day_shift} "
+                f"時刻={schedule.run_time.strftime('%H:%M')} 実行日={item.run_date} 基準日={base_day(schedule, item.run_date)}",
             )
             outcome, failed = _execute(item, client)
             repos.update_last_run(schedule.id, now_jst(), outcome, failed)
             level = "INF" if outcome == SUCCESS else "WRN"
             write(
                 level,
-                f"定期実行の結果 id={schedule.id} scene={schedule.scene} 結果={outcome} 失敗した機器={list(failed)}",
+                f"定期実行の結果 id={schedule.id} {_action_text(schedule)} 結果={outcome} 失敗した機器={list(failed)}",
             )
             reports.append(RunReport(schedule.id, item.run_date, outcome))
         except Exception as exc:  # DB の失敗など。他の定期実行は続ける

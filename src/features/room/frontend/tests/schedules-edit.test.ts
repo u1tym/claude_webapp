@@ -10,8 +10,12 @@ function item(override: Partial<ScheduleItem> = {}): ScheduleItem {
     id: 1,
     condition: "daily",
     weekdays: [],
+    holiday_mode: "none",
+    day_shift: "same",
     run_time: "07:00",
     scene: "indoor_speaker",
+    device: null,
+    state: null,
     is_enabled: true,
     last_run: null,
     ...override,
@@ -61,6 +65,7 @@ async function fillAndSave(
 ): Promise<void> {
   await wrapper.get(`input[name="condition"][value="${values.condition}"]`).setValue(true);
   await wrapper.get("#schedule-time").setValue(values.time);
+  await wrapper.get('input[name="action-type"][value="scene"]').setValue(true);
   await wrapper.get("#schedule-scene").setValue(values.scene);
   await wrapper.get("form").trigger("submit");
   await flushPromises();
@@ -87,16 +92,16 @@ describe("新規登録", () => {
     const wrapper = await mountSchedules();
     await wrapper.get('.schedules-top [aria-label="新規"]').trigger("click");
 
-    await fillAndSave(wrapper, { condition: "holiday", time: "12:30", scene: "out" });
+    await fillAndSave(wrapper, { condition: "daily", time: "12:30", scene: "out" });
 
     expect(calls.at(-1)).toEqual({
       method: "POST",
       path: "/schedules",
-      body: { condition: "holiday", weekdays: [], run_time: "12:30", scene: "out", is_enabled: true },
+      body: { condition: "daily", weekdays: [], run_time: "12:30", scene: "out", is_enabled: true },
     });
     expect(wrapper.find("[role=dialog]").exists()).toBe(false);
     expect(rows(wrapper).map((r) => r.get(".sch-time").text())).toEqual(["07:00", "12:30", "22:00"]);
-    expect(row(wrapper, 100).get(".sch-condition").text()).toBe("祝日");
+    expect(row(wrapper, 100).get(".sch-condition").text()).toBe("毎日");
     expect(row(wrapper, 100).get(".sch-scene").text()).toBe("お出かけ");
     expect(row(wrapper, 100).get(".sch-last").text()).toBe("未実行");
     expect(status(wrapper).text()).toBe("登録しました。");
@@ -111,11 +116,34 @@ describe("新規登録", () => {
     await wrapper.get('[aria-label="水曜日"]').trigger("click");
     await wrapper.get('[aria-label="月曜日"]').trigger("click");
     await wrapper.get("#schedule-time").setValue("06:00");
+    await wrapper.get('input[name="action-type"][value="scene"]').setValue(true);
     await wrapper.get("#schedule-scene").setValue("indirect_light");
     await wrapper.get("form").trigger("submit");
     await flushPromises();
 
     expect(row(wrapper, 100).get(".sch-condition").text()).toBe("月・水");
+  });
+
+  it("祝日を除く・の前の日の個別切替を登録すると、一覧に条件と実行内容が表示される", async () => {
+    mockApi(serverHandler([item()]));
+    const wrapper = await mountSchedules();
+    await wrapper.get('.schedules-top [aria-label="新規"]').trigger("click");
+    await wrapper.get('input[value="weekdays"]').setValue(true);
+    for (const label of ["月", "火", "水", "木", "金"]) {
+      await wrapper.get(`[aria-label="${label}曜日"]`).trigger("click");
+    }
+    await wrapper.get('input[name="holiday-mode"][value="exclude"]').setValue(true);
+    await wrapper.get('input[name="day-shift"][value="before"]').setValue(true);
+    await wrapper.get("#schedule-time").setValue("21:30");
+    await wrapper.get('input[name="action-type"][value="device"]').setValue(true);
+    await wrapper.get("#schedule-device").setValue("indirect_light");
+    await wrapper.get('input[name="state"][value="on"]').setValue(true);
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    expect(wrapper.find("[role=dialog]").exists()).toBe(false);
+    expect(row(wrapper, 100).get(".sch-condition").text()).toBe("月・火・水・木・金（祝日を除く）の前の日");
+    expect(row(wrapper, 100).get(".sch-scene").text()).toBe("間接照明を ON");
   });
 
   it("空の一覧からも登録でき、表が現れる", async () => {

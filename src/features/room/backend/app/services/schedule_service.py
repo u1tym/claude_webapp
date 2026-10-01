@@ -8,10 +8,15 @@ from typing import Any
 from app import repos
 from app.errors import InvalidInputError, NotFoundError
 from app.logger import write
-from app.repos import RoomScheduleRow
+from app.repos import RoomScheduleRow, ScheduleDefinition
 from app.timeutil import iso_seconds
 
-CONDITIONS = ("daily", "weekdays", "holiday")
+CONDITIONS = ("daily", "weekdays")
+HOLIDAY_MODES = ("none", "include", "exclude")
+DAY_SHIFTS = ("same", "before", "after")
+# 個別切替の機器。玄関ドアは対象外
+DEVICES = ("ceiling_light", "indirect_light", "indoor_speaker", "bedside_speaker")
+STATES = ("on", "off")
 SCENES = ("indoor_speaker", "bedside_speaker", "ceiling_light", "indirect_light", "out")
 
 # 時刻は HH:MM（00:00〜23:59）。秒は受け付けない
@@ -29,14 +34,15 @@ class ScheduleInput:
     run_time: object
     scene: object
     is_enabled: object
+    holiday_mode: object = None
+    day_shift: object = None
+    device: object = None
+    state: object = None
 
 
 @dataclass(frozen=True)
 class ValidScheduleInput:
-    condition: str
-    weekdays: tuple[int, ...]
-    run_time: time
-    scene: str
+    definition: ScheduleDefinition
     is_enabled: bool | None
 
 
@@ -61,7 +67,7 @@ def validate(data: ScheduleInput) -> ValidScheduleInput:
             weekdays = tuple(sorted(weekdays_raw))
     if condition == "weekdays" and not weekdays and "曜日が不正" not in reasons:
         reasons.append("曜日の指定なのに曜日がない")
-    if condition in ("daily", "holiday") and weekdays:
+    if condition == "daily" and weekdays:
         reasons.append("曜日の指定でないのに曜日がある")
 
     run_time: time | None = None
@@ -72,8 +78,40 @@ def validate(data: ScheduleInput) -> ValidScheduleInput:
     if run_time is None:
         reasons.append("時刻の形式が不正")
 
-    if data.scene not in SCENES:
-        reasons.append("一括切替が不正")
+    # 祝日の扱い・実行日の取り方。省略時は既定。毎日のときは既定のみ
+    holiday_mode = "none" if data.holiday_mode is None else data.holiday_mode
+    if holiday_mode not in HOLIDAY_MODES:
+        reasons.append("祝日の扱いが不正")
+    day_shift = "same" if data.day_shift is None else data.day_shift
+    if day_shift not in DAY_SHIFTS:
+        reasons.append("実行日の取り方が不正")
+    if condition == "daily" and (
+        (holiday_mode in HOLIDAY_MODES and holiday_mode != "none")
+        or (day_shift in DAY_SHIFTS and day_shift != "same")
+    ):
+        reasons.append("毎日なのに祝日の扱いか実行日の取り方がある")
+
+    # 実行内容は、一括切替（scene）か、機器の個別切替（device + state）のどちらか一方
+    has_scene = data.scene is not None
+    has_device = data.device is not None
+    has_state = data.state is not None
+    action_type = "scene"
+    if has_scene and (has_device or has_state):
+        reasons.append("一括切替と個別切替の両方がある")
+    elif has_scene:
+        if data.scene not in SCENES:
+            reasons.append("一括切替が不正")
+    elif has_device or has_state:
+        action_type = "device"
+        if not (has_device and has_state):
+            reasons.append("個別切替は機器と状態の両方が必要")
+        else:
+            if data.device not in DEVICES:
+                reasons.append("機器が不正")
+            if data.state not in STATES:
+                reasons.append("状態が不正")
+    else:
+        reasons.append("実行内容がない")
 
     is_enabled = data.is_enabled
     if is_enabled is not None and not isinstance(is_enabled, bool):
@@ -83,11 +121,20 @@ def validate(data: ScheduleInput) -> ValidScheduleInput:
         write("WRN", f"定期実行の入力不正 理由={'、'.join(reasons)}")
         raise InvalidInputError()
     assert run_time is not None
-    return ValidScheduleInput(
-        condition=str(condition),
+    is_scene = action_type == "scene"
+    definition = ScheduleDefinition(
+        condition_type=str(condition),
         weekdays=weekdays,
+        holiday_mode=str(holiday_mode),
+        day_shift=str(day_shift),
         run_time=run_time,
-        scene=str(data.scene),
+        action_type=action_type,
+        scene=str(data.scene) if is_scene else None,
+        device=None if is_scene else str(data.device),
+        target_state=None if is_scene else str(data.state),
+    )
+    return ValidScheduleInput(
+        definition=definition,
         is_enabled=is_enabled if isinstance(is_enabled, bool) else None,
     )
 
@@ -105,8 +152,12 @@ def to_api(row: RoomScheduleRow) -> dict[str, Any]:
         "id": row.id,
         "condition": row.condition_type,
         "weekdays": list(row.weekdays),
+        "holiday_mode": row.holiday_mode,
+        "day_shift": row.day_shift,
         "run_time": row.run_time.strftime("%H:%M"),
         "scene": row.scene,
+        "device": row.device,
+        "state": row.target_state,
         "is_enabled": row.is_enabled,
         "last_run": last_run,
     }
@@ -119,9 +170,14 @@ def _check_id(schedule_id: int) -> None:
 
 
 def _describe(data: ValidScheduleInput) -> str:
+    d = data.definition
+    action = (
+        f"scene={d.scene}" if d.action_type == "scene" else f"device={d.device} state={d.target_state}"
+    )
     return (
-        f"condition={data.condition} weekdays={list(data.weekdays)} "
-        f"run_time={data.run_time.strftime('%H:%M')} scene={data.scene} is_enabled={data.is_enabled}"
+        f"condition={d.condition_type} weekdays={list(d.weekdays)} holiday_mode={d.holiday_mode} "
+        f"day_shift={d.day_shift} run_time={d.run_time.strftime('%H:%M')} action={d.action_type} "
+        f"{action} is_enabled={data.is_enabled}"
     )
 
 
@@ -135,9 +191,7 @@ def create_schedule(data: ScheduleInput, user_id: int, username: str = "") -> di
     valid = validate(data)
     write("INF", f"定期実行の登録要求 username={username} {_describe(valid)}")
     enabled = True if valid.is_enabled is None else valid.is_enabled
-    schedule_id = repos.insert_room_schedule(
-        user_id, valid.condition, valid.weekdays, valid.run_time, valid.scene, enabled
-    )
+    schedule_id = repos.insert_room_schedule(user_id, valid.definition, enabled)
     row = repos.get_room_schedule(schedule_id)
     assert row is not None
     write("INF", f"定期実行の登録成功 id={schedule_id}")
@@ -150,14 +204,7 @@ def update_schedule(
     _check_id(schedule_id)
     valid = validate(data)
     write("INF", f"定期実行の変更要求 id={schedule_id} username={username} {_describe(valid)}")
-    updated = repos.update_room_schedule(
-        schedule_id,
-        valid.condition,
-        valid.weekdays,
-        valid.run_time,
-        valid.scene,
-        valid.is_enabled,
-    )
+    updated = repos.update_room_schedule(schedule_id, valid.definition, valid.is_enabled)
     if not updated:
         write("WRN", f"定期実行の変更失敗 id={schedule_id} 理由=対象なし")
         raise NotFoundError()

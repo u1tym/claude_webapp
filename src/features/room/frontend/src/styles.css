@@ -719,3 +719,11 @@ button:disabled {
   background: color-mix(in srgb, var(--color-primary) 22%, var(--color-surface));
   font-weight: 600;
 }
+
+/* 項目が多く、モーダルの中身がスクロールするとき、保存とキャンセルを下端に残す */
+.editor .dialog-actions {
+  position: sticky;
+  bottom: calc(var(--space) * -3);
+  padding: var(--space) 0 0;
+  background: var(--color-surface);
+}

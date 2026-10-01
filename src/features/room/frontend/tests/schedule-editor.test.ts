@@ -16,8 +16,12 @@ function item(override: Partial<ScheduleItem> = {}): ScheduleItem {
     id: 7,
     condition: "weekdays",
     weekdays: [1, 3],
+    holiday_mode: "none",
+    day_shift: "same",
     run_time: "22:30",
     scene: "out",
+    device: null,
+    state: null,
     is_enabled: false,
     last_run: null,
     ...override,
@@ -54,6 +58,7 @@ async function fill(
     await wrapper.get("#schedule-time").setValue(values.time);
   }
   if (values.scene !== undefined) {
+    await wrapper.get('input[name="action-type"][value="scene"]').setValue(true);
     await wrapper.get("#schedule-scene").setValue(values.scene);
   }
 }
@@ -66,18 +71,30 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
+const emptyForm: ScheduleForm = {
+  condition: "",
+  weekdays: [],
+  holidayMode: "none",
+  dayShift: "same",
+  time: "",
+  actionType: "",
+  scene: "",
+  device: "",
+  state: "",
+  enabled: true,
+};
+
 describe("入力フォームの補助関数", () => {
   const valid: ScheduleForm = {
+    ...emptyForm,
     condition: "daily",
-    weekdays: [],
     time: "07:00",
+    actionType: "scene",
     scene: "out",
-    enabled: true,
   };
 
   it("正しい入力は null（問題なし）", () => {
     expect(validateScheduleForm(valid)).toBeNull();
-    expect(validateScheduleForm({ ...valid, condition: "holiday" })).toBeNull();
     expect(validateScheduleForm({ ...valid, condition: "weekdays", weekdays: [3] })).toBeNull();
     expect(validateScheduleForm({ ...valid, time: "00:00" })).toBeNull();
     expect(validateScheduleForm({ ...valid, time: "23:59" })).toBeNull();
@@ -95,7 +112,7 @@ describe("入力フォームの補助関数", () => {
 
   it("曜日の指定でないときは、曜日が空でもよい（選んだ曜日が残っていてもよい）", () => {
     expect(validateScheduleForm({ ...valid, condition: "daily", weekdays: [] })).toBeNull();
-    expect(validateScheduleForm({ ...valid, condition: "holiday", weekdays: [1, 2] })).toBeNull();
+    expect(validateScheduleForm({ ...valid, condition: "daily", weekdays: [1, 2] })).toBeNull();
   });
 
   it.each(["", "7:00", "24:00", "12:60", "07:00:30", "abc", "0700", "07-00"])(
@@ -107,53 +124,130 @@ describe("入力フォームの補助関数", () => {
     },
   );
 
+  it("実行内容の種類が未選択", () => {
+    expect(validateScheduleForm({ ...valid, actionType: "", scene: "" })).toBe(
+      "実行内容を選択してください。",
+    );
+  });
+
   it("一括切替が未選択", () => {
     expect(validateScheduleForm({ ...valid, scene: "" })).toBe("一括切替を選択してください。");
   });
 
-  it("問題が複数あるときは、最初の 1 件だけを返す（実行条件 → 曜日 → 時刻 → 一括切替の順）", () => {
-    expect(validateScheduleForm({ condition: "", weekdays: [], time: "", scene: "", enabled: true })).toBe(
-      "実行条件を選択してください。",
+  it("機器の個別切替: 機器が未選択、状態が未選択", () => {
+    const device = { ...valid, actionType: "device" as const, scene: "" as const };
+    expect(validateScheduleForm(device)).toBe("機器を選択してください。");
+    expect(validateScheduleForm({ ...device, device: "indirect_light" })).toBe(
+      "状態（ON / OFF）を選択してください。",
     );
-    expect(
-      validateScheduleForm({ condition: "weekdays", weekdays: [], time: "", scene: "", enabled: true }),
-    ).toBe("曜日を 1 つ以上選択してください。");
-    expect(
-      validateScheduleForm({ condition: "daily", weekdays: [], time: "", scene: "", enabled: true }),
-    ).toBe("時刻を HH:MM の形式で入力してください。");
+    expect(validateScheduleForm({ ...device, state: "on" })).toBe("機器を選択してください。");
+    expect(validateScheduleForm({ ...device, device: "indirect_light", state: "off" })).toBeNull();
   });
 
-  it("本文は、曜日の指定のときだけ曜日を付け、昇順にする", () => {
-    expect(toScheduleBody({ ...valid, condition: "weekdays", weekdays: [5, 1, 3] })).toEqual({
-      condition: "weekdays",
-      weekdays: [1, 3, 5],
+  it("個別切替では、一括切替が残っていても検証に影響しない", () => {
+    expect(
+      validateScheduleForm({ ...valid, actionType: "device", scene: "out", device: "indoor_speaker", state: "on" }),
+    ).toBeNull();
+  });
+
+  it("問題が複数あるときは、最初の 1 件だけを返す（実行条件 → 曜日 → 時刻 → 実行内容の順）", () => {
+    expect(validateScheduleForm(emptyForm)).toBe("実行条件を選択してください。");
+    expect(validateScheduleForm({ ...emptyForm, condition: "weekdays" })).toBe(
+      "曜日を 1 つ以上選択してください。",
+    );
+    expect(validateScheduleForm({ ...emptyForm, condition: "daily" })).toBe(
+      "時刻を HH:MM の形式で入力してください。",
+    );
+    expect(validateScheduleForm({ ...emptyForm, condition: "daily", time: "07:00" })).toBe(
+      "実行内容を選択してください。",
+    );
+  });
+
+  it("本文（毎日・一括切替）: 曜日・祝日の扱い・実行日の取り方・機器・状態を付けない", () => {
+    expect(toScheduleBody({ ...valid, weekdays: [1, 2], holidayMode: "exclude", dayShift: "before" })).toEqual({
+      condition: "daily",
+      weekdays: [],
       run_time: "07:00",
       scene: "out",
       is_enabled: true,
     });
-    expect(toScheduleBody({ ...valid, condition: "daily", weekdays: [1, 2] }).weekdays).toEqual([]);
-    expect(toScheduleBody({ ...valid, condition: "holiday", weekdays: [1, 2] }).weekdays).toEqual([]);
+  });
+
+  it("本文（曜日の指定）: 曜日を昇順で、祝日の扱いと実行日の取り方を付ける", () => {
+    expect(
+      toScheduleBody({
+        ...valid,
+        condition: "weekdays",
+        weekdays: [5, 1, 3],
+        holidayMode: "exclude",
+        dayShift: "after",
+      }),
+    ).toEqual({
+      condition: "weekdays",
+      weekdays: [1, 3, 5],
+      holiday_mode: "exclude",
+      day_shift: "after",
+      run_time: "07:00",
+      scene: "out",
+      is_enabled: true,
+    });
+  });
+
+  it("本文（個別切替）: device と state だけを付け、scene を付けない", () => {
+    expect(
+      toScheduleBody({
+        ...valid,
+        actionType: "device",
+        scene: "out",
+        device: "bedside_speaker",
+        state: "off",
+      }),
+    ).toEqual({
+      condition: "daily",
+      weekdays: [],
+      run_time: "07:00",
+      device: "bedside_speaker",
+      state: "off",
+      is_enabled: true,
+    });
   });
 
   it("初期値: 新規は空で有効、変更は現在の値（元の配列を共有しない）", () => {
-    expect(formFromItem(null)).toEqual({
-      condition: "",
-      weekdays: [],
-      time: "",
-      scene: "",
-      enabled: true,
-    });
+    expect(formFromItem(null)).toEqual(emptyForm);
     const source = item();
     const form = formFromItem(source);
     expect(form).toEqual({
+      ...emptyForm,
       condition: "weekdays",
       weekdays: [1, 3],
       time: "22:30",
+      actionType: "scene",
       scene: "out",
       enabled: false,
     });
     form.weekdays.push(7);
     expect(source.weekdays).toEqual([1, 3]);
+  });
+
+  it("初期値: 祝日の扱い・実行日の取り方・個別切替の内容が入る", () => {
+    expect(
+      formFromItem(
+        item({
+          holiday_mode: "include",
+          day_shift: "before",
+          scene: null,
+          device: "indirect_light",
+          state: "off",
+        }),
+      ),
+    ).toMatchObject({
+      holidayMode: "include",
+      dayShift: "before",
+      actionType: "device",
+      scene: "",
+      device: "indirect_light",
+      state: "off",
+    });
   });
 });
 
@@ -167,26 +261,29 @@ describe("表示", () => {
     expect(radios.map((r) => (r.element as HTMLInputElement).value)).toEqual([
       "daily",
       "weekdays",
-      "holiday",
     ]);
     expect(radios.every((r) => !(r.element as HTMLInputElement).checked)).toBe(true);
     expect(wrapper.get('[role="switch"]').attributes("aria-checked")).toBe("true");
     expect(wrapper.find(".chips").exists()).toBe(false);
     expect((wrapper.get("#schedule-time").element as HTMLInputElement).value).toBe("");
-    expect((wrapper.get("#schedule-scene").element as HTMLSelectElement).value).toBe("");
+    expect(wrapper.find("#schedule-scene").exists()).toBe(false);
+    expect(wrapper.find("#schedule-device").exists()).toBe(false);
   });
 
-  it("実行条件の選択肢は「毎日」「曜日の指定」「祝日の指定」", () => {
+  it("実行条件の選択肢は「毎日」「曜日の指定」の 2 つだけ", () => {
     const wrapper = mountEditor();
-    expect(wrapper.findAll(".editor-radio").map((l) => l.text())).toEqual([
+    const labels = wrapper
+      .findAll('input[name="condition"]')
+      .map((r) => r.element.parentElement?.textContent?.trim());
+    expect(labels).toEqual([
       "毎日",
       "曜日の指定",
-      "祝日の指定",
     ]);
   });
 
-  it("一括切替の選択肢は 5 種だけで、玄関ドアの施錠・開錠を含めない", () => {
+  it("一括切替の選択肢は 5 種だけで、玄関ドアの施錠・開錠を含めない", async () => {
     const wrapper = mountEditor();
+    await wrapper.get('input[name="action-type"][value="scene"]').setValue(true);
     const options = wrapper.findAll("#schedule-scene option").map((o) => o.text());
     expect(options).toEqual([
       "選択してください",
@@ -221,7 +318,7 @@ describe("表示", () => {
     const wrapper = mountEditor();
     await fill(wrapper, { condition: "weekdays" });
     expect(wrapper.find(".chips").exists()).toBe(true);
-    await fill(wrapper, { condition: "holiday" });
+    await fill(wrapper, { condition: "daily" });
     expect(wrapper.find(".chips").exists()).toBe(false);
   });
 
@@ -273,7 +370,7 @@ describe("送信前の検証", () => {
     [{}, "実行条件を選択してください。"],
     [{ condition: "weekdays", time: "07:00", scene: "out" }, "曜日を 1 つ以上選択してください。"],
     [{ condition: "daily", scene: "out" }, "時刻を HH:MM の形式で入力してください。"],
-    [{ condition: "daily", time: "07:00" }, "一括切替を選択してください。"],
+    [{ condition: "daily", time: "07:00" }, "実行内容を選択してください。"],
   ])("入力 %j は送信せず、先頭に「%s」を示し、モーダルは開いたまま", async (values, message) => {
     const { calls } = mockApi(okHandler);
     const wrapper = mountEditor();
@@ -314,7 +411,7 @@ describe("送信前の検証", () => {
 describe("登録", () => {
   it.each([
     ["毎日", { condition: "daily", time: "07:00", scene: "indoor_speaker" }, [], "daily"],
-    ["祝日", { condition: "holiday", time: "09:15", scene: "ceiling_light" }, [], "holiday"],
+    ["毎日（電灯選択）", { condition: "daily", time: "09:15", scene: "ceiling_light" }, [], "daily"],
   ])("%s の定期実行を POST /schedules で登録する", async (_name, values, weekdays, condition) => {
     const { calls } = mockApi(okHandler);
     const wrapper = mountEditor();
@@ -352,6 +449,8 @@ describe("登録", () => {
     expect(calls[0]!.body).toEqual({
       condition: "weekdays",
       weekdays: [1, 3, 5],
+      holiday_mode: "none",
+      day_shift: "same",
       run_time: "22:30",
       scene: "out",
       is_enabled: true,
@@ -427,6 +526,8 @@ describe("変更", () => {
         body: {
           condition: "weekdays",
           weekdays: [1, 3, 5],
+          holiday_mode: "none",
+          day_shift: "same",
           run_time: "06:45",
           scene: "bedside_speaker",
           is_enabled: true,
@@ -441,10 +542,10 @@ describe("変更", () => {
   it("実行条件を変えると、曜日を外して送る", async () => {
     const { calls } = mockApi(okHandler);
     const wrapper = mountEditor(item());
-    await fill(wrapper, { condition: "holiday" });
+    await fill(wrapper, { condition: "daily" });
     await submit(wrapper);
     await flushPromises();
-    expect(calls[0]!.body).toMatchObject({ condition: "holiday", weekdays: [] });
+    expect(calls[0]!.body).toMatchObject({ condition: "daily", weekdays: [] });
   });
 
   it("変更でも、曜日の指定で曜日を外して 0 件にすると送信しない", async () => {
@@ -570,5 +671,253 @@ describe("閉じる操作", () => {
     const wrapper = mountEditor();
     await wrapper.get(".dialog-overlay").trigger("click");
     expect(wrapper.emitted("cancel")).toBeUndefined();
+  });
+});
+
+
+// ---- 祝日の扱い・実行日の取り方・実行内容（T-025） ----
+
+const radioValues = (w: VueWrapper, name: string) =>
+  w.findAll(`input[name="${name}"]`).map((r) => (r.element as HTMLInputElement).value);
+const radioLabels = (w: VueWrapper, name: string) =>
+  w.findAll(`input[name="${name}"]`).map((r) => r.element.parentElement?.textContent?.trim());
+const checked = (w: VueWrapper, name: string) =>
+  w
+    .findAll(`input[name="${name}"]`)
+    .filter((r) => (r.element as HTMLInputElement).checked)
+    .map((r) => (r.element as HTMLInputElement).value);
+const pick = (w: VueWrapper, name: string, value: string) =>
+  w.get(`input[name="${name}"][value="${value}"]`).setValue(true);
+
+describe("祝日の扱いと実行日の取り方", () => {
+  it("実行条件が「曜日の指定」のときだけ出る", async () => {
+    const wrapper = mountEditor();
+    expect(wrapper.find('input[name="holiday-mode"]').exists()).toBe(false);
+    expect(wrapper.find('input[name="day-shift"]').exists()).toBe(false);
+
+    await pick(wrapper, "condition", "weekdays");
+    expect(radioValues(wrapper, "holiday-mode")).toEqual(["none", "include", "exclude"]);
+    expect(radioLabels(wrapper, "holiday-mode")).toEqual([
+      "指定した曜日のみ",
+      "祝日も実行",
+      "祝日は実行しない",
+    ]);
+    expect(radioValues(wrapper, "day-shift")).toEqual(["same", "before", "after"]);
+    expect(radioLabels(wrapper, "day-shift")).toEqual(["当日", "の前の日", "の次の日"]);
+
+    await pick(wrapper, "condition", "daily");
+    expect(wrapper.find('input[name="holiday-mode"]').exists()).toBe(false);
+    expect(wrapper.find('input[name="day-shift"]').exists()).toBe(false);
+  });
+
+  it("既定は「指定した曜日のみ」と「当日」。説明が添えられる", async () => {
+    const wrapper = mountEditor();
+    await pick(wrapper, "condition", "weekdays");
+    expect(checked(wrapper, "holiday-mode")).toEqual(["none"]);
+    expect(checked(wrapper, "day-shift")).toEqual(["same"]);
+    expect(wrapper.text()).toContain(
+      "祝日も実行は、指定した曜日に加えて祝日にも実行します。祝日は実行しないは、指定した曜日のうち祝日を除きます。",
+    );
+    expect(wrapper.text()).toContain(
+      "上で決まる日に対して、実行する日を選びます。の前の日は前日、の次の日は翌日に実行します。",
+    );
+  });
+
+  it.each([
+    ["include", "before"],
+    ["exclude", "after"],
+    ["none", "before"],
+  ] as const)("祝日の扱い %s・実行日の取り方 %s を送る", async (mode, shift) => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "weekdays", time: "21:00", scene: "out" });
+    await chip(wrapper, "月").trigger("click");
+    await pick(wrapper, "holiday-mode", mode);
+    await pick(wrapper, "day-shift", shift);
+
+    await submit(wrapper);
+    await flushPromises();
+
+    expect(calls[0]!.body).toEqual({
+      condition: "weekdays",
+      weekdays: [1],
+      holiday_mode: mode,
+      day_shift: shift,
+      run_time: "21:00",
+      scene: "out",
+      is_enabled: true,
+    });
+  });
+
+  it("曜日の指定で選んだあと「毎日」に変えたら、祝日の扱いと実行日の取り方は送らない", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "weekdays", time: "21:00", scene: "out" });
+    await chip(wrapper, "火").trigger("click");
+    await pick(wrapper, "holiday-mode", "exclude");
+    await pick(wrapper, "day-shift", "before");
+    await pick(wrapper, "condition", "daily");
+
+    await submit(wrapper);
+    await flushPromises();
+
+    expect(calls[0]!.body).toEqual({
+      condition: "daily",
+      weekdays: [],
+      run_time: "21:00",
+      scene: "out",
+      is_enabled: true,
+    });
+  });
+
+  it("変更: 現在の祝日の扱いと実行日の取り方が初期値に入る", () => {
+    const wrapper = mountEditor(item({ holiday_mode: "exclude", day_shift: "after" }));
+    expect(checked(wrapper, "holiday-mode")).toEqual(["exclude"]);
+    expect(checked(wrapper, "day-shift")).toEqual(["after"]);
+  });
+});
+
+describe("実行内容", () => {
+  it("新規は、種類（一括切替／機器の個別切替）が未選択で、続きの入力は出ない", () => {
+    const wrapper = mountEditor();
+    expect(radioLabels(wrapper, "action-type")).toEqual(["一括切替", "機器の個別切替"]);
+    expect(checked(wrapper, "action-type")).toEqual([]);
+    expect(wrapper.find("#schedule-scene").exists()).toBe(false);
+    expect(wrapper.find("#schedule-device").exists()).toBe(false);
+    expect(wrapper.find('input[name="state"]').exists()).toBe(false);
+  });
+
+  it("「機器の個別切替」を選ぶと、機器（4 つ、電灯は未実装）と状態（ON/OFF）が出て、一括切替は消える", async () => {
+    const wrapper = mountEditor();
+    await pick(wrapper, "action-type", "device");
+
+    expect(wrapper.find("#schedule-scene").exists()).toBe(false);
+    const options = wrapper.findAll("#schedule-device option").map((o) => o.text());
+    expect(options).toEqual([
+      "選択してください",
+      "電灯（未実装）",
+      "間接照明",
+      "屋内スピーカー",
+      "枕元スピーカー",
+    ]);
+    expect(radioLabels(wrapper, "state")).toEqual(["ON", "OFF"]);
+    expect(checked(wrapper, "state")).toEqual([]);
+  });
+
+  it("玄関ドアは、機器の選択肢にも一括切替の選択肢にも無い", async () => {
+    const wrapper = mountEditor();
+    await pick(wrapper, "action-type", "device");
+    const deviceValues = wrapper.findAll("#schedule-device option").map((o) => o.attributes("value"));
+    expect(deviceValues).not.toContain("front_door");
+    expect(wrapper.html()).not.toContain("玄関");
+  });
+
+  it("種類を切り替えると、続きの入力が入れ替わる", async () => {
+    const wrapper = mountEditor();
+    await pick(wrapper, "action-type", "device");
+    await pick(wrapper, "action-type", "scene");
+    expect(wrapper.find("#schedule-scene").exists()).toBe(true);
+    expect(wrapper.find("#schedule-device").exists()).toBe(false);
+  });
+
+  it.each([
+    ["ceiling_light", "on"],
+    ["indirect_light", "off"],
+    ["indoor_speaker", "on"],
+    ["bedside_speaker", "off"],
+  ])("個別切替（%s を %s）を POST し、device と state だけを送る", async (device, state) => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30" });
+    await pick(wrapper, "action-type", "device");
+    await wrapper.get("#schedule-device").setValue(device);
+    await pick(wrapper, "state", state);
+
+    await submit(wrapper);
+    await flushPromises();
+
+    expect(calls).toEqual([
+      {
+        method: "POST",
+        path: "/schedules",
+        body: { condition: "daily", weekdays: [], run_time: "06:30", device, state, is_enabled: true },
+      },
+    ]);
+    const body = calls[0]!.body as Record<string, unknown>;
+    expect("scene" in body).toBe(false);
+  });
+
+  it("個別切替の検証: 機器 → 状態の順に、最初の 1 件を示し、送信しない", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30" });
+    await pick(wrapper, "action-type", "device");
+
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe("機器を選択してください。");
+
+    await wrapper.get("#schedule-device").setValue("indirect_light");
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe("状態（ON / OFF）を選択してください。");
+
+    expect(calls).toHaveLength(0);
+  });
+
+  it("一括切替を選んだあと個別切替に変えたら、scene は送らない", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30", scene: "out" });
+    await pick(wrapper, "action-type", "device");
+    await wrapper.get("#schedule-device").setValue("indoor_speaker");
+    await pick(wrapper, "state", "off");
+
+    await submit(wrapper);
+    await flushPromises();
+
+    const body = calls[0]!.body as Record<string, unknown>;
+    expect(body).toMatchObject({ device: "indoor_speaker", state: "off" });
+    expect("scene" in body).toBe(false);
+  });
+
+  it("変更: 個別切替の定期実行は、種類・機器・状態が初期値に入り、PUT できる", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor(
+      item({ condition: "daily", weekdays: [], scene: null, device: "bedside_speaker", state: "on" }),
+    );
+    expect(checked(wrapper, "action-type")).toEqual(["device"]);
+    expect((wrapper.get("#schedule-device").element as HTMLSelectElement).value).toBe("bedside_speaker");
+    expect(checked(wrapper, "state")).toEqual(["on"]);
+    expect(wrapper.find("#schedule-scene").exists()).toBe(false);
+
+    await pick(wrapper, "state", "off");
+    await submit(wrapper);
+    await flushPromises();
+
+    expect(calls).toEqual([
+      {
+        method: "PUT",
+        path: "/schedules/7",
+        body: {
+          condition: "daily",
+          weekdays: [],
+          run_time: "22:30",
+          device: "bedside_speaker",
+          state: "off",
+          is_enabled: false,
+        },
+      },
+    ]);
+  });
+
+  it("変更: 一括切替から個別切替へ変えられる（逆も）", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor(item({ condition: "daily", weekdays: [] }));
+    expect(checked(wrapper, "action-type")).toEqual(["scene"]);
+    await pick(wrapper, "action-type", "device");
+    await wrapper.get("#schedule-device").setValue("indirect_light");
+    await pick(wrapper, "state", "on");
+    await submit(wrapper);
+    await flushPromises();
+    expect(calls[0]!.body).toMatchObject({ device: "indirect_light", state: "on" });
   });
 });

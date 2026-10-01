@@ -204,8 +204,13 @@ class RoomScheduleRow:
     created_by_user_id: int
     condition_type: str
     weekdays: tuple[int, ...]
+    holiday_mode: str
+    day_shift: str
     run_time: time
-    scene: str
+    action_type: str
+    scene: str | None
+    device: str | None
+    target_state: str | None
     is_enabled: bool
     last_run_at: datetime | None
     last_run_result: str | None
@@ -213,7 +218,8 @@ class RoomScheduleRow:
 
 
 _SCHEDULE_COLUMNS = """
-    s.id, s.created_by_user_id, s.condition_type, s.run_time, s.scene, s.is_enabled,
+    s.id, s.created_by_user_id, s.condition_type, s.holiday_mode, s.day_shift, s.run_time,
+    s.action_type, s.scene, s.device, s.target_state, s.is_enabled,
     s.last_run_at, s.last_run_result, s.last_failed_devices,
     COALESCE(
         array_agg(w.weekday ORDER BY w.weekday) FILTER (WHERE w.weekday IS NOT NULL),
@@ -233,8 +239,13 @@ def _schedule_from_row(row: dict[str, object]) -> RoomScheduleRow:
         created_by_user_id=int(row["created_by_user_id"]),  # type: ignore[arg-type]
         condition_type=str(row["condition_type"]),
         weekdays=tuple(int(d) for d in row["weekdays"]),  # type: ignore[attr-defined]
+        holiday_mode=str(row["holiday_mode"]),
+        day_shift=str(row["day_shift"]),
         run_time=row["run_time"],  # type: ignore[arg-type]
-        scene=str(row["scene"]),
+        action_type=str(row["action_type"]),
+        scene=str(row["scene"]) if row["scene"] is not None else None,
+        device=str(row["device"]) if row["device"] is not None else None,
+        target_state=str(row["target_state"]) if row["target_state"] is not None else None,
         is_enabled=bool(row["is_enabled"]),
         last_run_at=row["last_run_at"],  # type: ignore[arg-type]
         last_run_result=(
@@ -245,12 +256,13 @@ def _schedule_from_row(row: dict[str, object]) -> RoomScheduleRow:
 
 
 def list_room_schedules(only_enabled: bool = False) -> list[RoomScheduleRow]:
-    """定期実行を run_time の昇順、同じ時刻なら scene の名称順で返す。"""
+    """定期実行を run_time の昇順、同じ時刻なら一括切替（scene 順）→ 個別切替（device、状態順）→ id 順で返す。"""
     where = "WHERE s.is_enabled" if only_enabled else ""
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             f"SELECT {_SCHEDULE_COLUMNS} {_SCHEDULE_FROM} {where} "
-            "GROUP BY s.id ORDER BY s.run_time, s.scene, s.id"
+            "GROUP BY s.id ORDER BY s.run_time, (s.action_type = 'device'), s.scene, s.device, "
+            "s.target_state, s.id"
         )
         return [_schedule_from_row(row) for row in cur.fetchall()]
 
@@ -274,54 +286,67 @@ def _replace_weekdays(cur: object, schedule_id: int, weekdays: tuple[int, ...]) 
         )
 
 
-def insert_room_schedule(
-    user_id: int,
-    condition_type: str,
-    weekdays: tuple[int, ...],
-    run_time: time,
-    scene: str,
-    is_enabled: bool,
-) -> int:
+@dataclass(frozen=True)
+class ScheduleDefinition:
+    """定期実行の定義（最終実行を除く）。action_type に応じて scene か device+target_state を持つ。"""
+
+    condition_type: str
+    weekdays: tuple[int, ...]
+    holiday_mode: str
+    day_shift: str
+    run_time: time
+    action_type: str
+    scene: str | None
+    device: str | None
+    target_state: str | None
+
+
+def insert_room_schedule(user_id: int, definition: ScheduleDefinition, is_enabled: bool) -> int:
     """定期実行と曜日を 1 つのトランザクションで登録し、識別子を返す。"""
+    d = definition
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
             INSERT INTO room.room_schedules
-                (created_by_user_id, condition_type, run_time, scene, is_enabled)
-            VALUES (%s, %s, %s, %s, %s)
+                (created_by_user_id, condition_type, holiday_mode, day_shift, run_time,
+                 action_type, scene, device, target_state, is_enabled)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
-            (user_id, condition_type, run_time, scene, is_enabled),
+            (
+                user_id, d.condition_type, d.holiday_mode, d.day_shift, d.run_time,
+                d.action_type, d.scene, d.device, d.target_state, is_enabled,
+            ),
         )
         row = cur.fetchone()
         assert row is not None
         schedule_id = int(row["id"])
-        _replace_weekdays(cur, schedule_id, weekdays)
+        _replace_weekdays(cur, schedule_id, d.weekdays)
         return schedule_id
 
 
 def update_room_schedule(
-    schedule_id: int,
-    condition_type: str,
-    weekdays: tuple[int, ...],
-    run_time: time,
-    scene: str,
-    is_enabled: bool | None,
+    schedule_id: int, definition: ScheduleDefinition, is_enabled: bool | None
 ) -> bool:
     """定義を置き換える（最終実行は変えない）。is_enabled が None なら現在の値を保つ。"""
+    d = definition
     with get_conn() as conn, conn.cursor() as cur:
         cur.execute(
             """
             UPDATE room.room_schedules
-            SET condition_type = %s, run_time = %s, scene = %s,
+            SET condition_type = %s, holiday_mode = %s, day_shift = %s, run_time = %s,
+                action_type = %s, scene = %s, device = %s, target_state = %s,
                 is_enabled = COALESCE(%s, is_enabled), updated_at = now()
             WHERE id = %s
             """,
-            (condition_type, run_time, scene, is_enabled, schedule_id),
+            (
+                d.condition_type, d.holiday_mode, d.day_shift, d.run_time,
+                d.action_type, d.scene, d.device, d.target_state, is_enabled, schedule_id,
+            ),
         )
         if cur.rowcount == 0:
             return False
-        _replace_weekdays(cur, schedule_id, weekdays)
+        _replace_weekdays(cur, schedule_id, d.weekdays)
         return True
 
 

@@ -21,6 +21,10 @@ class ScheduleBody(BaseModel):
     run_time: Any = None
     scene: Any = None
     is_enabled: Any = None
+    holiday_mode: Any = None
+    day_shift: Any = None
+    device: Any = None
+    state: Any = None
 
 
 class EnabledBody(BaseModel):
@@ -35,6 +39,10 @@ def _input(body: ScheduleBody | None) -> ScheduleInput:
         run_time=body.run_time,
         scene=body.scene,
         is_enabled=body.is_enabled,
+        holiday_mode=body.holiday_mode,
+        day_shift=body.day_shift,
+        device=body.device,
+        state=body.state,
     )
 
 

@@ -66,7 +66,13 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 
   どの一括切替も、`front_door` は変えない。`ceiling_light` を対象とする指示は、機器へ何も指示せず、結果を `skipped`（未実装）とする（REQ-006、REQ-007）。
 
-- `condition`（実行条件）は `daily`（毎日）、`weekdays`（曜日の指定）、`holiday`（祝日の指定）。
+- `condition`（実行条件）は `daily`（毎日）、`weekdays`（曜日の指定）。祝日だけの条件は無い。
+- `holiday_mode`（祝日の扱い。`condition` が `weekdays` のときだけ意味を持つ）は `none`（指定した曜日のみ。既定）、`include`（祝日も実行）、`exclude`（祝日は実行しない）。
+- `day_shift`（実行日の取り方。`condition` が `weekdays` のときだけ意味を持つ）は `same`（当日。既定）、`before`（の前の日）、`after`（の次の日）。
+  基準日（曜日と祝日の扱いで決まる日）に対して、実行する日を決める。`before` は、翌日が基準日である日に、`after` は、前日が基準日である日に実行する（`design.md` の基準日の判定）。
+- 定期実行の実行内容は、次の 2 種のどちらか 1 つ。
+  - 一括切替: `scene`（上の 5 つのいずれか）を指定する。
+  - 機器の個別切替: `device`（`ceiling_light`、`indirect_light`、`indoor_speaker`、`bedside_speaker` のいずれか。`front_door` は指定できない）と、`state`（`on` または `off`）を指定する。
 - `weekdays`（曜日）は 1〜7 の整数の配列。1 = 月曜、…、7 = 日曜（ISO 8601）。
 - 機器の状態の項目（`device_state`）は次の形とする。
 
@@ -286,8 +292,12 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
       "id": 1,
       "condition": "weekdays",
       "weekdays": [1, 3, 5],
+      "holiday_mode": "none",
+      "day_shift": "same",
       "run_time": "07:00",
       "scene": "indoor_speaker",
+      "device": null,
+      "state": null,
       "is_enabled": true,
       "last_run": {
         "at": "2026-10-01T07:00:02+09:00",
@@ -297,11 +307,28 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
     },
     {
       "id": 2,
-      "condition": "holiday",
-      "weekdays": [],
+      "condition": "weekdays",
+      "weekdays": [1, 2, 3, 4, 5],
+      "holiday_mode": "exclude",
+      "day_shift": "before",
       "run_time": "22:30",
-      "scene": "out",
+      "scene": null,
+      "device": "indirect_light",
+      "state": "off",
       "is_enabled": false,
+      "last_run": null
+    },
+    {
+      "id": 3,
+      "condition": "daily",
+      "weekdays": [],
+      "holiday_mode": "none",
+      "day_shift": "same",
+      "run_time": "23:00",
+      "scene": "out",
+      "device": null,
+      "state": null,
+      "is_enabled": true,
       "last_run": null
     }
   ]
@@ -309,8 +336,11 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 ```
 
 - `weekdays`: `condition` が `weekdays` のときは 1 件以上（昇順）。それ以外は空配列。
+- `holiday_mode`、`day_shift`: `condition` が `daily` のときは、常に `none`、`same`。
+- 実行内容: 一括切替のときは `scene` が値を持ち、`device` と `state` は `null`。機器の個別切替のときは `device` と `state` が値を持ち、`scene` は `null`。
 - `last_run`: 未実行は `null`。`result` は `success`、`partial`、`failure`。`failed_devices` は失敗した機器（`ceiling_light`、`indirect_light`、`indoor_speaker`、`bedside_speaker` のいずれか）。成功のときは空配列。
-- 並びは、`run_time` の昇順、同じ時刻なら `scene` の名称順。
+- `last_run.result`: 機器の個別切替は、`success` か `failure` のみ（`partial` は一括切替のとき）。失敗のとき、`failed_devices` は、その機器 1 つ。
+- 並びは、`run_time` の昇順、同じ時刻なら、一括切替（`scene` のキー名順）、続いて機器の個別切替（`device`、`state` のキー名順）、最後に `id` の昇順。
 
 エラー:
 
@@ -328,21 +358,25 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 
 | 項目 | 型 | 必須 | 説明 |
 |------|----|----|------|
-| `condition` | string | 必須 | `daily`、`weekdays`、`holiday` のいずれか |
+| `condition` | string | 必須 | `daily`、`weekdays` のいずれか |
 | `weekdays` | integer[] | 条件付き | `condition` が `weekdays` のとき必須（1 件以上、各値は 1〜7、重複なし）。それ以外のときは省略または空配列 |
+| `holiday_mode` | string | 任意 | `none`、`include`、`exclude`。省略時は `none`。`condition` が `daily` のときは、省略または `none` |
+| `day_shift` | string | 任意 | `same`、`before`、`after`。省略時は `same`。`condition` が `daily` のときは、省略または `same` |
 | `run_time` | string | 必須 | `HH:MM`（00:00〜23:59） |
-| `scene` | string | 必須 | 一括切替の 5 種のいずれか。玄関ドアの施錠・開錠は指定できない |
+| `scene` | string | 条件付き | 一括切替の 5 種のいずれか。実行内容が一括切替のとき必須。機器の個別切替のときは省略 |
+| `device` | string | 条件付き | 個別切替の機器（`ceiling_light`、`indirect_light`、`indoor_speaker`、`bedside_speaker`）。実行内容が機器の個別切替のとき必須。玄関ドア（`front_door`）は指定できない。一括切替のときは省略 |
+| `state` | string | 条件付き | 個別切替の目標の状態（`on`、`off`）。`device` を指定するとき必須。一括切替のときは省略 |
 | `is_enabled` | boolean | 任意 | 既定は `true` |
 
 応答: 201。`GET /schedules` の 1 件と同じ形（`last_run` は `null`）。
 
-処理概要: 作成した利用者を残して登録する。`condition` が `weekdays` のときは、曜日も登録する。
+処理概要: 作成した利用者を残して登録する。`condition` が `weekdays` のときは、曜日も登録する。実行内容は、`scene`、または、`device` と `state` の、どちらか一方だけを指定する（両方、どちらも無い、`device` だけ、`state` だけは、入力不正）。従来どおり `scene` だけを指定する要求は、そのまま受け付ける（`holiday_mode` は `none`、`day_shift` は `same` になる）。
 
 エラー:
 
 | 状況 | 応答 |
 |------|------|
-| 必須項目が無い、値が取り得る範囲外（実行条件、時刻の形式、一括切替）、`weekdays` が条件と合わない（`weekdays` で 0 件、`daily`／`holiday` で 1 件以上、範囲外、重複） | 400 |
+| 必須項目が無い、値が取り得る範囲外（実行条件、祝日の扱い、実行日の取り方、時刻の形式、一括切替、機器、状態。従来の実行条件 `holiday` を含む）、`weekdays` が条件と合わない（`weekdays` で 0 件、`daily` で 1 件以上、範囲外、重複）、`daily` なのに、`holiday_mode` が `none` でない、または `day_shift` が `same` でない、実行内容が合わない（`scene` と `device` の両方、どちらも無い、`device` と `state` の片方だけ） | 400 |
 | 未ログイン | 401 |
 | 権限なし | 403 |
 
@@ -351,7 +385,7 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 - 認証: 要
 - 対応 REQ: REQ-008、REQ-011
 
-要求（本文）: `POST /schedules` と同じ。ただし `is_enabled` も指定する（省略時は現在の値を維持する）。全項目を置き換える（`weekdays` は置き換える）。
+要求（本文）: `POST /schedules` と同じ。ただし `is_enabled` も指定する（省略時は現在の値を維持する）。全項目を置き換える（`weekdays` は置き換える）。`holiday_mode` と `day_shift` は、省略すると、現在の値を維持せず、既定（`none`、`same`）になる。実行内容も置き換える（一括切替から個別切替へ、または、その逆に、変えられる）。
 
 応答: 200。`GET /schedules` の 1 件と同じ形。
 
@@ -420,7 +454,7 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 | REQ-005 | PUT `/devices/{device}/state`（`front_door`。目標の状態を明示。確認は画面の責務）。電池残量は GET `/state` の `battery`（表示のみ。変更する API なし） |
 | REQ-006 | GET `/state`（`ceiling_light` は常に `off`、`implemented: false`）。PUT `/devices/{device}/state`（何もしない）。POST `/scenes/{scene}` の `skipped` |
 | REQ-007 | POST `/scenes/{scene}`（5 種。機器ごとの `results`、全体の `outcome`、再取得した `devices`） |
-| REQ-008 | GET / POST / PUT / DELETE `/schedules`、PUT `/schedules/{schedule_id}/enabled`（玄関ドアの施錠・開錠は `scene` に指定できない） |
+| REQ-008 | GET / POST / PUT / DELETE `/schedules`、PUT `/schedules/{schedule_id}/enabled`（実行内容の `scene` または `device`+`state`、祝日の扱い、実行日の取り方。玄関ドアの施錠・開錠は指定できない） |
 | REQ-009 | API なし（ジョブの処理。`design.md`） |
 | REQ-010 | GET `/schedules` の `last_run` |
 | REQ-011 | 本書全体。API キー認証。画面・ジョブ・API が同じサービス層を使う |
@@ -440,3 +474,5 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 |------|------|----------|
 | 2026-10-01 10:13 | 未承認 | 初版 |
 | 2026-10-01 10:17 | 承認済み | 初版を承認 |
+| 2026-10-01 15:05 | 未承認 | 定期実行の改訂に合わせ、`/schedules` の要求・応答に `holiday_mode`、`day_shift`、実行内容（`scene`、または `device`+`state`）を追加し、実行条件から `holiday` を廃止。個別切替の結果の扱いと並びを追記 |
+| 2026-10-01 15:08 | 承認済み | 定期実行の改訂の API（実行内容、祝日の扱い、実行日の取り方）を承認 |

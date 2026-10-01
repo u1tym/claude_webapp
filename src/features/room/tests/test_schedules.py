@@ -73,8 +73,12 @@ def test_毎日の定期実行を登録できる(ctx: tuple[TestClient, int], lo
     assert {k: v for k, v in body.items() if k != "id"} == {
         "condition": "daily",
         "weekdays": [],
+        "holiday_mode": "none",
+        "day_shift": "same",
         "run_time": "07:00",
         "scene": "indoor_speaker",
+        "device": None,
+        "state": None,
         "is_enabled": True,  # 既定は有効
         "last_run": None,
     }
@@ -91,10 +95,9 @@ def test_曜日の指定は昇順で保存される(ctx: tuple[TestClient, int])
     assert body["run_time"] == "22:30"
 
 
-def test_祝日の指定と無効での登録(ctx: tuple[TestClient, int]) -> None:
+def test_無効での登録(ctx: tuple[TestClient, int]) -> None:
     client, _ = ctx
-    body = _create(client, condition="holiday", is_enabled=False, run_time="00:00")
-    assert body["condition"] == "holiday"
+    body = _create(client, is_enabled=False, run_time="00:00")
     assert body["is_enabled"] is False
     assert body["run_time"] == "00:00"
     assert _create(client, run_time="23:59")["run_time"] == "23:59"
@@ -120,7 +123,27 @@ def test_曜日の空配列はdailyで許す(ctx: tuple[TestClient, int]) -> Non
         {"condition": "weekdays", "weekdays": [True]},
         {"condition": "weekdays", "weekdays": "1"},
         {"condition": "daily", "weekdays": [1]},
+        {"condition": "holiday"},  # 祝日だけの条件は無い
         {"condition": "holiday", "weekdays": [1]},
+        {"holiday_mode": "all"},
+        {"holiday_mode": 1},
+        {"day_shift": "tomorrow"},
+        {"day_shift": 1},
+        {"condition": "daily", "holiday_mode": "include"},  # 毎日には付けられない
+        {"condition": "daily", "holiday_mode": "exclude"},
+        {"condition": "daily", "day_shift": "before"},
+        {"condition": "daily", "day_shift": "after"},
+        {"scene": "out", "device": "indirect_light", "state": "on"},  # 両方
+        {"scene": "out", "device": "indirect_light"},
+        {"scene": "out", "state": "on"},
+        {"scene": None, "device": "indirect_light"},  # 状態がない
+        {"scene": None, "state": "on"},  # 機器がない
+        {"scene": None, "device": "front_door", "state": "on"},  # 玄関ドアは対象外
+        {"scene": None, "device": "lock", "state": "on"},
+        {"scene": None, "device": "indirect_light", "state": "toggle"},
+        {"scene": None, "device": "indirect_light", "state": "locked"},
+        {"scene": None, "device": "indirect_light", "state": True},
+        {"scene": None, "device": 1, "state": "on"},
         {"run_time": None},
         {"run_time": "7:00"},
         {"run_time": "24:00"},
@@ -128,7 +151,7 @@ def test_曜日の空配列はdailyで許す(ctx: tuple[TestClient, int]) -> Non
         {"run_time": "07:00:30"},
         {"run_time": "abc"},
         {"run_time": 700},
-        {"scene": None},
+        {"scene": None},  # 実行内容がない
         {"scene": "front_door"},  # 玄関ドアの施錠・開錠は指定できない
         {"scene": "lock"},
         {"scene": "unlock"},
@@ -156,6 +179,78 @@ def test_5種の一括切替をすべて登録できる(ctx: tuple[TestClient, i
         assert _create(client, scene=scene)["scene"] == scene
 
 
+def test_従来どおりsceneだけの要求は_祝日の扱いnone_実行日の取り方sameになる(
+    ctx: tuple[TestClient, int],
+) -> None:
+    client, _ = ctx
+    res = client.post(
+        "/schedules",
+        json={"condition": "weekdays", "weekdays": [1], "run_time": "07:00", "scene": "out"},
+    )
+    assert res.status_code == 201
+    assert (res.json()["holiday_mode"], res.json()["day_shift"]) == ("none", "same")
+
+
+@pytest.mark.parametrize("mode", ["none", "include", "exclude"])
+@pytest.mark.parametrize("shift", ["same", "before", "after"])
+def test_曜日の指定は祝日の扱いと実行日の取り方の9通りを登録できる(
+    ctx: tuple[TestClient, int], mode: str, shift: str
+) -> None:
+    client, _ = ctx
+    body = _create(
+        client, condition="weekdays", weekdays=[1, 2, 3, 4, 5], holiday_mode=mode, day_shift=shift
+    )
+    assert (body["holiday_mode"], body["day_shift"]) == (mode, shift)
+    assert body["weekdays"] == [1, 2, 3, 4, 5]
+    items = {s["id"]: s for s in client.get("/schedules").json()["schedules"]}
+    assert (items[body["id"]]["holiday_mode"], items[body["id"]]["day_shift"]) == (mode, shift)
+
+
+def test_毎日で既定値を明示しても登録できる(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    body = _create(client, condition="daily", holiday_mode="none", day_shift="same")
+    assert (body["holiday_mode"], body["day_shift"]) == ("none", "same")
+
+
+@pytest.mark.parametrize("device", ["ceiling_light", "indirect_light", "indoor_speaker", "bedside_speaker"])
+@pytest.mark.parametrize("state", ["on", "off"])
+def test_機器の個別切替を4機器とON_OFFで登録できる(
+    ctx: tuple[TestClient, int], device: str, state: str
+) -> None:
+    client, _ = ctx
+    body = _create(client, scene=None, device=device, state=state)
+    assert (body["scene"], body["device"], body["state"]) == (None, device, state)
+    item = {s["id"]: s for s in client.get("/schedules").json()["schedules"]}[body["id"]]
+    assert (item["scene"], item["device"], item["state"]) == (None, device, state)
+
+
+def test_sceneを省略した個別切替の要求も登録できる(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    res = client.post(
+        "/schedules",
+        json={"condition": "daily", "run_time": "07:00", "device": "indoor_speaker", "state": "off"},
+    )
+    assert res.status_code == 201
+    assert res.json()["scene"] is None
+
+
+def test_個別切替の登録がログに残る(ctx: tuple[TestClient, int], log_dir: Path) -> None:
+    client, _ = ctx
+    _create(
+        client,
+        scene=None,
+        device="indirect_light",
+        state="on",
+        condition="weekdays",
+        weekdays=[2],
+        holiday_mode="exclude",
+        day_shift="before",
+    )
+    log = _log_text(log_dir)
+    assert "action=device device=indirect_light state=on" in log
+    assert "holiday_mode=exclude day_shift=before" in log
+
+
 # ---- 一覧 ----
 
 
@@ -173,6 +268,21 @@ def test_一覧は時刻の昇順_同じ時刻なら一括切替の名称順(ctx
     mine = [i for i in ids if i in (a, b, c, d)]
     # 06:05 は scene の名称順（bedside_speaker < out）
     assert mine == [c, b, d, a]
+
+
+def test_一覧は同じ時刻なら一括切替_個別切替_idの順(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    d_on = _create(client, run_time="05:55", scene=None, device="bedside_speaker", state="on")["id"]
+    d_off = _create(client, run_time="05:55", scene=None, device="bedside_speaker", state="off")["id"]
+    d_ind = _create(client, run_time="05:55", scene=None, device="indirect_light", state="off")["id"]
+    s_out = _create(client, run_time="05:55", scene="out")["id"]
+    s_bed = _create(client, run_time="05:55", scene="bedside_speaker")["id"]
+    s_out2 = _create(client, run_time="05:55", scene="out")["id"]
+
+    ids = [s["id"] for s in client.get("/schedules").json()["schedules"]]
+    mine = [i for i in ids if i in (d_on, d_off, d_ind, s_out, s_bed, s_out2)]
+    # 一括切替（scene 名順、同じなら id 順）→ 個別切替（機器名順 → 状態名順）
+    assert mine == [s_bed, s_out, s_out2, d_off, d_on, d_ind]
 
 
 def test_一覧に最終実行が含まれる(ctx: tuple[TestClient, int]) -> None:
@@ -219,14 +329,23 @@ def test_変更で全項目が置き換わり最終実行は変わらない(ctx:
 
     res = client.put(
         f"/schedules/{schedule_id}",
-        json=_valid(condition="holiday", run_time="21:15", scene="out", is_enabled=False),
+        json=_valid(
+            condition="weekdays",
+            weekdays=[6, 7],
+            holiday_mode="include",
+            day_shift="after",
+            run_time="21:15",
+            scene="out",
+            is_enabled=False,
+        ),
     )
 
     assert res.status_code == 200
     body = res.json()
     assert body["id"] == schedule_id
-    assert body["condition"] == "holiday"
-    assert body["weekdays"] == []  # 曜日は置き換わる
+    assert body["condition"] == "weekdays"
+    assert body["weekdays"] == [6, 7]  # 曜日は置き換わる
+    assert (body["holiday_mode"], body["day_shift"]) == ("include", "after")
     assert body["run_time"] == "21:15"
     assert body["scene"] == "out"
     assert body["is_enabled"] is False
@@ -247,6 +366,45 @@ def test_変更で曜日を設定できる(ctx: tuple[TestClient, int]) -> None:
         f"/schedules/{schedule_id}", json=_valid(condition="weekdays", weekdays=[7, 6])
     ).json()
     assert body["weekdays"] == [6, 7]
+
+
+def test_変更で祝日の扱いと実行日の取り方を省略すると既定に戻る(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    schedule_id = _create(
+        client, condition="weekdays", weekdays=[1], holiday_mode="exclude", day_shift="before"
+    )["id"]
+    body = client.put(
+        f"/schedules/{schedule_id}", json=_valid(condition="weekdays", weekdays=[1])
+    ).json()
+    assert (body["holiday_mode"], body["day_shift"]) == ("none", "same")
+
+
+def test_変更で一括切替から個別切替へ_逆にも変えられる(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    schedule_id = _create(client, scene="out")["id"]
+
+    to_device = client.put(
+        f"/schedules/{schedule_id}", json=_valid(scene=None, device="indoor_speaker", state="off")
+    ).json()
+    assert (to_device["scene"], to_device["device"], to_device["state"]) == (
+        None,
+        "indoor_speaker",
+        "off",
+    )
+
+    back = client.put(f"/schedules/{schedule_id}", json=_valid(scene="ceiling_light")).json()
+    assert (back["scene"], back["device"], back["state"]) == ("ceiling_light", None, None)
+
+
+def test_変更の実行内容の不整合は400で変わらない(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    schedule_id = _create(client, scene="out")["id"]
+    res = client.put(
+        f"/schedules/{schedule_id}", json=_valid(scene="out", device="indirect_light", state="on")
+    )
+    assert res.status_code == 400
+    item = next(s for s in client.get("/schedules").json()["schedules"] if s["id"] == schedule_id)
+    assert (item["scene"], item["device"], item["state"]) == ("out", None, None)
 
 
 def test_変更でis_enabledを省略すると現在の値を保つ(ctx: tuple[TestClient, int]) -> None:

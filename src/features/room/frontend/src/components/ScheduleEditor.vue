@@ -2,8 +2,13 @@
 import { nextTick, onMounted, ref } from "vue";
 import { AuthError, SwitchError, createSchedule, updateSchedule } from "../api";
 import {
+  ACTION_TYPE_OPTIONS,
   CONDITION_OPTIONS,
+  DAY_SHIFT_OPTIONS,
+  HOLIDAY_MODE_OPTIONS,
   SCENES,
+  STATE_OPTIONS,
+  TIMER_DEVICES,
   WEEKDAY_CHIPS,
   formFromItem,
   toScheduleBody,
@@ -121,18 +126,67 @@ onMounted(async () => {
         </div>
       </fieldset>
 
+      <fieldset v-if="form.condition === 'weekdays'" class="editor-field">
+        <legend>祝日の扱い</legend>
+        <label v-for="option in HOLIDAY_MODE_OPTIONS" :key="option.value" class="editor-radio">
+          <input v-model="form.holidayMode" type="radio" name="holiday-mode" :value="option.value" />
+          <span>{{ option.label }}</span>
+        </label>
+        <p class="caption">
+          祝日も実行は、指定した曜日に加えて祝日にも実行します。祝日は実行しないは、指定した曜日のうち祝日を除きます。
+        </p>
+      </fieldset>
+
+      <fieldset v-if="form.condition === 'weekdays'" class="editor-field">
+        <legend>実行日の取り方</legend>
+        <label v-for="option in DAY_SHIFT_OPTIONS" :key="option.value" class="editor-radio">
+          <input v-model="form.dayShift" type="radio" name="day-shift" :value="option.value" />
+          <span>{{ option.label }}</span>
+        </label>
+        <p class="caption">
+          上で決まる日に対して、実行する日を選びます。の前の日は前日、の次の日は翌日に実行します。
+        </p>
+      </fieldset>
+
       <div class="editor-field">
         <label class="editor-label" for="schedule-time">時刻</label>
         <input id="schedule-time" v-model="form.time" class="editor-input" type="time" step="60" />
       </div>
 
-      <div class="editor-field">
+      <fieldset class="editor-field">
+        <legend>実行内容</legend>
+        <label v-for="option in ACTION_TYPE_OPTIONS" :key="option.value" class="editor-radio">
+          <input v-model="form.actionType" type="radio" name="action-type" :value="option.value" />
+          <span>{{ option.label }}</span>
+        </label>
+      </fieldset>
+
+      <div v-if="form.actionType === 'scene'" class="editor-field">
         <label class="editor-label" for="schedule-scene">一括切替</label>
         <select id="schedule-scene" v-model="form.scene" class="editor-input">
           <option value="">選択してください</option>
           <option v-for="scene in SCENES" :key="scene.key" :value="scene.key">{{ scene.label }}</option>
         </select>
       </div>
+
+      <template v-if="form.actionType === 'device'">
+        <div class="editor-field">
+          <label class="editor-label" for="schedule-device">機器</label>
+          <select id="schedule-device" v-model="form.device" class="editor-input">
+            <option value="">選択してください</option>
+            <option v-for="device in TIMER_DEVICES" :key="device.key" :value="device.key">
+              {{ device.label }}
+            </option>
+          </select>
+        </div>
+        <fieldset class="editor-field">
+          <legend>状態</legend>
+          <label v-for="option in STATE_OPTIONS" :key="option.value" class="editor-radio">
+            <input v-model="form.state" type="radio" name="state" :value="option.value" />
+            <span>{{ option.label }}</span>
+          </label>
+        </fieldset>
+      </template>
 
       <div class="editor-field editor-enabled">
         <span class="editor-label" id="schedule-enabled-label">有効</span>

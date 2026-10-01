@@ -279,7 +279,7 @@ def test_定期実行は取り直さないので_待たない(switchbot: FakeSwi
     from app.timeutil import JST
 
     user_id = insert_user(unique("room_settle_job"))
-    schedule_id = repos.insert_room_schedule(user_id, "daily", (), time(7, 0), "out", True)
+    schedule_id = repos.insert_room_schedule(user_id, repos.ScheduleDefinition("daily", (), "none", "same", time(7, 0), "scene", "out", None, None), True)
     row = repos.get_room_schedule(schedule_id)
     assert row is not None
     try:

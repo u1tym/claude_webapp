@@ -58,13 +58,26 @@ def make(
     scene: str = "indoor_speaker",
     weekdays: tuple[int, ...] = (),
     enabled: bool = True,
+    holiday_mode: str = "none",
+    day_shift: str = "same",
+    device: str | None = None,
+    state: str | None = None,
 ) -> RoomScheduleRow:
     from datetime import time
 
     hour, minute = (int(x) for x in run_time.split(":"))
-    schedule_id = repos.insert_room_schedule(
-        user_id, condition, weekdays, time(hour, minute), scene, enabled
+    definition = repos.ScheduleDefinition(
+        condition_type=condition,
+        weekdays=weekdays,
+        holiday_mode=holiday_mode,
+        day_shift=day_shift,
+        run_time=time(hour, minute),
+        action_type="scene" if device is None else "device",
+        scene=None if device is not None else scene,
+        device=device,
+        target_state=state,
     )
+    schedule_id = repos.insert_room_schedule(user_id, definition, enabled)
     row = repos.get_room_schedule(schedule_id)
     assert row is not None
     return row
@@ -155,20 +168,8 @@ def test_曜日の指定は指定した曜日だけ実行する(switchbot: FakeS
 
     assert reports[thursday.id].outcome == "success"
     assert reports[monday_tuesday.id].outcome is None
-    assert "条件に合わない" in (reports[monday_tuesday.id].reason or "")
+    assert "基準日でない" in (reports[monday_tuesday.id].reason or "")
     assert last_run(monday_tuesday.id).last_run_at is None
-
-
-def test_祝日の指定は祝日だけ実行する(switchbot: FakeSwitchBot, user_id: int) -> None:
-    s = make(user_id, condition="holiday")
-
-    on_working_day = run_once(now=at(THU, 7, 1), schedules=[s])
-    assert on_working_day[0].outcome is None
-    assert on_working_day[0].reason is not None and "祝日でない" in on_working_day[0].reason
-    assert switchbot.commands == []
-
-    on_holiday = run_once(now=at(CULTURE_DAY, 7, 1), schedules=[s])
-    assert on_holiday[0].outcome == "success"
 
 
 def test_日本標準時で判定する(switchbot: FakeSwitchBot, user_id: int) -> None:
@@ -386,7 +387,7 @@ def test_判定の結果が全件ログに残り秘密情報は出ない(
 
     log = _log_text(log_dir)
     assert f"id={ran.id} 判断=実行する" in log
-    assert f"id={wrong_day.id} 判断=実行しない 理由=条件に合わない" in log
+    assert f"id={wrong_day.id} 判断=実行しない 理由=基準日でない" in log
     assert f"id={off.id} 判断=実行しない 理由=無効" in log
     assert f"id={later.id} 判断=実行しない 理由=時刻が範囲外" in log
     assert "定期実行の判定終了 実行=1 実行しない=3" in log
@@ -439,8 +440,13 @@ def _row(**override: object) -> RoomScheduleRow:
         "created_by_user_id": 1,
         "condition_type": "daily",
         "weekdays": (),
+        "holiday_mode": "none",
+        "day_shift": "same",
         "run_time": time(7, 0),
+        "action_type": "scene",
         "scene": "out",
+        "device": None,
+        "target_state": None,
         "is_enabled": True,
         "last_run_at": None,
         "last_run_result": None,

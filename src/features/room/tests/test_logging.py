@@ -98,7 +98,7 @@ def _exercise_everything(op: dict[str, object], switchbot: FakeSwitchBot) -> str
     client.get("/schedules")
     client.put(
         f"/schedules/{created['id']}",
-        json={"condition": "holiday", "run_time": "08:00", "scene": "out"},
+        json={"condition": "weekdays", "weekdays": [6, 7], "run_time": "08:00", "scene": "out"},
     )
     client.put(f"/schedules/{created['id']}/enabled", json={"is_enabled": False})
     client.put("/schedules/999999999/enabled", json={"is_enabled": True})
@@ -109,10 +109,10 @@ def _exercise_everything(op: dict[str, object], switchbot: FakeSwitchBot) -> str
     from datetime import time
 
     due = repos.get_room_schedule(
-        repos.insert_room_schedule(user_id, "daily", (), time(7, 0), "bedside_speaker", True)
+        repos.insert_room_schedule(user_id, repos.ScheduleDefinition("daily", (), "none", "same", time(7, 0), "scene", "bedside_speaker", None, None), True)
     )
     skipped = repos.get_room_schedule(
-        repos.insert_room_schedule(user_id, "daily", (), time(12, 0), "out", True)
+        repos.insert_room_schedule(user_id, repos.ScheduleDefinition("daily", (), "none", "same", time(12, 0), "scene", "out", None, None), True)
     )
     assert due is not None and skipped is not None
     set_source("job")
@@ -191,7 +191,7 @@ def test_定期実行の判定と実行が主体つきで残る(
     text = "\n".join(job_lines)
 
     assert "定期実行の判定開始 判定時刻=2026-10-01 07:00:30" in text
-    assert re.search(r"判断=実行する scene=bedside_speaker 条件=daily 時刻=07:00 実行日=2026-10-01", text)
+    assert re.search(r"判断=実行する action=scene scene=bedside_speaker 条件=daily 祝日の扱い=none 実行日の取り方=same 時刻=07:00 実行日=2026-10-01 基準日=2026-10-01", text)
     assert re.search(r"判断=実行しない 理由=時刻が範囲外", text)
     # 定期実行による機器の変更の主体
     assert "一括切替 scene=bedside_speaker device=bedside_speaker target=on 主体=定期実行 結果=success" in text

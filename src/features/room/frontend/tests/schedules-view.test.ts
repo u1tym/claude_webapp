@@ -2,9 +2,9 @@ import { flushPromises, mount, type VueWrapper } from "@vue/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AuthError } from "../src/api";
 import {
+  actionText,
   conditionText,
   formatLastRunAt,
-  sceneLabel,
   sortSchedules,
   type ScheduleItem,
 } from "../src/room";
@@ -16,8 +16,12 @@ function item(override: Partial<ScheduleItem> = {}): ScheduleItem {
     id: 1,
     condition: "daily",
     weekdays: [],
+    holiday_mode: "none",
+    day_shift: "same",
     run_time: "07:00",
     scene: "indoor_speaker",
+    device: null,
+    state: null,
     is_enabled: true,
     last_run: null,
     ...override,
@@ -70,7 +74,17 @@ describe("表示", () => {
       scheduleHandler([
         item({ id: 1, condition: "daily", run_time: "07:00", scene: "indoor_speaker" }),
         item({ id: 2, condition: "weekdays", weekdays: [5, 1, 3], run_time: "22:30", scene: "out" }),
-        item({ id: 3, condition: "holiday", run_time: "09:15", scene: "ceiling_light" }),
+        item({
+          id: 3,
+          condition: "weekdays",
+          weekdays: [1, 2, 3, 4, 5],
+          holiday_mode: "exclude",
+          day_shift: "before",
+          run_time: "09:15",
+          scene: null,
+          device: "indirect_light",
+          state: "off",
+        }),
       ]),
     );
     const wrapper = await mountSchedules();
@@ -85,7 +99,8 @@ describe("表示", () => {
     expect(first.get(".sch-scene").text()).toBe("屋内スピーカー選択");
     expect(row(wrapper, 2).get(".sch-condition").text()).toBe("月・水・金");
     expect(row(wrapper, 2).get(".sch-scene").text()).toBe("お出かけ");
-    expect(row(wrapper, 3).get(".sch-condition").text()).toBe("祝日");
+    expect(row(wrapper, 3).get(".sch-condition").text()).toBe("月・火・水・木・金（祝日を除く）の前の日");
+    expect(row(wrapper, 3).get(".sch-scene").text()).toBe("間接照明を OFF");
   });
 
   it("時刻の昇順に並べる", async () => {
@@ -100,7 +115,7 @@ describe("表示", () => {
     expect(rows(wrapper).map((r) => r.get(".sch-time").text())).toEqual(["06:05", "12:00", "23:10"]);
   });
 
-  it("同じ時刻なら一括切替の名称順に並べる", () => {
+  it("同じ時刻なら実行内容の名称順に並べる", () => {
     const list = [
       item({ id: 1, scene: "out" }),
       item({ id: 2, scene: "indirect_light" }),
@@ -109,9 +124,9 @@ describe("表示", () => {
       item({ id: 5, scene: "indoor_speaker" }),
     ];
     const expected = [...list]
-      .map((s) => sceneLabel(s.scene))
+      .map((s) => actionText(s))
       .sort((a, b) => a.localeCompare(b, "ja"));
-    expect(sortSchedules(list).map((s) => sceneLabel(s.scene))).toEqual(expected);
+    expect(sortSchedules(list).map((s) => actionText(s))).toEqual(expected);
   });
 
   it("同じ時刻・同じ一括切替なら登録の順（id）に並べる", () => {
@@ -133,10 +148,55 @@ describe("表示", () => {
       "有効",
       "実行条件",
       "時刻",
-      "一括切替",
+      "実行内容",
       "最終実行",
       "操作",
     ]);
+  });
+});
+
+describe("個別切替の一覧と最終実行", () => {
+  it("個別切替の実行内容と、成功・失敗が示される", async () => {
+    mockApi(
+      scheduleHandler([
+        item({
+          id: 1,
+          scene: null,
+          device: "indoor_speaker",
+          state: "off",
+          last_run: { at: "2026-10-01T07:00:02+09:00", result: "success", failed_devices: [] },
+        }),
+        item({
+          id: 2,
+          scene: null,
+          device: "bedside_speaker",
+          state: "on",
+          last_run: {
+            at: "2026-10-01T07:00:03+09:00",
+            result: "failure",
+            failed_devices: ["bedside_speaker"],
+          },
+        }),
+      ]),
+    );
+    const wrapper = await mountSchedules();
+    expect(row(wrapper, 1).get(".sch-scene").text()).toBe("屋内スピーカーを OFF");
+    expect(row(wrapper, 1).get(".sch-result").text()).toBe("✓ 成功");
+    expect(row(wrapper, 2).get(".sch-scene").text()).toBe("枕元スピーカーを ON");
+    expect(row(wrapper, 2).get(".sch-result").text()).toBe("✕ 失敗");
+    expect(row(wrapper, 2).get(".sch-failed").text()).toContain("枕元スピーカー");
+  });
+
+  it("列の見出しは「実行内容」で、有効／無効のスイッチの名称も実行内容を使う", async () => {
+    mockApi(
+      scheduleHandler([item({ id: 1, scene: null, device: "indirect_light", state: "on", run_time: "06:30" })]),
+    );
+    const wrapper = await mountSchedules();
+    expect(wrapper.text()).toContain("実行内容");
+    expect(wrapper.text()).not.toContain("一括切替");
+    expect(row(wrapper, 1).get('[role="switch"]').attributes("aria-label")).toBe(
+      "間接照明を ON 06:30 の定期実行",
+    );
   });
 });
 
@@ -200,12 +260,43 @@ describe("最終実行", () => {
 describe("文言の補助関数", () => {
   it("実行条件の表示", () => {
     expect(conditionText({ condition: "daily", weekdays: [] })).toBe("毎日");
-    expect(conditionText({ condition: "holiday", weekdays: [] })).toBe("祝日");
     expect(conditionText({ condition: "weekdays", weekdays: [7, 1] })).toBe("月・日");
     expect(conditionText({ condition: "weekdays", weekdays: [6, 2, 4] })).toBe("火・木・土");
     expect(conditionText({ condition: "weekdays", weekdays: [1, 2, 3, 4, 5, 6, 7] })).toBe(
       "月・火・水・木・金・土・日",
     );
+  });
+
+  it.each([
+    ["none", "same", "月・水"],
+    ["include", "same", "月・水・祝日"],
+    ["exclude", "same", "月・水（祝日を除く）"],
+    ["none", "before", "月・水の前の日"],
+    ["none", "after", "月・水の次の日"],
+    ["include", "before", "月・水・祝日の前の日"],
+    ["include", "after", "月・水・祝日の次の日"],
+    ["exclude", "before", "月・水（祝日を除く）の前の日"],
+    ["exclude", "after", "月・水（祝日を除く）の次の日"],
+  ] as const)("曜日の指定の表示: 祝日の扱い %s、実行日の取り方 %s", (mode, shift, expected) => {
+    expect(
+      conditionText({ condition: "weekdays", weekdays: [3, 1], holiday_mode: mode, day_shift: shift }),
+    ).toBe(expected);
+  });
+
+  it("毎日は、祝日の扱いと実行日の取り方に関わらず「毎日」", () => {
+    expect(
+      conditionText({ condition: "daily", weekdays: [], holiday_mode: "none", day_shift: "same" }),
+    ).toBe("毎日");
+  });
+
+  it("実行内容の表示: 一括切替は名称、個別切替は機器と状態（電灯は未実装を添える）", () => {
+    expect(actionText({ scene: "out", device: null, state: null })).toBe("お出かけ");
+    expect(actionText({ scene: "ceiling_light", device: null, state: null })).toBe("電灯選択");
+    expect(actionText({ scene: null, device: "indirect_light", state: "on" })).toBe("間接照明を ON");
+    expect(actionText({ scene: null, device: "indoor_speaker", state: "off" })).toBe("屋内スピーカーを OFF");
+    expect(actionText({ scene: null, device: "bedside_speaker", state: "on" })).toBe("枕元スピーカーを ON");
+    expect(actionText({ scene: null, device: "ceiling_light", state: "on" })).toBe("電灯を ON（未実装）");
+    expect(actionText({ scene: null, device: "ceiling_light", state: "off" })).toBe("電灯を OFF（未実装）");
   });
 
   it("最終実行の日時は年月日 時分", () => {

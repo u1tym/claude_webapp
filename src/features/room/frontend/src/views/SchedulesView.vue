@@ -13,9 +13,9 @@ import ScheduleEditor from "../components/ScheduleEditor.vue";
 import {
   DEVICE_LABELS,
   RUN_RESULT_TEXT,
+  actionText,
   conditionText,
   formatLastRunAt,
-  sceneLabel,
   sortSchedules,
   type ScheduleItem,
 } from "../room";
@@ -195,7 +195,7 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
         <span role="columnheader">有効</span>
         <span role="columnheader">実行条件</span>
         <span role="columnheader">時刻</span>
-        <span role="columnheader">一括切替</span>
+        <span role="columnheader">実行内容</span>
         <span role="columnheader">最終実行</span>
         <span role="columnheader">操作</span>
       </div>
@@ -215,7 +215,7 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
               type="button"
               role="switch"
               :aria-checked="item.is_enabled"
-              :aria-label="`${sceneLabel(item.scene)} ${item.run_time} の定期実行`"
+              :aria-label="`${actionText(item)} ${item.run_time} の定期実行`"
               :disabled="pendingIds.has(item.id)"
               @click="toggleEnabled(item)"
             >
@@ -225,7 +225,7 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
           </span>
           <span class="sch-condition" role="cell">{{ conditionText(item) }}</span>
           <span class="sch-time" role="cell">{{ item.run_time }}</span>
-          <span class="sch-scene" role="cell">{{ sceneLabel(item.scene) }}</span>
+          <span class="sch-scene" role="cell">{{ actionText(item) }}</span>
           <span class="sch-last" role="cell">
             <template v-if="item.last_run">
               <span>{{ formatLastRunAt(item.last_run.at) }}</span>

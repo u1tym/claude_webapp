@@ -172,36 +172,81 @@ export function sceneStatus(
 }
 
 /** 実行条件（API の `condition`）。 */
-export type Condition = "daily" | "weekdays" | "holiday";
+export type Condition = "daily" | "weekdays";
+
+/** 祝日の扱い（API の `holiday_mode`）。none = 指定した曜日のみ、include = 祝日も実行、exclude = 祝日は実行しない。 */
+export type HolidayMode = "none" | "include" | "exclude";
+
+/** 実行日の取り方（API の `day_shift`）。same = 当日、before = の前の日、after = の次の日。 */
+export type DayShift = "same" | "before" | "after";
+
+/** 個別切替の機器（API の `device`）。玄関ドアは含めない。 */
+export type TimerDeviceKey = "ceiling_light" | "indirect_light" | "indoor_speaker" | "bedside_speaker";
 
 /** 最終実行の結果。 */
 export type RunResult = "success" | "partial" | "failure";
 
-/** API の定期実行 1 件。weekdays は 1〜7（1 = 月曜）。last_run は未実行なら null。 */
+/**
+ * API の定期実行 1 件。weekdays は 1〜7（1 = 月曜）。last_run は未実行なら null。
+ * 実行内容は、一括切替（scene）か、機器の個別切替（device + state）のどちらか一方。
+ */
 export type ScheduleItem = {
   id: number;
   condition: Condition;
   weekdays: number[];
+  holiday_mode: HolidayMode;
+  day_shift: DayShift;
   run_time: string;
-  scene: SceneKey;
+  scene: SceneKey | null;
+  device: TimerDeviceKey | null;
+  state: OnOff | null;
   is_enabled: boolean;
   last_run: { at: string; result: RunResult; failed_devices: DeviceKey[] } | null;
 };
 
 const WEEKDAY_NAMES = ["月", "火", "水", "木", "金", "土", "日"];
 
-/** 実行条件の表示。毎日、選んだ曜日（月曜から順に「月・水・金」）、祝日。 */
-export function conditionText(item: Pick<ScheduleItem, "condition" | "weekdays">): string {
+/**
+ * 実行条件の表示。毎日、または、選んだ曜日（月曜から順に「月・水・金」）に、祝日の扱いと実行日の取り方を続ける。
+ * 祝日も実行 → 曜日の後ろに「・祝日」、祝日は実行しない → 「（祝日を除く）」。
+ * の前の日 → 末尾に「の前の日」、の次の日 → 「の次の日」。指定した曜日のみ・当日は何も付けない。
+ */
+export function conditionText(
+  item: Pick<ScheduleItem, "condition" | "weekdays"> &
+    Partial<Pick<ScheduleItem, "holiday_mode" | "day_shift">>,
+): string {
   if (item.condition === "daily") {
     return "毎日";
   }
-  if (item.condition === "holiday") {
-    return "祝日";
-  }
-  return [...item.weekdays]
+  let text = [...item.weekdays]
     .sort((a, b) => a - b)
     .map((day) => WEEKDAY_NAMES[day - 1] ?? "")
     .join("・");
+  if (item.holiday_mode === "include") {
+    text += "・祝日";
+  } else if (item.holiday_mode === "exclude") {
+    text += "（祝日を除く）";
+  }
+  if (item.day_shift === "before") {
+    text += "の前の日";
+  } else if (item.day_shift === "after") {
+    text += "の次の日";
+  }
+  return text;
+}
+
+/**
+ * 実行内容の表示。一括切替はその名称、機器の個別切替は「間接照明を ON」のように機器名と状態。
+ * 電灯は未実装のため「（未実装）」を添える。
+ */
+export function actionText(
+  item: Pick<ScheduleItem, "scene" | "device" | "state">,
+): string {
+  if (item.device && item.state) {
+    const note = item.device === "ceiling_light" ? "（未実装）" : "";
+    return `${DEVICE_LABELS[item.device]}を ${item.state === "on" ? "ON" : "OFF"}${note}`;
+  }
+  return item.scene ? sceneLabel(item.scene) : "";
 }
 
 /** 結果の表示。色だけでなく、記号と文言で区別する。 */
@@ -216,22 +261,34 @@ export function formatLastRunAt(iso: string): string {
   return iso.slice(0, 16).replace("T", " ");
 }
 
-/** 一覧の並び: 時刻の昇順、同じ時刻なら一括切替の名称順。 */
+/** 一覧の並び: 時刻の昇順、同じ時刻なら実行内容の名称順。 */
 export function sortSchedules(items: ScheduleItem[]): ScheduleItem[] {
   return [...items].sort(
     (a, b) =>
       a.run_time.localeCompare(b.run_time) ||
-      sceneLabel(a.scene).localeCompare(sceneLabel(b.scene), "ja") ||
+      actionText(a).localeCompare(actionText(b), "ja") ||
       a.id - b.id,
   );
 }
 
-/** 定期実行入力フォームの値。condition / scene の空文字は未選択。time は `HH:MM`。 */
+/** 実行内容の種類。scene = 一括切替、device = 機器の個別切替。空文字は未選択。 */
+export type ActionType = "" | "scene" | "device";
+
+/**
+ * 定期実行入力フォームの値。空文字は未選択。time は `HH:MM`。
+ * holidayMode / dayShift は、実行条件が「曜日の指定」のときだけ意味を持つ。
+ * scene は actionType が scene のとき、device と state は actionType が device のときだけ意味を持つ。
+ */
 export type ScheduleForm = {
   condition: "" | Condition;
   weekdays: number[];
+  holidayMode: HolidayMode;
+  dayShift: DayShift;
   time: string;
+  actionType: ActionType;
   scene: "" | SceneKey;
+  device: "" | TimerDeviceKey;
+  state: "" | OnOff;
   enabled: boolean;
 };
 
@@ -244,12 +301,45 @@ export const WEEKDAY_CHIPS: { value: number; label: string }[] = WEEKDAY_NAMES.m
 export const CONDITION_OPTIONS: { value: Condition; label: string }[] = [
   { value: "daily", label: "毎日" },
   { value: "weekdays", label: "曜日の指定" },
-  { value: "holiday", label: "祝日の指定" },
+];
+
+/** 祝日の扱いの選択肢（既定は「指定した曜日のみ」）。 */
+export const HOLIDAY_MODE_OPTIONS: { value: HolidayMode; label: string }[] = [
+  { value: "none", label: "指定した曜日のみ" },
+  { value: "include", label: "祝日も実行" },
+  { value: "exclude", label: "祝日は実行しない" },
+];
+
+/** 実行日の取り方の選択肢（既定は「当日」）。 */
+export const DAY_SHIFT_OPTIONS: { value: DayShift; label: string }[] = [
+  { value: "same", label: "当日" },
+  { value: "before", label: "の前の日" },
+  { value: "after", label: "の次の日" },
+];
+
+/** 実行内容の種類の選択肢。 */
+export const ACTION_TYPE_OPTIONS: { value: "scene" | "device"; label: string }[] = [
+  { value: "scene", label: "一括切替" },
+  { value: "device", label: "機器の個別切替" },
+];
+
+/** 個別切替の機器の選択肢（玄関ドアは含めない）。電灯は未実装。 */
+export const TIMER_DEVICES: { key: TimerDeviceKey; label: string }[] = [
+  { key: "ceiling_light", label: "電灯（未実装）" },
+  { key: "indirect_light", label: DEVICE_LABELS.indirect_light },
+  { key: "indoor_speaker", label: DEVICE_LABELS.indoor_speaker },
+  { key: "bedside_speaker", label: DEVICE_LABELS.bedside_speaker },
+];
+
+/** 個別切替の状態の選択肢。 */
+export const STATE_OPTIONS: { value: OnOff; label: string }[] = [
+  { value: "on", label: "ON" },
+  { value: "off", label: "OFF" },
 ];
 
 const TIME_PATTERN = /^([01]\d|2[0-3]):[0-5]\d$/;
 
-/** 送信前の検証。問題があれば、最初の 1 件を一文で返す。問題がなければ null。 */
+/** 送信前の検証。問題があれば、最初の 1 件を一文で返す（実行条件 → 曜日 → 時刻 → 実行内容の順）。問題がなければ null。 */
 export function validateScheduleForm(form: ScheduleForm): string | null {
   if (form.condition === "") {
     return "実行条件を選択してください。";
@@ -260,42 +350,85 @@ export function validateScheduleForm(form: ScheduleForm): string | null {
   if (!TIME_PATTERN.test(form.time)) {
     return "時刻を HH:MM の形式で入力してください。";
   }
-  if (form.scene === "") {
-    return "一括切替を選択してください。";
+  if (form.actionType === "") {
+    return "実行内容を選択してください。";
+  }
+  if (form.actionType === "scene") {
+    return form.scene === "" ? "一括切替を選択してください。" : null;
+  }
+  if (form.device === "") {
+    return "機器を選択してください。";
+  }
+  if (form.state === "") {
+    return "状態（ON / OFF）を選択してください。";
   }
   return null;
 }
 
-/** API へ送る本文。曜日は、実行条件が「曜日の指定」のときだけ付ける。 */
+/**
+ * API へ送る本文。曜日・祝日の扱い・実行日の取り方は、実行条件が「曜日の指定」のときだけ付ける。
+ * 実行内容は、一括切替なら scene、個別切替なら device と state のどちらか一方だけを付ける。
+ */
 export function toScheduleBody(form: ScheduleForm): ScheduleInput {
-  return {
+  const body: ScheduleInput = {
     condition: form.condition as Condition,
     weekdays: form.condition === "weekdays" ? [...form.weekdays].sort((a, b) => a - b) : [],
     run_time: form.time,
-    scene: form.scene as SceneKey,
     is_enabled: form.enabled,
   };
+  if (form.condition === "weekdays") {
+    body.holiday_mode = form.holidayMode;
+    body.day_shift = form.dayShift;
+  }
+  if (form.actionType === "device") {
+    body.device = form.device as TimerDeviceKey;
+    body.state = form.state as OnOff;
+  } else {
+    body.scene = form.scene as SceneKey;
+  }
+  return body;
 }
 
 /** 登録・変更の要求本文。 */
 export type ScheduleInput = {
   condition: Condition;
   weekdays: number[];
+  holiday_mode?: HolidayMode;
+  day_shift?: DayShift;
   run_time: string;
-  scene: SceneKey;
+  scene?: SceneKey;
+  device?: TimerDeviceKey;
+  state?: OnOff;
   is_enabled: boolean;
 };
 
-/** 既存の定期実行から、入力フォームの初期値を作る。 */
+/** 既存の定期実行から、入力フォームの初期値を作る。新規は、実行条件と実行内容の種類を未選択にする。 */
 export function formFromItem(item: ScheduleItem | null): ScheduleForm {
   if (item === null) {
-    return { condition: "", weekdays: [], time: "", scene: "", enabled: true };
+    return {
+      condition: "",
+      weekdays: [],
+      holidayMode: "none",
+      dayShift: "same",
+      time: "",
+      actionType: "",
+      scene: "",
+      device: "",
+      state: "",
+      enabled: true,
+    };
   }
+  const isDevice = Boolean(item.device && item.state);
   return {
     condition: item.condition,
     weekdays: [...item.weekdays],
+    holidayMode: item.holiday_mode ?? "none",
+    dayShift: item.day_shift ?? "same",
     time: item.run_time,
-    scene: item.scene,
+    actionType: isDevice ? "device" : "scene",
+    scene: isDevice ? "" : (item.scene ?? ""),
+    device: isDevice ? (item.device ?? "") : "",
+    state: isDevice ? (item.state ?? "") : "",
     enabled: item.is_enabled,
   };
 }
