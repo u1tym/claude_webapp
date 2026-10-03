@@ -51,7 +51,7 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 - 日時: ISO 8601（`created_at` のみ。応答専用、要求では使わない）
 - 金額: 小数点以下2桁までの数値を表す文字列（例: `"1500.00"`）。誤差を避けるため数値型ではなく文字列で表す
 - `closing_day_shift_direction` / `payment_day_shift_direction`: `earlier`（過去）または `later`（未来）
-- `exclusion_kind`: `sunday`、`monday`、`tuesday`、`wednesday`、`thursday`、`friday`、`saturday`、`nonexistent_day`、`holiday`（日本の国民の祝日）
+- `exclusion_kind`: `sunday`、`monday`、`tuesday`、`wednesday`、`thursday`、`friday`、`saturday`、`nonexistent_day`、`holiday`（日本の国民の祝日、および本人のユーザ休日）
 - 除外条件は `{ "exclusion_kind": "..." }` の配列で表す（締め日用・支払日用を別々の配列で持つ）
 - `is_credit` / `is_credit_payment`: 真偽値。支出方法の売掛区分を表す（両方 `false` なら通常、`is_credit` だけ `true` なら売掛、`is_credit_payment` だけ `true` なら売掛支払）。両方 `true` にはできない
 
@@ -651,3 +651,5 @@ GET `/settings` だけ認証不要。それ以外の全エンドポイントは�
 | 2026-09-26 00:44 | 承認済み | API キー認証への対応を承認 |
 | 2026-09-27 | 未承認 | `/payment-methods` の GET/POST/PATCH に `is_credit`・`is_credit_payment` を追加（両方 `true` は400）。`GET /reports/usage-date` に `include_credit` クエリを追加。`GET /reports/payment-month` を廃止し、`GET /reports/payment-date` を追加（支払日ごと・売掛区分ごとの合計金額を返す） |
 | 2026-09-27 | 承認済み | `is_credit`・`is_credit_payment` の追加と `/reports/payment-date` への置き換えを承認 |
+| 2026-10-03 22:10 | 未承認 | `holiday` の説明にユーザ休日を加える（API の形は変更なし） |
+| 2026-10-03 22:12 | 承認済み | ユーザ休日の `public` 化と祝日判定への反映の改訂を承認 |

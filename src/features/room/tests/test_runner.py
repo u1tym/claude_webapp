@@ -466,3 +466,21 @@ def test_select_dueは毎日の定期実行を条件で落とさない() -> None
     due, skipped = select_due([_row()], at(THU, 7, 0, 1), grace_minutes=5)
     assert [d.run_date for d in due] == [THU]
     assert skipped == []
+
+
+def test_is_holiday_includes_user_holiday(monkeypatch) -> None:
+    from app import repos
+
+    calls: list[tuple[int, date]] = []
+
+    def fake(user_id: int, day: date) -> bool:
+        calls.append((user_id, day))
+        return user_id == 7 and day == THU
+
+    monkeypatch.setattr(holiday_service, "is_user_holiday", fake)
+    assert holiday_service.is_holiday(THU, 7) is True
+    assert holiday_service.is_holiday(THU, 8) is False
+    assert holiday_service.is_holiday(THU) is False
+    assert holiday_service.is_holiday(CULTURE_DAY, 8) is True  # 日本の祝日は DB を見ない
+    assert (8, CULTURE_DAY) not in calls
+    assert repos.is_user_holiday is not None

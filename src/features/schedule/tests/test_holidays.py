@@ -24,3 +24,13 @@ def test_holidays_do_not_call_network() -> None:
         mocked.assert_not_called()
     assert items[0]["date"] == "2026-01-01"
     assert items[0]["name"] == "元日"
+
+
+def test_is_holiday_includes_user_dates() -> None:
+    from app.services.holiday_service import is_holiday
+
+    user_dates = frozenset({date(2026, 1, 2)})
+    assert is_holiday(date(2026, 1, 1), user_dates) is True  # 日本の祝日
+    assert is_holiday(date(2026, 1, 2), user_dates) is True  # ユーザ休日
+    assert is_holiday(date(2026, 1, 2), None) is False
+    assert is_holiday(date(2026, 1, 2), frozenset({date(2026, 1, 5)})) is False

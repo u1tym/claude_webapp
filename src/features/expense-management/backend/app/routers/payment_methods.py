@@ -7,6 +7,7 @@ from pydantic import BaseModel, Field
 
 from app.deps import AuthContext, get_current_user
 from app.errors import InvalidInputError, NotFoundError
+from app.repos import is_user_holiday
 from app.services import payment_method_service
 from app.services.closing_date_service import estimate_payment_date
 from app.services.payment_method_service import PaymentMethodInput
@@ -111,5 +112,6 @@ def get_estimated_payment_date(
         payment_day=method.payment_day,
         payment_day_shift_direction=method.payment_day_shift_direction,
         payment_day_exclusions=payment_exclusions,
+        is_user_holiday=lambda day: is_user_holiday(auth.user.id, day),
     )
     return {"payment_date": result.isoformat()}

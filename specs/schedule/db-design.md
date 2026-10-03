@@ -4,10 +4,11 @@
 
 この機能が使うスキーマとテーブルの範囲。`requirements.md` の該当 REQ を満たすことだけを書く。
 
-- スキーマ: `schedule`。カテゴリ、スケジュール、ユーザ休日、ルーチン、表示設定を置く。
+- スキーマ: `schedule`。カテゴリ、スケジュール、ルーチン、表示設定を置く。
 - ユーザ、セッション、システム設定、機能マスタ、メニュー割当はスキーマ `public` を読む。複製しない。列は増やさない。表の作成は `portal` が担う。
 - API キー（`public.api_keys`）は、API キーによる認証のために読み、許可したときに最終利用日時（`last_used_at`）だけを更新する。複製しない。列は増やさない。表の作成は `api-key-management` が担う（列と制約は `specs/api-key-management/db-design.md`）。
-- 日本の祝日は算出し、テーブルには置かない。ユーザ休日はテーブルに置く。
+- ユーザ休日（`public.user_holidays`）は、全機能が祝日判定に使う共通データのため、スキーマ `public` に置く（`rules/13-db.md` の例外）。登録・更新・論理削除は本機能だけが行い、他機能は読み取りのみ。列と制約は従来の `schedule.user_holidays` と同じ。
+- 日本の祝日は算出し、テーブルには置かない。
 - ログはファイルへ出す。テーブルには置かない。
 
 関連ドキュメント:
@@ -268,9 +269,11 @@ erDiagram
 
 非表示を解除するときは行を削除する。カテゴリの論理削除では行を残してよい。`category_id` は本人のカテゴリに限る（`categories.user_id` と一致）。
 
-### schedule.user_holidays
+### public.user_holidays
 
-目的: 利用者本人が登録する休日。年月日と名称を持つ。日本の祝日とは別に保持する。論理削除する。
+目的: 利用者本人が登録する休日。年月日と名称を持つ。日本の祝日とは別に保持する。論理削除する。全機能が祝日判定に参照する（読み取りのみ。更新は `schedule` だけ）。
+
+既存の DB では、`schedule.user_holidays` の行を `public.user_holidays` へ移し（`id` を維持。シーケンスは最大値に合わせる）、`schedule.user_holidays` を削除する移行を行う（本節末「既存の DB の移行（ユーザ休日）」）。
 
 | カラム | 型 | NULL | 既定 | 説明 |
 |--------|-----|------|------|------|
@@ -293,6 +296,14 @@ erDiagram
 - 部分一意に付随する `(user_id, holiday_date)` WHERE `is_deleted = false`
 
 同一ユーザの未削除で年月日が重複する挿入・更新は失敗する。他ユーザや論理削除済みと同じ年月日は置ける。日本の祝日と同じ年月日も置ける。物理削除はしない。一覧は未削除のみ、`holiday_date` の昇順。
+
+#### 既存の DB の移行（ユーザ休日）
+
+1. `public.user_holidays` と索引を、`CREATE TABLE IF NOT EXISTS` / `CREATE INDEX IF NOT EXISTS` で作る。
+2. `schedule.user_holidays` があるときだけ、全行を `id` 付きで `public.user_holidays` へ複製し（既にある `id` は複製しない）、`id` のシーケンスを最大値に合わせる。
+3. 複製した行数が一致することを確認してから、`schedule.user_holidays` を削除する。
+
+何度適用しても失敗しない（べき等）こと。
 
 ### schedule.routines
 
@@ -540,7 +551,7 @@ erDiagram
 - `users` 1 対 多 `schedules`。スケジュールは物理削除しない。
 - `users` 1 対 0..1 `preferences`。行が無いときは初期値。
 - `users` 1 対 多 `hidden_categories`。非表示解除時だけ行を削除する。
-- `users` 1 対 多 `user_holidays`。ユーザ休日は物理削除しない。
+- `users` 1 対 多 `user_holidays`（`public.user_holidays`）。ユーザ休日は物理削除しない。他機能は読み取りのみ。
 - `users` 1 対 多 `routines`。ルーチンは物理削除しない。
 - `categories` 1 対 多 `schedules`。カテゴリの論理削除ではスケジュール行を残し、`category_id` は維持する。
 - `categories` 1 対 多 `hidden_categories`。カテゴリの論理削除では非表示行を残してよい。
@@ -558,7 +569,7 @@ erDiagram
 | 要件 | 設計 |
 |------|------|
 | REQ-001 | `public.sessions`、`public.users`、`public.features`（`id = 'schedule'`）、`public.menu_assignments`、`public.api_keys`（API キーによる認証、`last_used_at` の更新） |
-| REQ-002 | `schedule.categories.user_id`、`schedule.schedules.user_id`、`schedule.preferences.user_id`、`schedule.hidden_categories.user_id`、`schedule.user_holidays.user_id`、`schedule.routines.user_id` |
+| REQ-002 | `schedule.categories.user_id`、`schedule.schedules.user_id`、`schedule.preferences.user_id`、`schedule.hidden_categories.user_id`、`public.user_holidays.user_id`、`schedule.routines.user_id` |
 | REQ-003 | `schedule.schedules.kind`、`is_completed` |
 | REQ-004 | `schedule.schedules` のタイトル・開始終了・カテゴリ・場所・詳細・粒度・種別・`needs_notification`・`routine_id` |
 | REQ-005 | `granularity`、`start_date` / `end_date`、`start_time` / `end_time` |
@@ -579,9 +590,9 @@ erDiagram
 | REQ-020 | `start_date` / `end_date` による期間重なり |
 | REQ-021〜REQ-026 | テーブルなし（画面） |
 | REQ-027 | テーブルなし（ファイルログ） |
-| REQ-028 | `schedule.user_holidays` への挿入。部分一意 `(user_id, holiday_date)` |
-| REQ-029 | `schedule.user_holidays` の `holiday_date` / `name` 更新。部分一意 |
-| REQ-030 | `schedule.user_holidays.is_deleted` |
+| REQ-028 | `public.user_holidays` への挿入。部分一意 `(user_id, holiday_date)` |
+| REQ-029 | `public.user_holidays` の `holiday_date` / `name` 更新。部分一意 |
+| REQ-030 | `public.user_holidays.is_deleted` |
 | REQ-031 | `schedule.routines.id` |
 | REQ-032 | `schedule.routines`、`schedule.routine_months`、`schedule.routine_exclusions`。`needs_notification` を含む |
 | REQ-033 | `schedule.routines` への挿入。反映月は `routine_months` |
@@ -616,3 +627,5 @@ erDiagram
 | 2026-08-30 08:01 | 承認済み | `schedules` と `routines` の `needs_notification` を承認 |
 | 2026-09-26 00:43 | 未承認 | `public.api_keys` の参照と `last_used_at` の更新を追加（API キーによる認証）。本機能の DDL 変更なし |
 | 2026-09-26 00:44 | 承認済み | API キー認証への対応を承認 |
+| 2026-10-03 22:10 | 未承認 | ユーザ休日テーブルを `schedule.user_holidays` から `public.user_holidays` へ移す（全機能から参照）。既存 DB の移行手順を追加 |
+| 2026-10-03 22:12 | 承認済み | ユーザ休日の `public` 化と祝日判定への反映の改訂を承認 |

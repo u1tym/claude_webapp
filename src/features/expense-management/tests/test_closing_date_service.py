@@ -167,3 +167,18 @@ def test_estimate_payment_date_crosses_year_boundary() -> None:
     # closing: Dec 31, 2026 (exists). payment target month: Jan 2027, day 31
     # does not exist -> clamps to 31... January has 31 days, so it exists.
     assert result == date(2027, 1, 31)
+
+
+def test_compute_actual_date_shifts_on_user_holiday() -> None:
+    # 2026-09-15 は祝日でないが、ユーザ休日なら除外対象として 1 日ずれる。
+    user_days = {date(2026, 9, 15)}
+    result = compute_actual_date(
+        2026, 9, 15, frozenset({"holiday"}), "later", lambda d: d in user_days
+    )
+    assert result == date(2026, 9, 16)
+    # ユーザ休日を渡さなければ従来どおり。
+    assert compute_actual_date(2026, 9, 15, frozenset({"holiday"}), "later") == date(2026, 9, 15)
+    # "holiday" 除外が無ければユーザ休日は無関係。
+    assert compute_actual_date(
+        2026, 9, 15, frozenset(), "later", lambda d: d in user_days
+    ) == date(2026, 9, 15)

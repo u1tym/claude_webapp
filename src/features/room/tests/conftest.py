@@ -89,3 +89,11 @@ def cleanup_created_users() -> Iterator[None]:
             cur.execute("DELETE FROM public.users WHERE id = ANY(%s)", (ids,))
     except Exception as exc:  # 後始末の失敗でテストの結果を変えない
         print(f"テスト用データの後始末に失敗しました: {type(exc).__name__}")
+
+
+@pytest.fixture(autouse=True)
+def no_user_holidays(monkeypatch: pytest.MonkeyPatch) -> None:
+    """祝日の判定でユーザ休日を DB から読まない（既定は、ユーザ休日なし）。個別のテストで差し替えてよい。"""
+    from app.services import holiday_service
+
+    monkeypatch.setattr(holiday_service, "is_user_holiday", lambda user_id, day: False)

@@ -67,7 +67,7 @@ def _condition_matches(schedule: RoomScheduleRow, day: date) -> tuple[bool, str]
 
     base = base_day(schedule, day)
     in_weekdays = base.isoweekday() in schedule.weekdays
-    holiday = holiday_service.is_holiday(base)
+    holiday = holiday_service.is_holiday(base, schedule.created_by_user_id)
     mode = schedule.holiday_mode
     if mode == "include":
         matches = in_weekdays or holiday

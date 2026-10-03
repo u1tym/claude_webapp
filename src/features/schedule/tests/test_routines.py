@@ -338,3 +338,12 @@ def test_routine_update_does_not_change_schedules(log_dir: Path) -> None:
     assert "ルーチン更新成功" in text
     assert "ルーチン更新失敗" in text
     assert "session_id" not in text
+
+
+def test_apply_date_shift_user_holiday_later() -> None:
+    # 2026-01-02 は祝日でないが、ユーザ休日なら除外対象になり 1/3 へずれる。
+    user_dates = frozenset({date(2026, 1, 2)})
+    assert apply_date(date(2026, 1, 2), True, "later", ["holiday"], user_dates) == date(2026, 1, 3)
+    assert apply_date(date(2026, 1, 2), True, "later", ["holiday"], None) == date(2026, 1, 2)
+    # 日本の祝日とユーザ休日が連続しても越える。
+    assert apply_date(date(2026, 1, 1), True, "later", ["holiday"], user_dates) == date(2026, 1, 3)

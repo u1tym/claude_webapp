@@ -189,7 +189,7 @@ erDiagram
 |--------|-----|------|------|------|
 | `payment_method_id` | integer | NOT NULL | - | 対象の支出方法。`expense_management.payment_methods.id` |
 | `target` | varchar(16) | NOT NULL | - | `closing_day`（締め日用）または `payment_day`（支払日用） |
-| `exclusion_kind` | varchar(16) | NOT NULL | - | `sunday`〜`saturday`のいずれか（特定の曜日）、`nonexistent_day`（当月に存在しない日）、または `holiday`（日本の国民の祝日。`jpholiday` で判定し、日付そのものはDBに保存しない） |
+| `exclusion_kind` | varchar(16) | NOT NULL | - | `sunday`〜`saturday`のいずれか（特定の曜日）、`nonexistent_day`（当月に存在しない日）、または `holiday`（日本の国民の祝日、または支出方法の所有者のユーザ休日。日本の祝日は `jpholiday` で判定し、日付そのものは本表に保存しない。ユーザ休日は `public.user_holidays` を読み取りのみで参照する） |
 
 制約:
 
@@ -304,3 +304,5 @@ erDiagram
 | 2026-09-26 00:44 | 承認済み | API キー認証への対応を承認 |
 | 2026-09-27 | 未承認 | `payment_methods` に `is_credit`（売掛フラグ）・`is_credit_payment`（売掛支払フラグ）を追加し、両方を同時に true にしない検査制約を追加。既定は両方 false（通常）。既存 DDL は変えず新DDLファイルで反映。REQ-011・012 のトレーサビリティを更新（REQ-012 は支払日毎・売掛区分ごとの集計に変更） |
 | 2026-09-27 | 承認済み | `is_credit`・`is_credit_payment` の追加を承認 |
+| 2026-10-03 22:10 | 未承認 | `holiday` の判定が `public.user_holidays`（読み取りのみ）を参照することを明記（本機能のテーブル変更なし） |
+| 2026-10-03 22:12 | 承認済み | ユーザ休日の `public` 化と祝日判定への反映の改訂を承認 |

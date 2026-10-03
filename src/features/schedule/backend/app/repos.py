@@ -635,7 +635,7 @@ def list_user_holidays(
                 cur.execute(
                     """
                     SELECT id, user_id, holiday_date, name, is_deleted
-                    FROM schedule.user_holidays
+                    FROM public.user_holidays
                     WHERE user_id = %s
                       AND is_deleted = false
                       AND holiday_date >= %s
@@ -648,7 +648,7 @@ def list_user_holidays(
                 cur.execute(
                     """
                     SELECT id, user_id, holiday_date, name, is_deleted
-                    FROM schedule.user_holidays
+                    FROM public.user_holidays
                     WHERE user_id = %s AND is_deleted = false
                     ORDER BY holiday_date ASC
                     """,
@@ -663,7 +663,7 @@ def get_user_holiday(user_id: int, holiday_id: int) -> UserHolidayRow | None:
             cur.execute(
                 """
                 SELECT id, user_id, holiday_date, name, is_deleted
-                FROM schedule.user_holidays
+                FROM public.user_holidays
                 WHERE id = %s AND user_id = %s
                 """,
                 (holiday_id, user_id),
@@ -677,7 +677,7 @@ def insert_user_holiday(user_id: int, holiday_date: date, name: str) -> UserHoli
         with conn.cursor() as cur:
             cur.execute(
                 """
-                INSERT INTO schedule.user_holidays (user_id, holiday_date, name)
+                INSERT INTO public.user_holidays (user_id, holiday_date, name)
                 VALUES (%s, %s, %s)
                 RETURNING id, user_id, holiday_date, name, is_deleted
                 """,
@@ -698,7 +698,7 @@ def update_user_holiday(
         with conn.cursor() as cur:
             cur.execute(
                 """
-                UPDATE schedule.user_holidays
+                UPDATE public.user_holidays
                 SET holiday_date = %s, name = %s
                 WHERE id = %s AND user_id = %s AND is_deleted = false
                 """,
@@ -711,7 +711,7 @@ def logical_delete_user_holiday(holiday_id: int, user_id: int) -> None:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                UPDATE schedule.user_holidays
+                UPDATE public.user_holidays
                 SET is_deleted = true
                 WHERE id = %s AND user_id = %s AND is_deleted = false
                 """,

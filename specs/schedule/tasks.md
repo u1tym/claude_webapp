@@ -1023,6 +1023,81 @@ GET/POST/PATCH `/schedules` と GET/POST/PATCH `/routines` に `needs_notificati
 
 ---
 
+## タスク 27
+
+### タイトル
+
+ユーザ休日テーブルを `public.user_holidays` へ移す
+
+### 見積もり
+
+3時間
+
+### 関連要件
+
+- REQ-002, REQ-028, REQ-029, REQ-030
+
+### 関連設計
+
+- `db-design.md` / `public.user_holidays`、既存の DB の移行（ユーザ休日）
+- `design.md` / データアクセス（ユーザ休日）
+
+### 実装パス
+
+- `src/features/schedule/backend/sql/`（`01_schedule.sql` から `user_holidays` を除き、新しい DDL を追加）
+- `src/features/schedule/backend/app/repos.py`
+- `src/features/schedule/tests/`
+
+### 内容
+
+`public.user_holidays` を作成し、既存の `schedule.user_holidays` の行を移して削除する DDL を追加する。`repos.py` のユーザ休日の SQL を `public.user_holidays` に向ける。API の仕様は変えない。
+
+### 完了条件
+
+- [ ] 空の DB に DDL を適用すると `public.user_holidays` ができ、`schedule.user_holidays` は作られない
+- [ ] 旧い DB（`schedule.user_holidays` に行がある）に適用すると、行が `id` を保って `public.user_holidays` に移り、旧表が無くなる
+- [ ] DDL を再適用しても失敗しない（べき等）。移行後に追加した行の `id` が既存と重複しない
+- [ ] GET / POST / PATCH / DELETE `/user-holidays` が従来どおり動く（重複 409 などを含む）
+
+---
+
+## タスク 28
+
+### タイトル
+
+ルーチンの祝日除外にユーザ休日を含める
+
+### 見積もり
+
+2時間
+
+### 関連要件
+
+- REQ-039
+
+### 関連設計
+
+- `design.md` / 業務ロジック（除外対象の判定）、`app/services/holiday_service.py`
+
+### 実装パス
+
+- `src/features/schedule/backend/app/services/holiday_service.py`
+- `src/features/schedule/backend/app/services/routine_service.py`
+- `src/features/schedule/tests/`
+
+### 内容
+
+`holiday_service` に、ユーザ ID を指定して、日本の祝日、または本人の未削除のユーザ休日かを返す判定を追加する。`routine_service` の祝日除外は、`jpholiday` を直接呼ばず、この判定を使う。
+
+### 完了条件
+
+- [ ] 祝日除外のとき、日本の祝日の日が除外対象になる（従来どおり）
+- [ ] 祝日除外のとき、本人のユーザ休日（未削除）の日も除外対象になる
+- [ ] 他ユーザのユーザ休日、論理削除済みのユーザ休日は除外対象にならない
+- [ ] 判定に外部通信が無い
+
+---
+
 ## テスト
 
 ### 単体テスト
@@ -1065,3 +1140,5 @@ GET/POST/PATCH `/schedules` と GET/POST/PATCH `/routines` に `needs_notificati
 | 2026-08-30 00:23 | 承認済み | タスク 22〜23 を承認 |
 | 2026-08-30 08:02 | 未承認 | 通知要不要（タスク 24〜26）。DDL・API・入力の Notify |
 | 2026-08-30 08:04 | 承認済み | タスク 24〜26 を承認 |
+| 2026-10-03 22:10 | 未承認 | ユーザ休日の `public` への移行と、ルーチンの祝日除外へのユーザ休日の反映（タスク 27〜28） |
+| 2026-10-03 22:12 | 承認済み | ユーザ休日の `public` 化と祝日判定への反映の改訂を承認 |

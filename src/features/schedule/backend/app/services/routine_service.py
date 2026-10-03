@@ -3,8 +3,6 @@ from __future__ import annotations
 import calendar
 from datetime import date, timedelta
 
-import jpholiday
-
 from app.errors import InvalidInputError, NotFoundError
 from app.logger import write
 from app.repos import (
@@ -18,6 +16,7 @@ from app.repos import (
     logical_delete_routine,
     update_routine,
 )
+from app.services.holiday_service import is_holiday, user_holiday_dates
 from app.services.schedule_service import _body as schedule_body
 from app.services.schedule_service import _optional_text
 
@@ -228,6 +227,7 @@ def apply_date(
     adjust_excluded: bool,
     shift_direction: str | None,
     exclusions: list[str] | tuple[str, ...],
+    user_dates: frozenset[date] | None = None,
 ) -> date | None:
     if origin is None:
         return None
@@ -236,7 +236,7 @@ def apply_date(
     excluded = set(exclusions)
     current = origin
     for _ in range(32):
-        if not _is_excluded(current, excluded):
+        if not _is_excluded(current, excluded, user_dates):
             return current
         if shift_direction == "earlier":
             current = current - timedelta(days=1)
@@ -247,8 +247,8 @@ def apply_date(
     return None
 
 
-def _is_excluded(day: date, excluded: set[str]) -> bool:
-    if "holiday" in excluded and bool(jpholiday.is_holiday(day)):
+def _is_excluded(day: date, excluded: set[str], user_dates: frozenset[date] | None = None) -> bool:
+    if "holiday" in excluded and is_holiday(day, user_dates):
         return True
     return _NAME_BY_PY[day.weekday()] in excluded
 
@@ -483,7 +483,14 @@ def _apply_one(user_id: int, row: RoutineRow, year: int, month: int) -> dict[str
         row.weekday_n,
         row.weekday,
     )
-    target = apply_date(origin, row.adjust_excluded, row.shift_direction, row.exclusions)
+    user_dates: frozenset[date] | None = None
+    if origin is not None and row.adjust_excluded and "holiday" in row.exclusions:
+        user_dates = user_holiday_dates(
+            user_id, origin - timedelta(days=32), origin + timedelta(days=32)
+        )
+    target = apply_date(
+        origin, row.adjust_excluded, row.shift_direction, row.exclusions, user_dates
+    )
     if origin is None or target is None:
         write(
             "INF",

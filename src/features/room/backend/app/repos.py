@@ -393,3 +393,14 @@ def update_last_run(
             """,
             (at, result, list(failed_devices), schedule_id),
         )
+
+
+def is_user_holiday(user_id: int, day: date) -> bool:
+    """利用者のユーザ休日（public.user_holidays の未削除の行。読み取りのみ）に当たる日かを返す。"""
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 FROM public.user_holidays "
+            "WHERE user_id = %s AND holiday_date = %s AND is_deleted = false LIMIT 1",
+            (user_id, day),
+        )
+        return cur.fetchone() is not None

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date, timedelta
 
 import jpholiday
@@ -34,6 +35,7 @@ def compute_actual_date(
     base_day: int,
     exclusion_kinds: frozenset[str],
     shift_direction: str | None,
+    is_user_holiday: Callable[[date], bool] | None = None,
 ) -> date:
     """Resolve a day-of-month basis value to a concrete date for (year, month).
 
@@ -43,6 +45,9 @@ def compute_actual_date(
     weekday, or the fact that `base_day` did not exist in the month), it is
     shifted one day at a time in `shift_direction` until no exclusion
     matches.
+
+    The "holiday" exclusion matches Japanese national holidays and, when
+    `is_user_holiday` is given, the owner's registered user holidays.
     """
     days_in_month = _days_in_month(year, month)
     clamped_day = min(base_day, days_in_month)
@@ -54,7 +59,13 @@ def compute_actual_date(
         matches = (
             (day_was_nonexistent and "nonexistent_day" in exclusion_kinds)
             or (_WEEKDAY_KIND[candidate.weekday()] in exclusion_kinds)
-            or ("holiday" in exclusion_kinds and jpholiday.is_holiday(candidate))
+            or (
+                "holiday" in exclusion_kinds
+                and (
+                    jpholiday.is_holiday(candidate)
+                    or (is_user_holiday is not None and is_user_holiday(candidate))
+                )
+            )
         )
         if not matches:
             return candidate
@@ -86,17 +97,20 @@ def estimate_payment_date(
     payment_day: int,
     payment_day_shift_direction: str | None,
     payment_day_exclusions: frozenset[str],
+    is_user_holiday: Callable[[date], bool] | None = None,
 ) -> date:
     if closing_day == 0:
         return usage_date
 
     closing_year, closing_month = _closing_period(usage_date, closing_day)
     actual_closing_date = compute_actual_date(
-        closing_year, closing_month, closing_day, closing_day_exclusions, closing_day_shift_direction
+        closing_year, closing_month, closing_day, closing_day_exclusions, closing_day_shift_direction,
+        is_user_holiday,
     )
     payment_year, payment_month = add_months(
         actual_closing_date.year, actual_closing_date.month, payment_month_offset
     )
     return compute_actual_date(
-        payment_year, payment_month, payment_day, payment_day_exclusions, payment_day_shift_direction
+        payment_year, payment_month, payment_day, payment_day_exclusions, payment_day_shift_direction,
+        is_user_holiday,
     )
