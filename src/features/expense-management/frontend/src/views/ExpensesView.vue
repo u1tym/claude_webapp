@@ -48,14 +48,21 @@ const formItems = computed(() =>
   formPeriodId.value === null ? [] : items.value.filter((i) => i.budget_period_id === formPeriodId.value),
 );
 
+// ブラウザのローカル日付（日本時間）で YYYY-MM-DD にする。toISOString は UTC のため、日本時間の 9 時前は前日になる
+function toLocalIso(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 function today(): string {
-  return new Date().toISOString().slice(0, 10);
+  return toLocalIso(new Date());
 }
 
 function threeMonthsAgo(): string {
   const d = new Date();
   d.setMonth(d.getMonth() - 3);
-  return d.toISOString().slice(0, 10);
+  return toLocalIso(d);
 }
 
 // The API requires an end_date; this stands in for "no upper bound" when "all" is selected.
