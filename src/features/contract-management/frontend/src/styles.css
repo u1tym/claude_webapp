@@ -1,0 +1,1090 @@
+/* rules/15-ui-style.md のトークン。--color-primary はこの機能では Magenta */
+:root {
+  --color-bg: #faf7f2;
+  --color-surface: #ffffff;
+  --color-text: #3a3244;
+  --color-text-muted: #8b8496;
+  --color-border: #e6e0ed;
+  --color-primary: #e58fe0;
+  --color-danger: #d1477a;
+  --space: 8px;
+  --radius: 8px;
+  --font-size: 16px;
+  --font-size-title: 20px;
+  --tap: 44px;
+  --duration: 200ms;
+  --header-height: 56px;
+  --nav-width: 200px;
+  --nav-bottom: 56px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+/* ページ全体はスクロールさせない。部品内のスクロールは各部品で行う */
+html,
+body,
+#app {
+  margin: 0;
+  height: 100%;
+  overflow: hidden;
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-family: system-ui, sans-serif;
+  font-size: var(--font-size);
+}
+
+body {
+  background-image:
+    linear-gradient(rgba(229, 143, 224, 0.06) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(229, 143, 224, 0.06) 1px, transparent 1px);
+  background-size: 32px 32px;
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+  color: inherit;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* フォーカス表示（キーボード操作） */
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.icon {
+  width: 20px;
+  height: 20px;
+  flex: none;
+}
+
+/* ---- 殻（ヘッダ / ナビ / コンテンツ） ---- */
+
+.shell {
+  height: 100%;
+  display: grid;
+  grid-template-rows: var(--header-height) 1fr;
+  grid-template-columns: var(--nav-width) 1fr;
+  overflow: hidden;
+}
+
+.header {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) * 2);
+  padding: 0 var(--space) 0 calc(var(--space) * 2);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-primary);
+}
+
+.header-title {
+  flex: 1;
+  margin: 0;
+  font-size: var(--font-size-title);
+  font-weight: 500;
+  letter-spacing: 0.04em;
+}
+
+.header-icon {
+  width: 32px;
+  height: 32px;
+  object-fit: contain;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  min-height: 0;
+  overflow: auto;
+  background: var(--color-surface);
+  border-right: 1px solid var(--color-border);
+  padding: calc(var(--space) * 2);
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  min-height: var(--tap);
+  padding: 0 calc(var(--space) * 2);
+  border-radius: var(--radius);
+  color: var(--color-text);
+  text-decoration: none;
+}
+
+/* 現在地（RouterLink が aria-current="page" を付ける） */
+.nav-item[aria-current="page"] {
+  color: var(--color-primary);
+  box-shadow: inset 3px 0 0 var(--color-primary);
+  font-weight: 600;
+}
+
+.content {
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  padding: calc(var(--space) * 3);
+}
+
+.page {
+  height: 100%;
+}
+
+.center-message {
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: calc(var(--space) * 2);
+}
+
+/* ---- 部品 ---- */
+
+.btn-icon {
+  width: var(--tap);
+  min-width: var(--tap);
+  padding: 0;
+  justify-content: center;
+}
+
+.btn-text,
+.btn-secondary,
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space);
+  min-height: var(--tap);
+  padding: 0 calc(var(--space) * 2);
+  border-radius: var(--radius);
+}
+
+.btn-text {
+  border: 0;
+  background: transparent;
+  color: var(--color-text-muted);
+}
+
+.btn-secondary {
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+}
+
+.btn-primary {
+  border: 1px solid var(--color-primary);
+  background: var(--color-primary);
+  color: var(--color-text);
+}
+
+.caption {
+  margin: 0;
+  color: var(--color-text-muted);
+}
+
+.msg-error {
+  margin: 0;
+  color: var(--color-danger);
+}
+
+/* ---- スマートフォン（768px 未満）: ナビは下端に固定 ---- */
+
+@media (max-width: 767px) {
+  .shell {
+    grid-template-rows: var(--header-height) 1fr var(--nav-bottom);
+    grid-template-columns: 1fr;
+  }
+
+  .header {
+    grid-column: 1;
+  }
+
+  .content {
+    padding: calc(var(--space) * 2);
+  }
+
+  .nav {
+    grid-row: 3;
+    flex-direction: row;
+    gap: 0;
+    padding: 0;
+    overflow: hidden;
+    border-right: 0;
+    border-top: 1px solid var(--color-border);
+  }
+
+  .nav-item {
+    flex: 1;
+    justify-content: center;
+    padding: 0;
+    border-radius: 0;
+  }
+
+  .nav-item[aria-current="page"] {
+    box-shadow: inset 0 3px 0 var(--color-primary);
+  }
+}
+
+/* ---- 確認ダイアログ ---- */
+
+.dialog-overlay {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: calc(var(--space) * 2);
+  background: rgba(58, 50, 68, 0.4);
+  z-index: 10;
+}
+
+.dialog {
+  width: min(100%, 420px);
+  padding: calc(var(--space) * 3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.dialog-message {
+  margin: 0 0 var(--space);
+}
+
+.dialog-note {
+  margin: 0 0 var(--space);
+  color: var(--color-danger);
+}
+
+.dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--space);
+  margin-top: calc(var(--space) * 2);
+}
+
+
+/* ---- この機能の共通部品 ---- */
+
+.nav-item {
+  gap: var(--space);
+}
+
+.msg-success {
+  margin: 0;
+  color: var(--color-text);
+  background: rgba(78, 205, 196, 0.15);
+  border-radius: var(--radius);
+  padding: var(--space) calc(var(--space) * 2);
+}
+
+.btn-compact {
+  min-height: var(--tap);
+  padding: 0 var(--space);
+}
+
+/* 色だけで示さない（文字のバッジ） */
+.badge {
+  display: inline-block;
+  padding: 2px var(--space);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  font-size: 0.85em;
+  white-space: nowrap;
+}
+
+.badge-warn {
+  border-color: var(--color-danger);
+  color: var(--color-danger);
+}
+
+.password-field {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space);
+}
+
+.password-value {
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---- 一覧画面の共通（検索欄、一覧。ヘッダ行は固定、本体だけスクロール） ---- */
+
+.page {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) * 2);
+  min-height: 0;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space) calc(var(--space) * 2);
+}
+
+.search-input {
+  flex: 1 1 240px;
+  min-width: 0;
+  min-height: var(--tap);
+  padding: 0 calc(var(--space) * 2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.search-input:focus {
+  border-color: var(--color-primary);
+}
+
+.list {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  overflow: hidden;
+}
+
+.list-head {
+  padding: var(--space) calc(var(--space) * 2);
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text-muted);
+}
+
+.list-body {
+  flex: 1;
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.list-row {
+  padding: var(--space) calc(var(--space) * 2);
+  border-bottom: 1px solid var(--color-border);
+  align-items: center;
+}
+
+.list-row:last-child {
+  border-bottom: 0;
+}
+
+.list-state {
+  flex: 1;
+}
+
+.cell {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space);
+  min-width: 0;
+}
+
+.cell-main {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0;
+}
+
+.cell-title {
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.cell-text {
+  overflow-wrap: anywhere;
+}
+
+.cell-link {
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+  overflow-wrap: anywhere;
+}
+
+.accounts-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 2fr) minmax(0, 2fr) minmax(0, 3fr);
+  gap: var(--space) calc(var(--space) * 2);
+}
+
+/* スマートフォン: 行を、名称を主にしたカードにする（見出し行は出さない） */
+@media (max-width: 767px) {
+  .list-head {
+    display: none;
+  }
+
+  .accounts-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .list-row .cell[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 5.5em;
+    color: var(--color-text-muted);
+    font-size: 0.85em;
+  }
+}
+
+/* ---- 区分画面・入力欄の共通 ---- */
+
+.field-group {
+  flex: 1 1 240px;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) / 2);
+}
+
+.field-error {
+  margin: 0;
+  color: var(--color-danger);
+  font-size: 0.9em;
+}
+
+.check-label {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space);
+  min-height: var(--tap);
+  cursor: pointer;
+}
+
+.category-row {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space) calc(var(--space) * 2);
+  min-height: calc(var(--tap) + var(--space) * 2);
+}
+
+.category-name {
+  flex: 1;
+  min-width: 0;
+}
+
+.category-edit {
+  flex: 1 1 200px;
+}
+
+.row-actions {
+  display: flex;
+  gap: var(--space);
+  margin-left: auto;
+}
+
+/* ---- 契約一覧 ---- */
+
+.filters {
+  align-items: flex-end;
+}
+
+.filter {
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) / 2);
+}
+
+.filter-label {
+  color: var(--color-text-muted);
+  font-size: 0.85em;
+}
+
+.select {
+  min-height: var(--tap);
+  padding: 0 var(--space);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.select:focus {
+  border-color: var(--color-primary);
+}
+
+/* 新規登録ボタンは、絞り込みから離して右端に置く */
+.toolbar-end {
+  margin-left: auto;
+}
+
+/* 一覧の行を選ぶボタン（行そのものがボタン。アイコン化の対象外） */
+.row-button {
+  width: 100%;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  color: inherit;
+}
+
+.row-button:hover {
+  background: rgba(229, 143, 224, 0.08);
+}
+
+.row-button[aria-pressed="true"] {
+  box-shadow: inset 3px 0 0 var(--color-primary);
+}
+
+.contracts-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1.5fr) minmax(0, 1.2fr) minmax(0, 1.5fr) minmax(0, 1.5fr);
+  gap: var(--space) calc(var(--space) * 2);
+}
+
+@media (max-width: 767px) {
+  .contracts-grid {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+  }
+
+  .toolbar-end {
+    margin-left: 0;
+  }
+}
+
+/* ---- 詳細表示（モーダル） ---- */
+
+.dialog-wide {
+  width: min(100%, 880px);
+  max-height: calc(100vh - var(--space) * 4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.detail-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: calc(var(--space) * 2);
+}
+
+.detail-title {
+  margin: 0;
+  font-size: var(--font-size-title);
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+/* 内容が長いときは、ダイアログ内でスクロールする */
+.detail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) * 2);
+}
+
+.detail-heading {
+  margin: 0 0 var(--space);
+  font-size: var(--font-size);
+  font-weight: 600;
+  color: var(--color-text-muted);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.detail-list {
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.detail-row {
+  display: grid;
+  grid-template-columns: minmax(0, 14em) minmax(0, 1fr);
+  gap: var(--space) calc(var(--space) * 2);
+  align-items: center;
+  min-height: var(--tap);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.detail-row:last-child {
+  border-bottom: 0;
+}
+
+.detail-row dt {
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+}
+
+.detail-row dd {
+  margin: 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--space);
+  overflow-wrap: anywhere;
+}
+
+.pre {
+  white-space: pre-wrap;
+}
+
+.link-button {
+  min-height: var(--tap);
+  padding: 0 var(--space);
+  border: 0;
+  background: transparent;
+  color: var(--color-text);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-align: left;
+}
+
+@media (max-width: 767px) {
+  .detail-row {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0;
+    padding: calc(var(--space) / 2) 0;
+  }
+}
+
+/* ---- 登録・編集フォーム（モーダル） ---- */
+
+.dialog-form {
+  width: min(100%, 80vw);
+}
+
+.form-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: calc(var(--space) * 2);
+}
+
+.form-section {
+  margin: 0;
+  padding: 0;
+  border: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.form-section > legend {
+  width: 100%;
+  padding: 0;
+}
+
+.field {
+  display: grid;
+  grid-template-columns: minmax(0, 14em) minmax(0, 1fr);
+  align-items: start;
+  gap: calc(var(--space) / 2) calc(var(--space) * 2);
+}
+
+.field > .field-label {
+  padding-top: var(--space);
+  color: var(--color-text-muted);
+  font-size: 0.9em;
+}
+
+.field > .field-error {
+  grid-column: 2;
+}
+
+.field input[type="text"],
+.field input[type="number"],
+.field input[type="date"],
+.field textarea,
+.field select {
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space) calc(var(--space) * 1.5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.field textarea {
+  resize: vertical;
+}
+
+.field input:focus,
+.field textarea:focus,
+.field select:focus {
+  border-color: var(--color-primary);
+}
+
+.radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0 calc(var(--space) * 2);
+}
+
+.password-input {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space);
+}
+
+.password-input textarea {
+  flex: 1;
+}
+
+/* パスワードの入力欄は、「隠す」のとき、文字を伏せる（複数行も入力できる） */
+.password-input textarea.masked {
+  -webkit-text-security: disc;
+  text-security: disc;
+}
+
+@media (max-width: 767px) {
+  .dialog-form {
+    width: 100%;
+  }
+
+  .field {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .field > .field-label {
+    padding-top: 0;
+  }
+
+  .field > .field-error {
+    grid-column: 1;
+  }
+}
+
+/* ---- フォーム: 数値と選択の入力 ---- */
+
+.inline-inputs {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space) calc(var(--space) * 2);
+}
+
+.inline-inputs input[type="text"] {
+  width: 10em;
+}
+
+.inline-inputs input.input-short {
+  width: 6em;
+}
+
+.picker {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  min-width: 0;
+}
+
+.picker input[type="search"] {
+  width: 100%;
+  min-height: var(--tap);
+  padding: var(--space) calc(var(--space) * 1.5);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.picker-list {
+  margin: 0;
+  padding: var(--space);
+  list-style: none;
+  max-height: 11em;
+  overflow-y: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.picker .select {
+  width: 100%;
+}
+
+/* ---- 解約順 ---- */
+
+.cancellation-page {
+  overflow: hidden;
+}
+
+.warning-box {
+  padding: var(--space) calc(var(--space) * 2);
+  border: 1px solid var(--color-danger);
+  border-radius: var(--radius);
+}
+
+.warning-item {
+  margin: 0;
+  color: var(--color-danger);
+  overflow-wrap: anywhere;
+}
+
+/* PC: 解約順の一覧と、対象にできる契約の一覧を、左右に並べる。それぞれの中でスクロールする */
+.plan-layout {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
+  gap: calc(var(--space) * 3);
+}
+
+.plan-panel {
+  min-height: 0;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+  overflow-y: auto;
+}
+
+.plan-empty {
+  margin: 0;
+  padding: calc(var(--space) * 2) 0;
+}
+
+.plan-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+.plan-row {
+  display: flex;
+  align-items: center;
+  gap: calc(var(--space) * 2);
+  padding: var(--space) calc(var(--space) * 2);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+}
+
+.plan-number {
+  flex: none;
+  min-width: 2em;
+  font-size: var(--font-size-title);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-primary);
+  text-align: center;
+}
+
+.plan-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+/* 解約方法は、先頭の数行だけを出す */
+.plan-method {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  color: var(--color-text-muted);
+  overflow-wrap: anywhere;
+}
+
+.plan-row .row-actions {
+  flex: none;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+/* スマートフォン: 縦に並べる（解約順の一覧が先） */
+@media (max-width: 767px) {
+  .plan-layout {
+    grid-template-columns: minmax(0, 1fr);
+    overflow-y: auto;
+    align-content: start;
+  }
+
+  .plan-panel {
+    overflow: visible;
+  }
+
+  .plan-row {
+    flex-wrap: wrap;
+  }
+}
+
+/* ---- 解約手順の印刷（PDF 出力）。印刷用の領域は、画面には出さない ---- */
+
+.print-area {
+  display: none;
+}
+
+@page {
+  margin: 16mm;
+}
+
+@media print {
+  /* 画面の殻は、印刷しない。印刷用の領域だけを出す */
+  #app {
+    display: none;
+  }
+
+  html,
+  body {
+    height: auto;
+    overflow: visible;
+    background: #ffffff;
+    background-image: none;
+  }
+
+  .print-area {
+    display: block;
+    color: #000000;
+    font-size: 12pt;
+    line-height: 1.6;
+  }
+
+  .print-area h1 {
+    margin: 0 0 4mm;
+    font-size: 18pt;
+  }
+
+  .print-area h2 {
+    margin: 0 0 2mm;
+    font-size: 13pt;
+  }
+
+  .print-area p {
+    margin: 0 0 4mm;
+  }
+
+  .print-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .print-list li {
+    margin-bottom: 6mm;
+    break-inside: avoid;
+  }
+
+  .print-method {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+}
+
+/* ---- 目視確認（T-032）で直した点 ---- */
+
+/* 縦に並ぶ入力欄（field-group）の中では、検索欄の flex の基準を高さに使わない（縦に伸びてしまう） */
+.field-group > .search-input {
+  flex: none;
+  width: 100%;
+}
+
+/* 契約一覧: 更新日（「2026年12月1日」）が折り返さない幅にする */
+.contracts-grid {
+  grid-template-columns: minmax(0, 3fr) minmax(0, 1.6fr) minmax(0, 1fr) minmax(0, 1.5fr) minmax(9em, 1.6fr);
+}
+
+/* リンクは、文字色に合わせる（ブラウザ既定の青にしない） */
+a {
+  color: var(--color-text);
+  text-underline-offset: 3px;
+}
+
+@media (max-width: 767px) {
+  .contracts-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* スマートフォン（目視確認で直した点）: 一覧の見出し行は出さない。下端のナビは、アイコンの下にラベルを置く */
+@media (max-width: 767px) {
+  .list-head.contracts-grid,
+  .list-head.accounts-grid {
+    display: none;
+  }
+
+  .nav-item {
+    flex-direction: column;
+    justify-content: center;
+    gap: 2px;
+    font-size: 0.7rem;
+    line-height: 1.2;
+    text-align: center;
+  }
+
+  .nav-label {
+    overflow-wrap: anywhere;
+  }
+}
+
+/* 区分の一覧は、行の数に合わせた高さにする（余白を伸ばさない） */
+.categories-page .list {
+  flex: 0 1 auto;
+}
+
+/* スマートフォンの解約順: 縦に並べた各パネルは、中身の高さのまま（内側でスクロールさせず、全体でスクロールする） */
+@media (max-width: 767px) {
+  .plan-layout {
+    display: flex;
+    flex-direction: column;
+    gap: calc(var(--space) * 3);
+    overflow-y: auto;
+  }
+
+  .plan-panel {
+    flex: none;
+    overflow: visible;
+  }
+}
+
+/* 解約順: 縦に並ぶパネルの中の検索欄は、高さを伸ばさない */
+.plan-panel > .search-input {
+  flex: none;
+}
+
+/* スマートフォンの解約順: 行の操作ボタンは、名称・解約方法の下に、1 行で置く */
+@media (max-width: 767px) {
+  .plan-main {
+    flex: 1 1 calc(100% - 4em);
+  }
+
+  .plan-row:not(.plan-candidate) .row-actions {
+    flex: 1 1 100%;
+    margin-left: 0;
+    justify-content: flex-end;
+  }
+}
