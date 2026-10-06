@@ -34,7 +34,7 @@ const allSceneButtons = (w: VueWrapper) => w.findAll("[data-scene]");
 type SceneBody = {
   scene: SceneKey;
   outcome: "success" | "partial" | "failure";
-  results: { device: DeviceKey; target: "on" | "off"; outcome: "success" | "failure" | "skipped" }[];
+  results: { device: DeviceKey; target: "on" | "off"; outcome: "success" | "failure" }[];
   devices: Devices;
 };
 
@@ -101,8 +101,8 @@ describe("一括切替ボタン", () => {
 });
 
 describe("実行", () => {
-  it.each(Object.keys(LABELS) as SceneKey[])(
-    "%s を押すと POST /scenes/%s を呼び、確認は挟まない",
+  it.each((Object.keys(LABELS) as SceneKey[]).filter((key) => key !== "ceiling_light"))(
+    "%s を押すと POST /scenes/%s を、本文なしで呼び、確認は挟まない",
     async (scene) => {
       const { calls } = mockApi(
         withScene({ scene, outcome: "success", results: [], devices: allOff }),
@@ -151,44 +151,23 @@ describe("実行", () => {
         scene: "out",
         outcome: "success",
         results: [
-          { device: "ceiling_light", target: "off", outcome: "skipped" },
+          { device: "ceiling_light", target: "off", outcome: "success" },
           { device: "indirect_light", target: "off", outcome: "success" },
           { device: "indoor_speaker", target: "off", outcome: "success" },
           { device: "bedside_speaker", target: "off", outcome: "success" },
         ],
         devices: allOff,
-      }, devices({ bedside_speaker: { status: "ok", state: "on" } })),
+      }, devices({ bedside_speaker: { status: "ok", state: "on" }, ceiling_light: { status: "ok", state: "on" } })),
     );
     const wrapper = await mountView();
     await sceneButton(wrapper, "out").trigger("click");
     await flushPromises();
 
-    for (const key of ["indirect_light", "indoor_speaker", "bedside_speaker"] as const) {
+    for (const key of ["ceiling_light", "indirect_light", "indoor_speaker", "bedside_speaker"] as const) {
       expect(part(wrapper, key).text()).toContain("OFF");
     }
     expect(part(wrapper, "front_door").text()).toContain("施錠中");
     expect(status(wrapper).text()).toBe("お出かけを実行しました。");
-  });
-
-  it("電灯選択は、電灯が未実装のため変更していないことを添える", async () => {
-    mockApi(
-      withScene({
-        scene: "ceiling_light",
-        outcome: "success",
-        results: [
-          { device: "ceiling_light", target: "on", outcome: "skipped" },
-          { device: "indirect_light", target: "off", outcome: "success" },
-        ],
-        devices: allOff,
-      }),
-    );
-    const wrapper = await mountView();
-    await sceneButton(wrapper, "ceiling_light").trigger("click");
-    await flushPromises();
-
-    expect(status(wrapper).text()).toBe("電灯選択を実行しました。（電灯は未実装のため変更していません）");
-    expect(part(wrapper, "ceiling_light").text()).toContain("OFF");
-    expect(part(wrapper, "indirect_light").text()).toContain("OFF");
   });
 
   it("成功の一文は数秒で消える", async () => {
@@ -296,13 +275,13 @@ describe("一部失敗・失敗", () => {
     expect(allSceneButtons(wrapper).every((b) => b.attributes("disabled") === undefined)).toBe(true);
   });
 
-  it("すべて失敗したら、失敗した機器の名称を示す（skipped は含めない）", async () => {
+  it("すべて失敗したら、失敗した機器の名称を示す（電灯も含む）", async () => {
     mockApi(
       withScene({
         scene: "out",
         outcome: "failure",
         results: [
-          { device: "ceiling_light", target: "off", outcome: "skipped" },
+          { device: "ceiling_light", target: "off", outcome: "failure" },
           { device: "indirect_light", target: "off", outcome: "failure" },
           { device: "indoor_speaker", target: "off", outcome: "failure" },
           { device: "bedside_speaker", target: "off", outcome: "failure" },
@@ -315,9 +294,9 @@ describe("一部失敗・失敗", () => {
     await flushPromises();
 
     expect(status(wrapper).text()).toBe(
-      "切り替えに失敗しました。失敗: 間接照明、屋内スピーカー、枕元スピーカー",
+      "切り替えに失敗しました。失敗: 電灯、間接照明、屋内スピーカー、枕元スピーカー",
     );
-    expect(status(wrapper).text()).not.toContain("電灯");
+    expect(status(wrapper).text()).not.toContain("skipped");
     expect(status(wrapper).classes()).toContain("is-error");
   });
 
@@ -385,6 +364,7 @@ describe("押せない間", () => {
       res({
         fetched_at: STATE_AT,
         devices: devices({
+          ceiling_light: ERROR,
           indirect_light: ERROR,
           indoor_speaker: ERROR,
           bedside_speaker: ERROR,

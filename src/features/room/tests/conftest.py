@@ -19,6 +19,7 @@ def switchbot(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
     from app.services import device_service
     from fakes import (
         ID_BEDSIDE,
+        ID_CEILING,
         ID_DOOR,
         ID_INDIRECT,
         ID_INDOOR,
@@ -31,6 +32,7 @@ def switchbot(monkeypatch: pytest.MonkeyPatch):  # type: ignore[no-untyped-def]
         load_config(),
         switchbot_token=TEST_TOKEN,
         switchbot_secret=TEST_SECRET,
+        device_ceiling_light_id=ID_CEILING,
         device_indirect_light_id=ID_INDIRECT,
         device_indoor_speaker_id=ID_INDOOR,
         device_bedside_speaker_id=ID_BEDSIDE,

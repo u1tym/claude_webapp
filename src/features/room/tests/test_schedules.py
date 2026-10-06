@@ -79,6 +79,7 @@ def test_毎日の定期実行を登録できる(ctx: tuple[TestClient, int], lo
         "scene": "indoor_speaker",
         "device": None,
         "state": None,
+        "pattern": None,
         "is_enabled": True,  # 既定は有効
         "last_run": None,
     }
@@ -549,3 +550,105 @@ def test_最終実行の日時は秒までの日本標準時で返る(ctx: tuple
     assert ISO.match(item["last_run"]["at"])
     assert item["last_run"]["result"] == "failure"
     assert item["last_run"]["failed_devices"] == ["indirect_light", "indoor_speaker"]
+
+
+# ---- 電灯の調光パターン ----
+
+
+def _ceiling_on(**override: object) -> dict[str, object]:
+    body = {"scene": None, "device": "ceiling_light", "state": "on"}
+    body.update(override)
+    return body
+
+
+@pytest.mark.parametrize("pattern", ["full", "reading", "relax", "night"])
+def test_電灯をONにする個別切替は_調光パターンを登録でき_応答に返る(
+    ctx: tuple[TestClient, int], pattern: str
+) -> None:
+    client, user_id = ctx
+    body = _create(client, **_ceiling_on(pattern=pattern))
+    assert body["pattern"] == pattern
+    assert (body["device"], body["state"], body["scene"]) == ("ceiling_light", "on", None)
+    assert client.get("/schedules").json()["schedules"][0]["pattern"] == pattern
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT dimming_pattern FROM room.room_schedules WHERE id = %s", (body["id"],))
+        assert cur.fetchone()["dimming_pattern"] == pattern
+
+
+def test_調光パターンを省略した電灯のONは_全灯として返り_DBはNULL(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    body = _create(client, **_ceiling_on())
+    assert body["pattern"] == "full"
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT dimming_pattern FROM room.room_schedules WHERE id = %s", (body["id"],))
+        assert cur.fetchone()["dimming_pattern"] is None
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        _ceiling_on(pattern="dark"),  # 4 種以外
+        _ceiling_on(pattern=""),
+        _ceiling_on(pattern="FULL"),
+        _ceiling_on(pattern=1),
+        _ceiling_on(state="off", pattern="full"),  # 電灯の OFF には付けられない
+        {"scene": None, "device": "indirect_light", "state": "on", "pattern": "full"},  # 電灯以外
+        {"scene": None, "device": "indoor_speaker", "state": "on", "pattern": "night"},
+        {"pattern": "full"},  # 一括切替
+        {"scene": "ceiling_light", "pattern": "reading"},  # 電灯選択
+    ],
+)
+def test_不正な調光パターンは400で登録されない(
+    ctx: tuple[TestClient, int], override: dict[str, object], log_dir: Path
+) -> None:
+    client, user_id = ctx
+    res = client.post("/schedules", json=_valid(**override))
+    assert res.status_code == 400
+    assert res.json() == {"detail": "入力が不正です"}
+    assert _mine(user_id) == []
+    assert "調光パターン" in _log_text(log_dir)
+
+
+def test_ほかの定期実行の調光パターンはnull(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    assert _create(client)["pattern"] is None  # 一括切替
+    assert _create(client, scene=None, device="ceiling_light", state="off")["pattern"] is None
+    assert _create(client, scene=None, device="indirect_light", state="on")["pattern"] is None
+
+
+def test_変更で調光パターンを変えられ_ONでなくすと外れる(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    schedule_id = _create(client, **_ceiling_on(pattern="reading"))["id"]
+
+    res = client.put(f"/schedules/{schedule_id}", json=_valid(**_ceiling_on(pattern="night")))
+    assert res.status_code == 200
+    assert res.json()["pattern"] == "night"
+
+    res = client.put(f"/schedules/{schedule_id}", json=_valid(**_ceiling_on(state="off")))
+    assert res.status_code == 200
+    assert res.json()["pattern"] is None  # OFF には、調光パターンが無い
+
+    # 調光パターンを指定したまま OFF にする変更は、400
+    res = client.put(f"/schedules/{schedule_id}", json=_valid(**_ceiling_on(state="off", pattern="night")))
+    assert res.status_code == 400
+
+
+def test_調光パターンの省略で更新すると_全灯に戻る(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    schedule_id = _create(client, **_ceiling_on(pattern="night"))["id"]
+    res = client.put(f"/schedules/{schedule_id}", json=_valid(**_ceiling_on()))
+    assert res.json()["pattern"] == "full"  # 省略は、現在の値を維持せず、既定になる
+
+
+def test_調光パターンの登録がログに残る(ctx: tuple[TestClient, int], log_dir: Path) -> None:
+    client, _ = ctx
+    _create(client, **_ceiling_on(pattern="relax"))
+    assert "device=ceiling_light state=on pattern=relax" in _log_text(log_dir)
+
+
+def test_有効_無効の切替と最終実行は_調光パターンを変えない(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    schedule_id = _create(client, **_ceiling_on(pattern="relax"))["id"]
+    res = client.put(f"/schedules/{schedule_id}/enabled", json={"is_enabled": False})
+    assert res.status_code == 200
+    assert res.json()["pattern"] == "relax"

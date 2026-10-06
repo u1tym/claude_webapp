@@ -69,28 +69,46 @@
 |----|--------|--------------------|----------|----------|----------|
 | T-027 | `holiday_service` を、日本の祝日、または、定期実行の作成者のユーザ休日（`public.user_holidays` の未削除の行）かの判定に改訂し、`runner_service` から作成者のユーザ ID を渡す。テスト | REQ-009 / design.md §業務ロジック（祝日）、db-design.md §room.room_schedules（祝日の判定） | `src/features/room/backend/app/services/holiday_service.py`、`app/services/runner_service.py`、`tests/` | 3h | 日本の祝日の日は従来どおり祝日。作成者のユーザ休日（未削除）の日も祝日として、`include` で実行され `exclude` で実行されない。他ユーザのユーザ休日・論理削除済みの休日は祝日にならない。`public.user_holidays` は読み取りのみ。 |
 
+### 電灯の調光（固定 4 種の調光パターン）
+
+要件の改訂（電灯の実装。ON / OFF と、固定 4 種の調光パターン）に合わせる。T-004、T-005、T-006、T-011、T-015、T-023、T-024、T-025 の、電灯を「未実装・OFF 固定・何もしない」とする完了条件は、本節のタスクで置き換える（本節のタスクを実施したあと、それらの電灯の記述は無効とする）。実行は、T-028 から番号順に進める。T-028 の結果で、`design.md` / `api-design.md` の指示の順序や間隔を改訂することがある（その場合は、改訂と再承認のあとに T-030 以降へ進む）。
+
+| No | タスク | 対応する要件/設計 | 実装パス | 所要時間 | 完了条件 |
+|----|--------|--------------------|----------|----------|----------|
+| T-028 | 実機での調光の指示の確認（利用者の立ち会いで行う）: `D:\claude_code\switchbot` の CLI（`main.py command`）で、電灯（シーリングライト）へ、`turnOn`、`setBrightness`、`setColorTemperature`、`turnOff` を送り、(1) 3 つを続けて送ってよいか、指示の間に待ちが要るか、(2) 消灯中に `setBrightness` だけ送ると点灯するか、(3) 4 種のパターンの値（明るさ・色温度）が反映されるか、を確かめる。結果を `README.md` に記す | REQ-006、REQ-012 / design.md §未決事項、api-design.md §未決事項 | `src/features/room/README.md` | 1h | (1)〜(3) の結果が `README.md` に残る。結果が設計と食い違うときは、`design.md` と `api-design.md`（指示の順序・間隔）の改訂案が示される。4 種のパターンが、実機で意図した明るさと色温度になる。確認のあと、電灯は元の状態（点灯・明るさ 100・色温度 6200）に戻る |
+| T-029 | 既存の DB の移行: `sql/03_room_dimming.sql`（`dimming_pattern` の追加、列と整合の CHECK）、`sql/apply.py` での適用、テスト | REQ-008 / db-design.md §room.room_schedules・§既存の DB の移行（電灯の調光の追加） | `src/features/room/backend/sql/`、`src/features/room/tests/` | 2h | 空の DB（01 → 02 → 03）と、旧い定義（01 → 02）に既存の行を入れた DB の、どちらでも、適用後に `dimming_pattern` がある。既存の行は変わらず、`dimming_pattern` は NULL になる。03 を繰り返し適用しても壊れない。CHECK が、4 種以外の値、電灯を ON にする個別切替以外での値（`scene` の行、電灯以外の機器、`off`）を拒否する |
+| T-030 | 電灯の取得と個別切替、調光パターン: `app/dimming.py`（4 種の定義と既定）、`app/config.py`（`ROOM_DEVICE_CEILING_LIGHT_ID`）、`switchbot/client.py`（値つきコマンド）、`device_service`（電灯の状態取得、`on` で `turnOn` → `setBrightness` → `setColorTemperature`、`off` で `turnOff`、途中の失敗で残りを送らない、`implemented` の廃止）、`GET /state`、`PUT /devices/{device}/state`（`pattern`）、`GET /dimming-patterns`、`.env` のひな型 | REQ-001、REQ-006、REQ-011、REQ-012 / design.md §業務ロジック（状態の取得、個別切替、電灯の調光）、api-design.md §GET `/state`・§GET `/dimming-patterns`・§PUT `/devices/{device}/state` | `src/features/room/backend/app/`、`src/features/room/backend/.env.example`、`src/features/room/tests/` | 4h | SwitchBot をモックして、5 機器の状態が返り、電灯は電源（`on` / `off`）だけで、`implemented`・明るさ・色温度を含まない。電灯を `on` にすると、3 つの指示が順に 1 回ずつ送られ、`pattern` 省略時は `full` の値になる。ON の電灯への別のパターンでも 3 つが送られる。`off` は `turnOff` だけ。途中の指示の失敗で、残りは送られず 502 になり、状態は取り直される。`pattern` が不正、または電灯を ON にする以外で指定されたときは 400。`GET /dimming-patterns` が 4 種と既定を返す。認証情報と機器の識別子が応答・ログに出ない。ログに調光パターン名が残る（テストあり） |
+| T-031 | 一括切替の電灯: `scene_service`（電灯選択の `pattern`、電灯を `off` にする指示、`skipped` の廃止）、`POST /scenes/{scene}`（任意の本文 `pattern`） | REQ-006、REQ-007、REQ-011 / design.md §業務ロジック（一括切替）、api-design.md §POST `/scenes/{scene}` | `src/features/room/backend/app/services/scene_service.py`、`src/features/room/backend/app/routers/room.py`、`src/features/room/tests/` | 3h | 電灯選択で、電灯がパターン（省略時は `full`）で ON、間接照明が OFF になる。間接照明選択とお出かけで、電灯が実際に `off` へ指示される。`results` に `skipped` が現れない。電灯の 3 つの指示がすべて成功したときだけ、電灯の結果が成功になる。電灯選択以外で `pattern` を指定すると 400（テストあり） |
+| T-032 | 定期実行の調光パターン（定義とジョブ）: `schedule_service`・`repos`・`room_schedules` ルータ（`pattern` の検証・保存・応答。省略は `full` で返す）、`runner_service`（電灯の個別切替を実際に指示。`on` は調光パターンつき。電灯の「指示せず成功」を廃止） | REQ-008、REQ-009、REQ-010、REQ-011、REQ-013 / design.md §業務ロジック（定期実行の定義、実行内容の実行）、db-design.md §room.room_schedules、api-design.md §GET・POST・PUT `/schedules` | `src/features/room/backend/app/services/schedule_service.py`、`app/services/runner_service.py`、`app/repos.py`、`app/routers/room_schedules.py`、`tests/` | 4h | 電灯を ON にする個別切替で、`pattern` を保存でき、一覧が `pattern`（省略時は `full`）を返す。それ以外の定期実行の `pattern` は `null`。電灯以外の機器、`off`、一括切替で `pattern` を指定すると 400。ジョブが、電灯の個別切替を、調光パターンつきで 1 回だけ指示する（取り直しはしない）。電灯を `off` にする個別切替は `turnOff` だけ。電灯の指示の失敗は、`failure` と、失敗した機器 `ceiling_light` が記録される。電灯選択・お出かけの定期実行が、電灯を実際に操作する。ログに調光パターン名が残る（テストあり） |
+| T-033 | フロントエンド: 部屋の図と調光パターンダイアログ（電灯のパーツ）: 電灯のパーツを操作できるボタンにし、「未実装」の文言を廃止、調光パターンダイアログ（4 種、「消灯」、「キャンセル」、背景で閉じない、実行中の無効化）、`GET /dimming-patterns` の利用、型（`implemented` の廃止）、個別切替の連携、`aria-label` | REQ-002、REQ-006 / ui-design.md §SCR-001（部屋の図、パーツの操作、調光パターンダイアログ） | `src/features/room/frontend/src/components/`、`src/features/room/frontend/src/room.ts`、`src/api.ts`、`frontend/tests/` | 4h | 電灯のパーツを押すと、ダイアログが出る。OFF のとき「消灯」は出ず、ON のときは出る。パターンを選ぶと、そのパターンで電灯が ON になる（ON のときは、パターンが変わる）。「消灯」で OFF になる。キャンセルで何も起きない。電灯の明るさと色温度は表示されない。キーボードで操作でき、フォーカスリングと 44px のタップ領域がある。切替の失敗で、図は元の状態のままで、ステータスに一文が出る。型検査とテストが通る |
+| T-034 | フロントエンド: 一括切替「電灯選択」の調光パターン: 「電灯選択」を押すとダイアログ（「消灯」なし）を出し、選んだパターンで一括切替を実行する。結果の `skipped` の扱いを廃止 | REQ-007 / ui-design.md §SCR-001（一括切替ボタン、調光パターンダイアログ） | `src/features/room/frontend/src/pages/`、`src/features/room/frontend/src/components/`、`frontend/tests/` | 2h | 「電灯選択」を押すとダイアログが出て、パターンを選ぶと、そのパターンで電灯が ON、間接照明が OFF になる。キャンセルで何も実行されない。他の 4 つの一括切替は、確認なしで実行される。一部失敗の表示が従来どおり動く。型検査とテストが通る |
+| T-035 | フロントエンド: 定期実行の調光パターン: 一覧の実行内容に、電灯を ON にする個別切替のパターン名（例: 「電灯を ON（読書）」）を表示し、「未実装」を廃止。入力モーダルに、機器が電灯で状態が ON のときだけ出る「調光パターン」（4 択、既定は全灯）を追加し、条件に合わなくなったら隠して破棄する。送信と変更の初期値 | REQ-008 / ui-design.md §SCR-002（一覧、定期実行入力） | `src/features/room/frontend/src/views/SchedulesView.vue`、`src/components/ScheduleEditor.vue`、`src/room.ts`、`frontend/tests/` | 3h | 一覧が「電灯を ON（全灯）」のように表示される（`pattern` が省略で登録されたものは「全灯」）。入力モーダルで、電灯と ON を選んだときだけ調光パターンが出て、送信される。機器を電灯以外に変えるか、状態を OFF にすると、隠れて送られない。変更の画面で、初期値に現在のパターンが入る。型検査とテストが通る |
+| T-036 | 実機での結合確認と手順書の更新（利用者の立ち会いで行う）: 電灯の ON/OFF、4 種のパターン、パターン変更、電灯選択、お出かけ・間接照明選択での電灯の消灯、定期実行（電灯の個別切替）の実行、API キーでの利用。`README.md`（`ROOM_DEVICE_CEILING_LIGHT_ID`、調光パターンの値、既存の定期実行が電灯を実際に操作するようになること、トラブルの切り分け）を更新。バックエンドとフロントエンドの全テスト | REQ-006〜REQ-012 / db-design.md §既存の DB の移行 | `src/features/room/tests/`（実機用）、`src/features/room/README.md` | 3h | 実機で、4 種のパターンと ON/OFF が、画面・一括切替・定期実行・API のそれぞれで動く。結果が `README.md` に残る。`README.md` に、電灯の `.env` 項目、移行（`sql/apply.py` の再実行）、既存の電灯に関わる定期実行の動作変更が書かれている。バックエンド・フロントエンドの全テストが通る。確認のあと、電灯は元の状態に戻る |
+
 ## 要件トレーサビリティ
 
 | 要件 | タスク |
 |------|--------|
-| REQ-001 | T-004、T-010、T-011、T-012、T-016、T-019 |
-| REQ-002 | T-011、T-013 |
+| REQ-001 | T-004、T-010、T-011、T-012、T-016、T-019、T-030 |
+| REQ-002 | T-011、T-013、T-033 |
 | REQ-003 | T-004、T-012 |
 | REQ-004 | T-005、T-012 |
 | REQ-005 | T-005、T-012 |
-| REQ-006 | T-004、T-005、T-011 |
-| REQ-007 | T-006、T-013 |
-| REQ-008 | T-002、T-007、T-014、T-015、T-021、T-022、T-024、T-025、T-026 |
-| REQ-009 | T-002、T-008、T-020、T-021、T-023、T-026、T-027 |
-| REQ-010 | T-002、T-007、T-008、T-014、T-022、T-023、T-024 |
-| REQ-011 | T-003、T-005、T-006、T-007、T-017、T-018、T-022 |
-| REQ-012 | T-001、T-004、T-005、T-006、T-009、T-019 |
-| REQ-013 | T-001、T-008、T-009、T-023 |
+| REQ-006 | T-004、T-005、T-011、T-028、T-030、T-031、T-033、T-036 |
+| REQ-007 | T-006、T-013、T-031、T-034 |
+| REQ-008 | T-002、T-007、T-014、T-015、T-021、T-022、T-024、T-025、T-026、T-029、T-032、T-035 |
+| REQ-009 | T-002、T-008、T-020、T-021、T-023、T-026、T-027、T-032 |
+| REQ-010 | T-002、T-007、T-008、T-014、T-022、T-023、T-024、T-032 |
+| REQ-011 | T-003、T-005、T-006、T-007、T-017、T-018、T-022、T-030、T-031、T-032 |
+| REQ-012 | T-001、T-004、T-005、T-006、T-009、T-019、T-028、T-030、T-036 |
+| REQ-013 | T-001、T-008、T-009、T-023、T-030、T-032 |
 
 ## 範囲外（別の SPEC で扱う）
 
 - MCP サーバへのツール追加: ROOM の実装が終わったあとに、`mcp` 側の SPEC（`requirements.md`、`design.md`、`tool-design.md`）を改訂して扱う。
-- 電灯の実際の制御、屋内状態（温度・湿度）の表示: 後日の要件で扱う。
+- 屋内状態（温度・湿度）の表示: 後日の要件で扱う。
+- 調光パターンの追加・変更・削除、明るさと色温度の任意指定、電灯の現在の明るさ・色温度の表示: 要件のスコープ外。
+- MCP サーバの、電灯の調光（`pattern`）への対応: 後日、`mcp` 側の SPEC を改訂して扱う。それまでの間、MCP が `skipped` や `implemented` に依存している場合は、API の改訂で動作が変わる。
 - MCP サーバの、定期実行のツール（`room_create_timer`、`room_update_timer`、`room_list_timers`）の拡張（祝日の扱い、実行日の取り方、機器の個別切替）: 後日、`mcp` 側の SPEC を改訂して扱う。それまでの間、MCP の `condition` の選択肢に残っている `holiday`（祝日の指定）は、API が受け付けなくなるため、400 になる。また、MCP の一覧には、個別切替の定期実行が、`scene` が `null` の形で現れる。
 
 ## 承認
@@ -107,3 +125,5 @@
 | 2026-10-03 22:12 | 承認済み | ユーザ休日の `public` 化と祝日判定への反映の改訂を承認 |
 | 2026-10-03 22:29 | 未承認 | 要件トレーサビリティ表の REQ-009 に T-027 を追加 |
 | 2026-10-03 22:33 | 承認済み | 要件トレーサビリティ表への T-027 追加を承認 |
+| 2026-10-06 19:27 | 未承認 | 電灯の調光のタスク T-028〜T-036（実機での指示の確認、DB の移行、電灯の取得と個別切替、一括切替、定期実行の定義とジョブ、フロントの部屋の図・ダイアログ・電灯選択・定期実行、結合確認と手順書）を追加。要件トレーサビリティと範囲外を更新 |
+| 2026-10-06 19:30 | 承認済み | 電灯の調光のタスク（T-028〜T-036）を承認 |

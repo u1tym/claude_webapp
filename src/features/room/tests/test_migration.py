@@ -142,11 +142,11 @@ def snapshot(schema: str) -> list[dict[str, Any]]:
 # ---- ファイルの構成 ----
 
 
-def test_適用の順は_01_のあと_02() -> None:
+def test_適用の順は_01_02_03() -> None:
     sys.path.insert(0, str(SQL_DIR))
     import apply  # noqa: PLC0415
 
-    assert [p.name for p in apply.DDL_PATHS] == ["01_room.sql", "02_room_actions.sql"]
+    assert [p.name for p in apply.DDL_PATHS] == ["01_room.sql", "02_room_actions.sql", "03_room_dimming.sql"]
 
 
 # ---- 旧い定義からの移行 ----

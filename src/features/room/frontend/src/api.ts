@@ -2,8 +2,10 @@ import type {
   DeviceKey,
   DeviceState,
   Devices,
+  DimmingPatterns,
   LockState,
   OnOff,
+  PatternKey,
   SceneKey,
   SceneOutcome,
   ScheduleInput,
@@ -96,14 +98,28 @@ export class SwitchError extends Error {
   }
 }
 
-/** 1 機器を目標の状態へ切り替える。目標の状態は必ず明示する（「反転」は送らない）。 */
+/** 調光パターンの種類と既定を取得する（固定の 4 種。SwitchBot へは問い合わせない）。401 / 403 は AuthError。 */
+export async function getDimmingPatterns(): Promise<DimmingPatterns> {
+  const res = await apiFetch("/dimming-patterns");
+  throwIfAuthFailed(res);
+  if (!res.ok) {
+    throw new Error("dimming patterns failed");
+  }
+  return (await res.json()) as DimmingPatterns;
+}
+
+/**
+ * 1 機器を目標の状態へ切り替える。目標の状態は必ず明示する（「反転」は送らない）。
+ * pattern（調光パターン）は、電灯を ON にするときだけ付ける。
+ */
 export async function putDeviceState(
   device: DeviceKey,
   state: OnOff | LockState,
+  pattern?: PatternKey,
 ): Promise<SwitchResponse> {
   const res = await apiFetch(`/devices/${device}/state`, {
     method: "PUT",
-    body: JSON.stringify({ state }),
+    body: JSON.stringify(pattern === undefined ? { state } : { state, pattern }),
   });
   throwIfAuthFailed(res);
   if (!res.ok) {
@@ -125,9 +141,17 @@ export type SceneResponse = {
   devices: Devices;
 };
 
-/** 一括切替を実行する。一部の機器が失敗しても 200 で返り、機器ごとの結果が results に入る。 */
-export async function postScene(scene: SceneKey): Promise<SceneResponse> {
-  const res = await apiFetch(`/scenes/${scene}`, { method: "POST" });
+/**
+ * 一括切替を実行する。一部の機器が失敗しても 200 で返り、機器ごとの結果が results に入る。
+ * pattern（調光パターン）は、電灯選択のときだけ付ける。それ以外は本文なしで送る。
+ */
+export async function postScene(scene: SceneKey, pattern?: PatternKey): Promise<SceneResponse> {
+  const res = await apiFetch(
+    `/scenes/${scene}`,
+    pattern === undefined
+      ? { method: "POST" }
+      : { method: "POST", body: JSON.stringify({ pattern }) },
+  );
   throwIfAuthFailed(res);
   if (!res.ok) {
     throw new SwitchError(res.status, "操作に失敗しました。");

@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from typing import Any
 
+from app import dimming
 from app.config import Config, load_config
 from app.errors import DeviceOperationError, InvalidInputError, NotFoundError
 from app.logger import write
@@ -27,9 +28,8 @@ DEVICE_KEYS: tuple[str, ...] = (
     FRONT_DOOR,
 )
 
-# SwitchBot へ問い合わせる機器（電灯は未実装のため含めない）
-_PLUG_KEYS: tuple[str, ...] = (INDIRECT_LIGHT, INDOOR_SPEAKER, BEDSIDE_SPEAKER)
-_QUERY_KEYS: tuple[str, ...] = (*_PLUG_KEYS, FRONT_DOOR)
+# SwitchBot へ問い合わせる機器（5 機器すべて）
+_QUERY_KEYS: tuple[str, ...] = DEVICE_KEYS
 
 DeviceState = dict[str, Any]
 
@@ -61,6 +61,7 @@ class StateSnapshot:
 def device_id_for(cfg: Config, device: str) -> str:
     """機器のキーから SwitchBot の機器識別子を引く（コード・応答・ログに出さない）。"""
     mapping = {
+        CEILING_LIGHT: cfg.device_ceiling_light_id,
         INDIRECT_LIGHT: cfg.device_indirect_light_id,
         INDOOR_SPEAKER: cfg.device_indoor_speaker_id,
         BEDSIDE_SPEAKER: cfg.device_bedside_speaker_id,
@@ -85,12 +86,8 @@ def error_state(device: str) -> DeviceState:
     return state
 
 
-def ceiling_light_state() -> DeviceState:
-    """電灯は未実装のため、常に OFF を返す。"""
-    return {"status": "ok", "state": "off", "implemented": False}
-
-
 def _parse_plug(body: dict[str, Any]) -> DeviceState:
+    """電源の状態（プラグ、電灯）。電灯の明るさと色温度は読まない（状態は ON / OFF だけ）。"""
     power = body.get("power")
     if power in ("on", "off"):
         return {"status": "ok", "state": power}
@@ -162,17 +159,40 @@ def send_switch(
     target: str,
     command: str,
     actor: str,
+    pattern: str | None = None,
 ) -> None:
-    """SwitchBot へ指示を 1 回だけ送る（再試行しない）。失敗は DeviceOperationError にする。"""
+    """SwitchBot へ指示を 1 回だけ送る（再試行しない）。失敗は DeviceOperationError にする。
+
+    電灯を ON にするときは、調光パターン（省略時は既定）の、点灯・明るさ・色温度の 3 つの指示を、この順に
+    1 回ずつ送る。途中の指示が失敗したら、残りは送らない。
+    """
     device_id = device_id_for(cfg, device)
     if active is None or not device_id:
         write("ERR", f"機器切替失敗 device={device} target={target} 理由=SwitchBot の設定が未完了")
         raise DeviceOperationError()
-    try:
-        active.send_command(device_id, command)
-    except SwitchBotError as exc:
-        write("ERR", f"機器切替失敗 device={device} target={target} 主体={actor} 理由={exc}")
-        raise DeviceOperationError() from None
+
+    steps: tuple[tuple[str, str], ...] = ((command, "default"),)
+    detail = ""
+    if device == CEILING_LIGHT and command == "turnOn":
+        resolved = dimming.resolve(pattern)
+        assert resolved is not None  # 呼び出し側が、4 種のいずれかであることを確かめている
+        steps = dimming.turn_on_commands(resolved)
+        detail = f" パターン={resolved.id}"
+
+    for index, (step_command, parameter) in enumerate(steps):
+        try:
+            active.send_command(device_id, step_command, parameter)
+        except SwitchBotError as exc:
+            write(
+                "ERR",
+                f"機器切替失敗 device={device} target={target}{detail} 主体={actor} 理由={exc}"
+                + (f" 失敗した指示={step_command}（{index + 1}/{len(steps)}）" if len(steps) > 1 else ""),
+            )
+            if index > 0:
+                # 途中で失敗したときは、実機の状態が、一部だけ変わっていることがある。調べられるよう、状態を残す
+                after = read_device(active, cfg, device)
+                write("WRN", f"機器切替失敗の後の状態 device={device} 取得した状態={after.get('state')}")
+            raise DeviceOperationError() from None
 
 
 def read_settled(
@@ -204,13 +224,16 @@ def switch_device(
     actor: str,
     username: str = "",
     client: SwitchBotApi | None = None,
+    pattern: str | None = None,
 ) -> SwitchResult:
     """1 機器を目標の状態に切り替える。
 
     「反転」は受けず、目標の状態を必ず明示させる。指示は 1 回だけ行い、再試行しない。
-    電灯は未実装のため、機器へ何も指示せず OFF を返す。成功したら、その機器の状態を取得し直して返す。
+    電灯を ON にするときは、調光パターン（省略時は既定のパターン）で点灯する。
+    成功したら、その機器の状態を取得し直して返す。
     """
-    write("INF", f"機器切替要求 device={device} target={target} 主体={actor} username={username}")
+    requested = f" パターン={pattern}" if pattern is not None else ""
+    write("INF", f"機器切替要求 device={device} target={target} 主体={actor} username={username}{requested}")
     if device not in DEVICE_KEYS:
         write("WRN", f"機器切替失敗 device={device} 理由=機器が存在しない")
         raise NotFoundError()
@@ -218,22 +241,27 @@ def switch_device(
     if command is None:
         write("WRN", f"機器切替失敗 device={device} target={target} 理由=その機器で取り得ない状態")
         raise InvalidInputError()
-
-    if device == CEILING_LIGHT:
-        write("INF", f"機器切替 device={device} target={target} 判断=未実装のため何も指示しない")
-        return SwitchResult(device, False, now_jst(), ceiling_light_state())
+    if pattern is not None and not (device == CEILING_LIGHT and target == "on"):
+        write("WRN", f"機器切替失敗 device={device} target={target} パターン={pattern} 理由=調光パターンは電灯を ON にするときだけ指定できる")
+        raise InvalidInputError()
+    if pattern is not None and dimming.find(pattern) is None:
+        write("WRN", f"機器切替失敗 device={device} target={target} パターン={pattern} 理由=調光パターンが存在しない")
+        raise InvalidInputError()
 
     cfg = load_config()
     active = client if client is not None else build_client(cfg)
-    send_switch(active, cfg, device, target, command, actor)
+    send_switch(active, cfg, device, target, command, actor, pattern)
 
     # 指示のあとに状態を取得し直す。実機の反映が遅れるため、目標の状態になるまで、
     # 間隔をおいて取り直す（上限は設定値）。食い違ったままなら、最後に取得した値を返す
     result, reads = read_settled(active, cfg, device, target)
     outcome = result.get("state")
+    applied_pattern = (
+        f" パターン={pattern or dimming.DEFAULT_PATTERN_ID}" if device == CEILING_LIGHT and target == "on" else ""
+    )
     write(
         "INF",
-        f"機器切替成功 device={device} target={target} 主体={actor} 取得した状態={outcome} 取得回数={reads}",
+        f"機器切替成功 device={device} target={target}{applied_pattern} 主体={actor} 取得した状態={outcome} 取得回数={reads}",
     )
     if result["status"] == "ok" and outcome != target:
         write("WRN", f"機器切替の結果が目標と異なる device={device} target={target} 取得した状態={outcome}")
@@ -241,14 +269,14 @@ def switch_device(
 
 
 def fetch_states(client: SwitchBotApi | None = None) -> StateSnapshot:
-    """5 機器の状態を取得する。電灯を除く 4 機器を並行して SwitchBot へ問い合わせる。
+    """5 機器の状態を、並行して SwitchBot へ問い合わせる。
 
     ある機器の取得に失敗しても他は続け、失敗した機器は error とする。キャッシュしない。
     """
     cfg = load_config()
     active = client if client is not None else build_client(cfg)
 
-    devices: dict[str, DeviceState] = {CEILING_LIGHT: ceiling_light_state()}
+    devices: dict[str, DeviceState] = {}
     if active is None:
         write("ERR", "状態取得失敗 理由=SwitchBot の認証情報が未設定")
         for key in _QUERY_KEYS:

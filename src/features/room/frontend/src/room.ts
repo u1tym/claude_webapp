@@ -6,20 +6,21 @@ export type DeviceKey =
   | "bedside_speaker"
   | "front_door";
 
-/** パーツのクリックで切り替えられる機器（電灯は未実装、電池残量は表示のみ）。 */
-export type OperableDeviceKey = "indirect_light" | "indoor_speaker" | "bedside_speaker" | "front_door";
+/** パーツのクリックで切り替えられる機器（5 機器すべて。電池残量は機器ではなく、表示のみ）。 */
+export type OperableDeviceKey = DeviceKey;
 
 export type OnOff = "on" | "off";
 export type LockState = "locked" | "unlocked";
 
-/** API の `device_state`。status が error のとき state は null（状態を推測しない）。 */
+/**
+ * API の `device_state`。status が error のとき state は null（状態を推測しない）。
+ * 電灯の状態は電源（on / off）だけで、明るさと色温度は持たない。
+ */
 export type DeviceState = {
   status: "ok" | "error";
   state: OnOff | LockState | null;
   /** 玄関ドアだけが持つ。0〜100。取得できなければ null */
   battery?: number | null;
-  /** 電灯だけが持つ。常に false（未実装） */
-  implemented?: boolean;
 };
 
 export type Devices = Record<DeviceKey, DeviceState>;
@@ -53,9 +54,50 @@ export function stateText(device: DeviceState): string {
   return STATE_TEXT[device.state];
 }
 
-/** 切り替えられる機器か。 */
-export function isOperable(key: DeviceKey): key is OperableDeviceKey {
-  return key !== "ceiling_light";
+/** 切り替えられる機器か（5 機器すべて）。 */
+export function isOperable(_key: DeviceKey): _key is OperableDeviceKey {
+  return true;
+}
+
+/** 調光パターンの識別子（API の `pattern`）。 */
+export type PatternKey = "full" | "reading" | "relax" | "night";
+
+/** API の調光パターン 1 種（GET /dimming-patterns）。明るさ 1〜100、色温度 2700〜6500。 */
+export type DimmingPattern = {
+  id: PatternKey;
+  name: string;
+  brightness: number;
+  color_temperature: number;
+};
+
+/** GET /dimming-patterns の応答。default は、パターンを選ばずに ON にするときのパターン。 */
+export type DimmingPatterns = {
+  default: PatternKey;
+  patterns: DimmingPattern[];
+};
+
+/**
+ * 調光パターンの名称（固定 4 種。表示の順）。定期実行の一覧の表示と、入力の選択肢に使う。
+ * 明るさと色温度の値は持たない（GET /dimming-patterns の値を、目安として添える）。
+ */
+export const PATTERN_OPTIONS: { value: PatternKey; label: string }[] = [
+  { value: "full", label: "全灯" },
+  { value: "reading", label: "読書" },
+  { value: "relax", label: "くつろぎ" },
+  { value: "night", label: "夜" },
+];
+
+/** 調光パターンを選ばずに電灯を ON にするときのパターン（API の既定と同じ）。 */
+export const DEFAULT_PATTERN: PatternKey = "full";
+
+/** 調光パターンの明るさと色温度の目安（選択肢の Caption）。 */
+export function patternCaption(pattern: DimmingPattern): string {
+  return `明るさ ${pattern.brightness}・色温度 ${pattern.color_temperature}`;
+}
+
+/** 調光パターンの名称。一覧に無い識別子は、識別子のまま返す。 */
+export function patternName(patterns: DimmingPattern[], id: string): string {
+  return patterns.find((p) => p.id === id)?.name ?? id;
 }
 
 /** 押したときに目標になる状態。取得できていないときは null。 */
@@ -72,14 +114,17 @@ export function nextState(key: OperableDeviceKey, device: DeviceState): OnOff | 
 /** スクリーンリーダー向けの説明。機器名、現在の状態、押したときの結果を示す。 */
 export function ariaLabelFor(key: DeviceKey, device: DeviceState): string {
   const name = DEVICE_LABELS[key];
-  if (key === "ceiling_light") {
-    return `${name} OFF（未実装）`;
-  }
-  const next = nextState(key as OperableDeviceKey, device);
+  const next = nextState(key, device);
   if (next === null) {
     return `${name} 取得できません`;
   }
   const current = stateText(device);
+  if (key === "ceiling_light") {
+    // 電灯は、押すと調光パターンダイアログを開く（すぐには切り替えない）
+    return device.state === "on"
+      ? `${name} ${current}。押すと調光パターンの変更または消灯ができます`
+      : `${name} ${current}。押すと調光パターンを選んで点灯します`;
+  }
   if (key === "front_door") {
     // 玄関ドアは、押すと確認ダイアログを開く（すぐには切り替えない）
     return `${name} ${current}。押すと${DOOR_ACTION_TEXT[next as LockState]}の確認を開きます`;
@@ -105,10 +150,17 @@ export function doorConfirmMessage(target: LockState): string {
 /** 開錠のときだけ添える一文。 */
 export const DOOR_UNLOCK_NOTE = "開錠すると、玄関のドアが開けられる状態になります。";
 
-/** 切替が成功したときのステータスの一文。 */
-export function switchSuccessMessage(key: DeviceKey, target: OnOff | LockState): string {
+/** 切替が成功したときのステータスの一文。電灯を ON にしたときは、調光パターンの名称を添える。 */
+export function switchSuccessMessage(
+  key: DeviceKey,
+  target: OnOff | LockState,
+  patternLabel?: string,
+): string {
   if (key === "front_door") {
     return `玄関ドアを${DOOR_ACTION_TEXT[target as LockState]}しました。`;
+  }
+  if (key === "ceiling_light" && target === "on" && patternLabel) {
+    return `${DEVICE_LABELS[key]}を ${STATE_TEXT[target]}（${patternLabel}）にしました。`;
   }
   return `${DEVICE_LABELS[key]}を ${STATE_TEXT[target]} にしました。`;
 }
@@ -121,11 +173,11 @@ export type SceneKey =
   | "indirect_light"
   | "out";
 
-/** 一括切替の機器ごとの結果。skipped は電灯（未実装のため指示しない）。 */
+/** 一括切替の機器ごとの結果。 */
 export type SceneOutcome = {
   device: DeviceKey;
   target: OnOff;
-  outcome: "success" | "failure" | "skipped";
+  outcome: "success" | "failure";
 };
 
 /** 一括切替ボタン（表示の順）。ボタンは機能の区別にアイコンが使えないため、文字ラベルを持つ。 */
@@ -148,11 +200,15 @@ function names(results: SceneOutcome[], outcome: SceneOutcome["outcome"]): strin
     .join("、");
 }
 
-/** 一括切替の結果のステータス。失敗があるときは、成功した機器と失敗した機器の名称を示す。 */
+/**
+ * 一括切替の結果のステータス。失敗があるときは、成功した機器と失敗した機器の名称を示す。
+ * 電灯選択で調光パターンを選んだときは、成功の一文にパターンの名称を添える。
+ */
 export function sceneStatus(
   scene: SceneKey,
   outcome: "success" | "partial" | "failure",
   results: SceneOutcome[],
+  patternLabel?: string,
 ): { kind: "success" | "error"; text: string } {
   if (outcome === "partial") {
     return {
@@ -163,12 +219,8 @@ export function sceneStatus(
   if (outcome === "failure") {
     return { kind: "error", text: `切り替えに失敗しました。失敗: ${names(results, "failure")}` };
   }
-  // 電灯を ON にする指示は、未実装のため行わない。そのことを添える
-  const ceilingSkippedOn = results.some(
-    (r) => r.device === "ceiling_light" && r.outcome === "skipped" && r.target === "on",
-  );
-  const note = ceilingSkippedOn ? "（電灯は未実装のため変更していません）" : "";
-  return { kind: "success", text: `${sceneLabel(scene)}を実行しました。${note}` };
+  const detail = scene === "ceiling_light" && patternLabel ? `（${patternLabel}）` : "";
+  return { kind: "success", text: `${sceneLabel(scene)}${detail}を実行しました。` };
 }
 
 /** 実行条件（API の `condition`）。 */
@@ -200,6 +252,8 @@ export type ScheduleItem = {
   scene: SceneKey | null;
   device: TimerDeviceKey | null;
   state: OnOff | null;
+  /** 電灯を ON にする個別切替の調光パターン。それ以外は null */
+  pattern?: PatternKey | null;
   is_enabled: boolean;
   last_run: { at: string; result: RunResult; failed_devices: DeviceKey[] } | null;
 };
@@ -237,14 +291,18 @@ export function conditionText(
 
 /**
  * 実行内容の表示。一括切替はその名称、機器の個別切替は「間接照明を ON」のように機器名と状態。
- * 電灯は未実装のため「（未実装）」を添える。
+ * 電灯を ON にするときは、調光パターンの名称を添える（「電灯を ON（読書）」）。
  */
 export function actionText(
-  item: Pick<ScheduleItem, "scene" | "device" | "state">,
+  item: Pick<ScheduleItem, "scene" | "device" | "state"> & Partial<Pick<ScheduleItem, "pattern">>,
 ): string {
   if (item.device && item.state) {
-    const note = item.device === "ceiling_light" ? "（未実装）" : "";
-    return `${DEVICE_LABELS[item.device]}を ${item.state === "on" ? "ON" : "OFF"}${note}`;
+    const base = `${DEVICE_LABELS[item.device]}を ${item.state === "on" ? "ON" : "OFF"}`;
+    if (item.device === "ceiling_light" && item.state === "on" && item.pattern) {
+      const label = PATTERN_OPTIONS.find((o) => o.value === item.pattern)?.label ?? item.pattern;
+      return `${base}（${label}）`;
+    }
+    return base;
   }
   return item.scene ? sceneLabel(item.scene) : "";
 }
@@ -289,6 +347,8 @@ export type ScheduleForm = {
   scene: "" | SceneKey;
   device: "" | TimerDeviceKey;
   state: "" | OnOff;
+  /** 調光パターン。電灯を ON にする個別切替のときだけ意味を持つ（既定は全灯） */
+  pattern: PatternKey;
   enabled: boolean;
 };
 
@@ -323,9 +383,9 @@ export const ACTION_TYPE_OPTIONS: { value: "scene" | "device"; label: string }[]
   { value: "device", label: "機器の個別切替" },
 ];
 
-/** 個別切替の機器の選択肢（玄関ドアは含めない）。電灯は未実装。 */
+/** 個別切替の機器の選択肢（玄関ドアは含めない）。 */
 export const TIMER_DEVICES: { key: TimerDeviceKey; label: string }[] = [
-  { key: "ceiling_light", label: "電灯（未実装）" },
+  { key: "ceiling_light", label: DEVICE_LABELS.ceiling_light },
   { key: "indirect_light", label: DEVICE_LABELS.indirect_light },
   { key: "indoor_speaker", label: DEVICE_LABELS.indoor_speaker },
   { key: "bedside_speaker", label: DEVICE_LABELS.bedside_speaker },
@@ -383,10 +443,19 @@ export function toScheduleBody(form: ScheduleForm): ScheduleInput {
   if (form.actionType === "device") {
     body.device = form.device as TimerDeviceKey;
     body.state = form.state as OnOff;
+    // 調光パターンは、電灯を ON にするときだけ送る
+    if (isCeilingOn(form)) {
+      body.pattern = form.pattern;
+    }
   } else {
     body.scene = form.scene as SceneKey;
   }
   return body;
+}
+
+/** 入力フォームが「電灯を ON にする個別切替」か（調光パターンを選べる条件）。 */
+export function isCeilingOn(form: Pick<ScheduleForm, "actionType" | "device" | "state">): boolean {
+  return form.actionType === "device" && form.device === "ceiling_light" && form.state === "on";
 }
 
 /** 登録・変更の要求本文。 */
@@ -399,6 +468,7 @@ export type ScheduleInput = {
   scene?: SceneKey;
   device?: TimerDeviceKey;
   state?: OnOff;
+  pattern?: PatternKey;
   is_enabled: boolean;
 };
 
@@ -415,6 +485,7 @@ export function formFromItem(item: ScheduleItem | null): ScheduleForm {
       scene: "",
       device: "",
       state: "",
+      pattern: DEFAULT_PATTERN,
       enabled: true,
     };
   }
@@ -429,6 +500,7 @@ export function formFromItem(item: ScheduleItem | null): ScheduleForm {
     scene: isDevice ? "" : (item.scene ?? ""),
     device: isDevice ? (item.device ?? "") : "",
     state: isDevice ? (item.state ?? "") : "",
+    pattern: item.pattern ?? DEFAULT_PATTERN,
     enabled: item.is_enabled,
   };
 }

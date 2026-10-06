@@ -177,7 +177,7 @@ def test_機器の変更に対象_変更後の状態_主体_成否_理由が残�
     # 一括切替: 機器ごとの対象・変更後の状態・主体・結果
     assert "一括切替 scene=indoor_speaker device=indoor_speaker target=on 主体=画面の利用者 結果=success" in log
     assert "一括切替 scene=indoor_speaker device=bedside_speaker target=off 主体=画面の利用者 結果=failure" in log
-    assert "一括切替 scene=ceiling_light device=ceiling_light target=on 判断=未実装のため何も指示しない" in log
+    assert "一括切替 scene=ceiling_light device=ceiling_light target=on パターン=full 主体=画面の利用者 結果=success" in log
     assert "一括切替結果 scene=indoor_speaker 主体=画面の利用者 全体=partial" in log
     assert "一括切替失敗 scene=no_such_scene 理由=一括切替が存在しない" in log
 

@@ -1,21 +1,32 @@
 <script setup lang="ts">
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
-import { AuthError, getState, postScene, putDeviceState, SwitchError } from "../api";
+import {
+  AuthError,
+  getDimmingPatterns,
+  getState,
+  postScene,
+  putDeviceState,
+  SwitchError,
+} from "../api";
 import ConfirmDialog from "../components/ConfirmDialog.vue";
+import DimmingDialog from "../components/DimmingDialog.vue";
 import RoomDiagram from "../components/RoomDiagram.vue";
 import {
   DOOR_UNLOCK_NOTE,
   doorConfirmMessage,
   formatFetchedAt,
   nextState,
+  patternName,
   SCENES,
   sceneStatus,
   switchSuccessMessage,
   type DeviceKey,
   type Devices,
+  type DimmingPattern,
   type LockState,
   type OnOff,
   type OperableDeviceKey,
+  type PatternKey,
   type SceneKey,
 } from "../room";
 
@@ -36,6 +47,11 @@ const sceneRunning = ref<SceneKey | null>(null);
 const status = ref<{ kind: "success" | "error"; text: string } | null>(null);
 // 玄関ドアの確認ダイアログ（目標の状態）
 const doorTarget = ref<LockState | null>(null);
+// 調光パターンダイアログ。電灯のパーツ（device）と、一括切替「電灯選択」（scene）から開く。
+// パターンは、初めて開くときに API から取得する
+const dimmingOpen = ref(false);
+const dimmingFor = ref<"device" | "scene">("device");
+const patterns = ref<DimmingPattern[] | null>(null);
 
 let clearTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -43,16 +59,21 @@ const busy = computed(
   () => loading.value || switching.value !== null || sceneRunning.value !== null,
 );
 
-/** 取得できた機器が 1 つもない（電灯は常に OK なので、それ以外の 4 機器で判定する）。 */
+/** 取得できた機器が 1 つもない。 */
 const allFailed = computed(() => {
   const list = devices.value;
   if (!list) {
     return false;
   }
-  return (["indirect_light", "indoor_speaker", "bedside_speaker", "front_door"] as const).every(
-    (key) => list[key].status !== "ok",
-  );
+  return (
+    ["ceiling_light", "indirect_light", "indoor_speaker", "bedside_speaker", "front_door"] as const
+  ).every((key) => list[key].status !== "ok");
 });
+
+/** 電灯が ON か（調光パターンダイアログに「消灯」を出す条件）。 */
+const ceilingIsOn = computed(
+  () => devices.value?.ceiling_light.status === "ok" && devices.value.ceiling_light.state === "on",
+);
 
 /** 一括切替を押せるか。状態を取得できていない間と、取得中・切替中は押せない（操作は更新だけ有効）。 */
 const scenesEnabled = computed(
@@ -104,14 +125,18 @@ async function load(): Promise<void> {
   }
 }
 
-async function doSwitch(key: OperableDeviceKey, target: OnOff | LockState): Promise<void> {
+async function doSwitch(
+  key: OperableDeviceKey,
+  target: OnOff | LockState,
+  pattern?: PatternKey,
+): Promise<void> {
   if (busy.value) {
     return;
   }
   switching.value = key;
   clearStatus();
   try {
-    const response = await putDeviceState(key, target);
+    const response = await putDeviceState(key, target, pattern);
     if (devices.value) {
       devices.value = { ...devices.value, [key]: response.result };
     }
@@ -122,7 +147,8 @@ async function doSwitch(key: OperableDeviceKey, target: OnOff | LockState): Prom
     } else if (response.result.state !== target) {
       showStatus("error", "切り替えを指示しましたが、状態が変わっていません。更新して確認してください。");
     } else {
-      showStatus("success", switchSuccessMessage(key, target));
+      const label = pattern !== undefined ? patternName(patterns.value ?? [], pattern) : undefined;
+      showStatus("success", switchSuccessMessage(key, target, label));
     }
   } catch (error) {
     if (!passAuthError(error)) {
@@ -133,18 +159,19 @@ async function doSwitch(key: OperableDeviceKey, target: OnOff | LockState): Prom
   }
 }
 
-async function runScene(scene: SceneKey): Promise<void> {
+async function runScene(scene: SceneKey, pattern?: PatternKey): Promise<void> {
   if (!scenesEnabled.value) {
     return;
   }
   sceneRunning.value = scene;
   clearStatus();
   try {
-    const response = await postScene(scene);
+    const response = await postScene(scene, pattern);
     // 応答は、実行のあとに全機器を取得し直した結果（一部が失敗しても 200 で返る）
     devices.value = response.devices;
     fetchedAt.value = response.fetched_at;
-    const result = sceneStatus(scene, response.outcome, response.results);
+    const label = pattern !== undefined ? patternName(patterns.value ?? [], pattern) : undefined;
+    const result = sceneStatus(scene, response.outcome, response.results, label);
     showStatus(result.kind, result.text);
   } catch (error) {
     if (!passAuthError(error)) {
@@ -155,6 +182,52 @@ async function runScene(scene: SceneKey): Promise<void> {
   }
 }
 
+/** 調光パターンダイアログを開く。パターンを取得できなければ、開かずに、ステータスへ一文を示す。 */
+async function openDimming(target: "device" | "scene"): Promise<void> {
+  clearStatus();
+  if (patterns.value === null) {
+    try {
+      patterns.value = (await getDimmingPatterns()).patterns;
+    } catch (error) {
+      if (!passAuthError(error)) {
+        showStatus("error", "調光パターンを取得できませんでした。");
+      }
+      return;
+    }
+  }
+  dimmingFor.value = target;
+  dimmingOpen.value = true;
+}
+
+async function chooseDimming(pattern: PatternKey): Promise<void> {
+  if (dimmingFor.value === "scene") {
+    await runScene("ceiling_light", pattern);
+  } else {
+    await doSwitch("ceiling_light", "on", pattern);
+  }
+  dimmingOpen.value = false;
+}
+
+/** 一括切替ボタン。電灯選択は、調光パターンを選んでから実行する。ほかは、確認を挟まず実行する。 */
+function onScene(scene: SceneKey): void {
+  if (scene === "ceiling_light") {
+    if (scenesEnabled.value) {
+      void openDimming("scene");
+    }
+    return;
+  }
+  void runScene(scene);
+}
+
+async function turnOffCeiling(): Promise<void> {
+  await doSwitch("ceiling_light", "off");
+  dimmingOpen.value = false;
+}
+
+function cancelDimming(): void {
+  dimmingOpen.value = false;
+}
+
 function onSelect(key: OperableDeviceKey): void {
   const list = devices.value;
   if (!list || busy.value) {
@@ -162,6 +235,11 @@ function onSelect(key: OperableDeviceKey): void {
   }
   const target = nextState(key, list[key]);
   if (target === null) {
+    return;
+  }
+  if (key === "ceiling_light") {
+    // 電灯は、調光パターンを選んで切り替える（確認ダイアログではなく、パターンの選択）
+    void openDimming("device");
     return;
   }
   if (key === "front_door") {
@@ -225,7 +303,7 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
           :data-scene="scene.key"
           :aria-busy="sceneRunning === scene.key"
           :disabled="!scenesEnabled"
-          @click="runScene(scene.key)"
+          @click="onScene(scene.key)"
         >
           {{ scene.label }}
         </button>
@@ -240,6 +318,16 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
     >
       {{ sceneRunning ? "実行中…" : status?.text }}
     </p>
+
+    <DimmingDialog
+      v-if="dimmingOpen && patterns"
+      :patterns="patterns"
+      :can-turn-off="dimmingFor === 'device' && ceilingIsOn"
+      :busy="switching !== null || sceneRunning !== null"
+      @select="chooseDimming"
+      @off="turnOffCeiling"
+      @cancel="cancelDimming"
+    />
 
     <ConfirmDialog
       v-if="doorTarget"

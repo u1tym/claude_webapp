@@ -11,6 +11,7 @@ from app.main import app as room_app
 from app.services import device_service
 from fakes import (
     ID_BEDSIDE,
+    ID_CEILING,
     ID_DOOR,
     ID_INDIRECT,
     ID_INDOOR,
@@ -37,7 +38,7 @@ def test_5機器の状態と取得日時が返る(switchbot: FakeSwitchBot) -> N
 
     assert ISO.match(snapshot["fetched_at"])
     assert snapshot["devices"] == {
-        "ceiling_light": {"status": "ok", "state": "off", "implemented": False},
+        "ceiling_light": {"status": "ok", "state": "off"},
         "indirect_light": {"status": "ok", "state": "on"},
         "indoor_speaker": {"status": "ok", "state": "off"},
         "bedside_speaker": {"status": "ok", "state": "off"},
@@ -46,9 +47,28 @@ def test_5機器の状態と取得日時が返る(switchbot: FakeSwitchBot) -> N
     assert list(snapshot["devices"]) == list(device_service.DEVICE_KEYS)
 
 
-def test_電灯はSwitchBotへ問い合わせない(switchbot: FakeSwitchBot) -> None:
+def test_5機器すべてをSwitchBotへ問い合わせる(switchbot: FakeSwitchBot) -> None:
     device_service.fetch_states()
-    assert sorted(switchbot.status_calls) == sorted([ID_INDIRECT, ID_INDOOR, ID_BEDSIDE, ID_DOOR])
+    assert sorted(switchbot.status_calls) == sorted([ID_CEILING, ID_INDIRECT, ID_INDOOR, ID_BEDSIDE, ID_DOOR])
+
+
+def test_電灯は電源だけを返し_明るさと色温度を含まない(switchbot: FakeSwitchBot) -> None:
+    switchbot.statuses[ID_CEILING] = {"power": "on", "brightness": 40, "colorTemperature": 3000}
+    assert device_service.fetch_states().devices["ceiling_light"] == {"status": "ok", "state": "on"}
+
+
+def test_電灯の取得に失敗しても他に影響しない(switchbot: FakeSwitchBot, log_dir: Path) -> None:
+    switchbot.statuses[ID_CEILING] = failure()
+    devices = device_service.fetch_states().devices
+    assert devices["ceiling_light"] == {"status": "error", "state": None}
+    assert all(devices[key]["status"] == "ok" for key in ("indirect_light", "indoor_speaker", "bedside_speaker", "front_door"))
+    assert "状態取得失敗 device=ceiling_light" in _log_text(log_dir)
+
+
+@pytest.mark.parametrize("power", ["standby", None, 1])
+def test_電灯の電源の値が想定外ならエラー(switchbot: FakeSwitchBot, power: object) -> None:
+    switchbot.statuses[ID_CEILING] = {"power": power}
+    assert device_service.fetch_states().devices["ceiling_light"] == {"status": "error", "state": None}
 
 
 def test_1機器の失敗は他に影響しない(switchbot: FakeSwitchBot, log_dir: Path) -> None:
@@ -64,13 +84,12 @@ def test_1機器の失敗は他に影響しない(switchbot: FakeSwitchBot, log_
 
 
 def test_全機器が失敗してもスナップショットを返す(switchbot: FakeSwitchBot) -> None:
-    for key in (ID_INDIRECT, ID_INDOOR, ID_BEDSIDE, ID_DOOR):
+    for key in (ID_CEILING, ID_INDIRECT, ID_INDOOR, ID_BEDSIDE, ID_DOOR):
         switchbot.statuses[key] = failure()
 
     devices = device_service.fetch_states().devices
 
-    assert devices["ceiling_light"]["state"] == "off"
-    for key in ("indirect_light", "indoor_speaker", "bedside_speaker"):
+    for key in ("ceiling_light", "indirect_light", "indoor_speaker", "bedside_speaker"):
         assert devices[key] == {"status": "error", "state": None}
     assert devices["front_door"] == {"status": "error", "state": None, "battery": None}
 
@@ -111,7 +130,7 @@ def test_電源の値が想定外ならエラー(switchbot: FakeSwitchBot, power
     }
 
 
-def test_認証情報が未設定なら電灯以外はすべてエラー(
+def test_認証情報が未設定なら全機器がエラー(
     monkeypatch: pytest.MonkeyPatch, log_dir: Path
 ) -> None:
     import dataclasses
@@ -121,11 +140,7 @@ def test_認証情報が未設定なら電灯以外はすべてエラー(
 
     devices = device_service.fetch_states().devices
 
-    assert devices["ceiling_light"]["status"] == "ok"
-    assert all(
-        devices[key]["status"] == "error"
-        for key in ("indirect_light", "indoor_speaker", "bedside_speaker", "front_door")
-    )
+    assert all(devices[key]["status"] == "error" for key in device_service.DEVICE_KEYS)
     assert "認証情報が未設定" in _log_text(log_dir)
 
 
@@ -138,6 +153,7 @@ def test_機器の識別子が未設定ならその機器だけエラー(
         load_config(),
         switchbot_token=TEST_TOKEN,
         switchbot_secret=TEST_SECRET,
+        device_ceiling_light_id=ID_CEILING,
         device_indirect_light_id=ID_INDIRECT,
         device_indoor_speaker_id="",
         device_bedside_speaker_id=ID_BEDSIDE,
@@ -152,13 +168,28 @@ def test_機器の識別子が未設定ならその機器だけエラー(
     assert "機器の識別子が未設定" in _log_text(log_dir)
 
 
+def test_電灯の識別子が未設定なら電灯だけエラー(
+    switchbot: FakeSwitchBot, monkeypatch: pytest.MonkeyPatch, log_dir: Path
+) -> None:
+    import dataclasses
+
+    cfg = dataclasses.replace(device_service.load_config(), device_ceiling_light_id="")
+    monkeypatch.setattr(device_service, "load_config", lambda: cfg)
+
+    devices = device_service.fetch_states().devices
+
+    assert devices["ceiling_light"] == {"status": "error", "state": None}
+    assert devices["indirect_light"]["status"] == "ok"
+    assert "状態取得失敗 device=ceiling_light 理由=機器の識別子が未設定" in _log_text(log_dir)
+
+
 def test_認証情報と機器の識別子が応答とログに出ない(
     switchbot: FakeSwitchBot, log_dir: Path
 ) -> None:
     switchbot.statuses[ID_INDOOR] = failure()
     body = str(device_service.fetch_states().to_dict())
     log = _log_text(log_dir)
-    for secret in (ID_INDIRECT, ID_INDOOR, ID_BEDSIDE, ID_DOOR, TEST_TOKEN, TEST_SECRET):
+    for secret in (ID_CEILING, ID_INDIRECT, ID_INDOOR, ID_BEDSIDE, ID_DOOR, TEST_TOKEN, TEST_SECRET):
         assert secret not in body
         assert secret not in log
 
@@ -217,5 +248,5 @@ def test_stateはAPIキーでも同じ内容を返す(switchbot: FakeSwitchBot, 
 
 def test_stateの応答に秘密情報が含まれない(switchbot: FakeSwitchBot) -> None:
     text = _cookie_client().get("/state").text
-    for secret in (ID_INDIRECT, ID_INDOOR, ID_BEDSIDE, ID_DOOR, TEST_TOKEN, TEST_SECRET):
+    for secret in (ID_CEILING, ID_INDIRECT, ID_INDOOR, ID_BEDSIDE, ID_DOOR, TEST_TOKEN, TEST_SECRET):
         assert secret not in text

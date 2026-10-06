@@ -81,6 +81,7 @@ const emptyForm: ScheduleForm = {
   scene: "",
   device: "",
   state: "",
+  pattern: "full",
   enabled: true,
 };
 
@@ -787,7 +788,7 @@ describe("実行内容", () => {
     expect(wrapper.find('input[name="state"]').exists()).toBe(false);
   });
 
-  it("「機器の個別切替」を選ぶと、機器（4 つ、電灯は未実装）と状態（ON/OFF）が出て、一括切替は消える", async () => {
+  it("「機器の個別切替」を選ぶと、機器（4 つ）と状態（ON/OFF）が出て、一括切替は消える", async () => {
     const wrapper = mountEditor();
     await pick(wrapper, "action-type", "device");
 
@@ -795,7 +796,7 @@ describe("実行内容", () => {
     const options = wrapper.findAll("#schedule-device option").map((o) => o.text());
     expect(options).toEqual([
       "選択してください",
-      "電灯（未実装）",
+      "電灯",
       "間接照明",
       "屋内スピーカー",
       "枕元スピーカー",
@@ -836,14 +837,16 @@ describe("実行内容", () => {
     await submit(wrapper);
     await flushPromises();
 
-    expect(calls).toEqual([
+    // 電灯を ON にするときだけ、調光パターン（既定の全灯）も送る
+    const pattern = device === "ceiling_light" && state === "on" ? { pattern: "full" } : {};
+    expect(calls.filter((c) => c.path !== "/dimming-patterns")).toEqual([
       {
         method: "POST",
         path: "/schedules",
-        body: { condition: "daily", weekdays: [], run_time: "06:30", device, state, is_enabled: true },
+        body: { condition: "daily", weekdays: [], run_time: "06:30", device, state, ...pattern, is_enabled: true },
       },
     ]);
-    const body = calls[0]!.body as Record<string, unknown>;
+    const body = calls.find((c) => c.method === "POST")!.body as Record<string, unknown>;
     expect("scene" in body).toBe(false);
   });
 
@@ -919,5 +922,197 @@ describe("実行内容", () => {
     await submit(wrapper);
     await flushPromises();
     expect(calls[0]!.body).toMatchObject({ device: "indirect_light", state: "on" });
+  });
+});
+
+
+// ---- 調光パターン ----
+
+const PATTERNS_BODY = {
+  default: "full",
+  patterns: [
+    { id: "full", name: "全灯", brightness: 100, color_temperature: 6200 },
+    { id: "reading", name: "読書", brightness: 80, color_temperature: 5000 },
+    { id: "relax", name: "くつろぎ", brightness: 50, color_temperature: 3000 },
+    { id: "night", name: "夜", brightness: 10, color_temperature: 2700 },
+  ],
+};
+
+/** 登録・変更に成功し、GET /dimming-patterns は固定の 4 種を返す。 */
+const withPatterns: Handler = (call) =>
+  call.method === "GET" && call.path === "/dimming-patterns" ? res(PATTERNS_BODY) : okHandler(call);
+
+async function chooseCeilingOn(wrapper: VueWrapper): Promise<void> {
+  await pick(wrapper, "action-type", "device");
+  await wrapper.get("#schedule-device").setValue("ceiling_light");
+  await pick(wrapper, "state", "on");
+  await flushPromises();
+}
+
+const patternField = (w: VueWrapper) => w.find('[data-field="pattern"]');
+const patternBodies = (calls: { method: string; body: unknown }[]) =>
+  calls.filter((c) => c.method === "POST" || c.method === "PUT").map((c) => c.body as Record<string, unknown>);
+
+describe("調光パターン", () => {
+  it("機器が電灯で、状態が ON のときだけ出る", async () => {
+    mockApi(withPatterns);
+    const wrapper = mountEditor();
+    expect(patternField(wrapper).exists()).toBe(false);
+
+    await pick(wrapper, "action-type", "device");
+    expect(patternField(wrapper).exists()).toBe(false);
+
+    await wrapper.get("#schedule-device").setValue("ceiling_light");
+    expect(patternField(wrapper).exists()).toBe(false); // 状態が未選択
+
+    await pick(wrapper, "state", "on");
+    expect(patternField(wrapper).exists()).toBe(true);
+
+    await pick(wrapper, "state", "off");
+    expect(patternField(wrapper).exists()).toBe(false);
+
+    await pick(wrapper, "state", "on");
+    await wrapper.get("#schedule-device").setValue("indirect_light");
+    expect(patternField(wrapper).exists()).toBe(false);
+  });
+
+  it("一括切替（電灯選択を含む）では出ない", async () => {
+    mockApi(withPatterns);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30", scene: "ceiling_light" });
+    expect(patternField(wrapper).exists()).toBe(false);
+  });
+
+  it("4 択（全灯・読書・くつろぎ・夜）で、既定は全灯。明るさと色温度の目安を添える", async () => {
+    mockApi(withPatterns);
+    const wrapper = mountEditor();
+    await chooseCeilingOn(wrapper);
+
+    expect(radioLabels(wrapper, "pattern")).toEqual([
+      "全灯（明るさ 100・色温度 6200）",
+      "読書（明るさ 80・色温度 5000）",
+      "くつろぎ（明るさ 50・色温度 3000）",
+      "夜（明るさ 10・色温度 2700）",
+    ]);
+    expect(checked(wrapper, "pattern")).toEqual(["full"]);
+  });
+
+  it("目安を取得できなくても、4 択は選べる。その旨を示す", async () => {
+    mockApi(okHandler); // GET /dimming-patterns は 404
+    const wrapper = mountEditor();
+    await chooseCeilingOn(wrapper);
+
+    expect(radioLabels(wrapper, "pattern")).toEqual(["全灯", "読書", "くつろぎ", "夜"]);
+    expect(patternField(wrapper).text()).toContain("明るさと色温度の目安を取得できませんでした。");
+  });
+
+  it.each([401, 403] as const)("目安の取得で %s なら親（殻）へ auth-error を伝える", async (code) => {
+    mockApi((call) =>
+      call.path === "/dimming-patterns" ? res({ detail: "x" }, code) : okHandler(call),
+    );
+    const wrapper = mountEditor();
+    await chooseCeilingOn(wrapper);
+    const emitted = wrapper.emitted("auth-error");
+    expect(emitted).toHaveLength(1);
+    expect((emitted![0]![0] as AuthError).status).toBe(code);
+  });
+
+  it("目安は、初めて出すときに 1 回だけ取得する", async () => {
+    const { calls } = mockApi(withPatterns);
+    const wrapper = mountEditor();
+    await chooseCeilingOn(wrapper);
+    await pick(wrapper, "state", "off");
+    await pick(wrapper, "state", "on");
+    expect(calls.filter((c) => c.path === "/dimming-patterns")).toHaveLength(1);
+  });
+
+  it("選んだパターンを、電灯を ON にする個別切替として POST する", async () => {
+    const { calls } = mockApi(withPatterns);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30" });
+    await chooseCeilingOn(wrapper);
+    await pick(wrapper, "pattern", "reading");
+
+    await submit(wrapper);
+    await flushPromises();
+
+    expect(patternBodies(calls)).toEqual([
+      {
+        condition: "daily",
+        weekdays: [],
+        run_time: "06:30",
+        device: "ceiling_light",
+        state: "on",
+        pattern: "reading",
+        is_enabled: true,
+      },
+    ]);
+  });
+
+  it("電灯の OFF や、電灯以外の機器、一括切替では、pattern を送らない", async () => {
+    const { calls } = mockApi(withPatterns);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30" });
+    await chooseCeilingOn(wrapper);
+    await pick(wrapper, "pattern", "night");
+    await pick(wrapper, "state", "off");
+
+    await submit(wrapper);
+    await flushPromises();
+    expect("pattern" in patternBodies(calls)[0]!).toBe(false);
+  });
+
+  it("条件に合わなくなったら、選択を破棄する（次に出すときは、既定の全灯）", async () => {
+    mockApi(withPatterns);
+    const wrapper = mountEditor();
+    await chooseCeilingOn(wrapper);
+    await pick(wrapper, "pattern", "night");
+    expect(checked(wrapper, "pattern")).toEqual(["night"]);
+
+    await pick(wrapper, "state", "off");
+    await pick(wrapper, "state", "on");
+    expect(checked(wrapper, "pattern")).toEqual(["full"]);
+  });
+
+  it("変更では、現在のパターンが初期値に入る", async () => {
+    mockApi(withPatterns);
+    const wrapper = mountEditor(
+      item({ condition: "daily", weekdays: [], scene: null, device: "ceiling_light", state: "on", pattern: "night" }),
+    );
+    await flushPromises();
+    expect(patternField(wrapper).exists()).toBe(true);
+    expect(checked(wrapper, "pattern")).toEqual(["night"]);
+  });
+
+  it("変更で別のパターンを選ぶと、PUT で送る", async () => {
+    const { calls } = mockApi(withPatterns);
+    const wrapper = mountEditor(
+      item({ condition: "daily", weekdays: [], scene: null, device: "ceiling_light", state: "on", pattern: "night" }),
+    );
+    await flushPromises();
+    await pick(wrapper, "pattern", "relax");
+
+    await submit(wrapper);
+    await flushPromises();
+
+    const put = calls.find((c) => c.method === "PUT")!;
+    expect(put.path).toBe("/schedules/7");
+    expect((put.body as Record<string, unknown>).pattern).toBe("relax");
+  });
+
+  it("電灯の ON の既存の定期実行で pattern が null でも、既定の全灯として扱う", async () => {
+    mockApi(withPatterns);
+    const wrapper = mountEditor(
+      item({ condition: "daily", weekdays: [], scene: null, device: "ceiling_light", state: "on", pattern: null }),
+    );
+    await flushPromises();
+    expect(checked(wrapper, "pattern")).toEqual(["full"]);
+  });
+
+  it("一括切替の既存の定期実行を変更するとき、調光パターンは出ない", async () => {
+    mockApi(withPatterns);
+    const wrapper = mountEditor(item({ scene: "ceiling_light" }));
+    await flushPromises();
+    expect(patternField(wrapper).exists()).toBe(false);
   });
 });

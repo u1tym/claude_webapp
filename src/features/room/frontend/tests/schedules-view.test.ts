@@ -289,14 +289,30 @@ describe("文言の補助関数", () => {
     ).toBe("毎日");
   });
 
-  it("実行内容の表示: 一括切替は名称、個別切替は機器と状態（電灯は未実装を添える）", () => {
+  it("実行内容の表示: 一括切替は名称、個別切替は機器と状態（電灯を ON にするときは調光パターンを添える）", () => {
     expect(actionText({ scene: "out", device: null, state: null })).toBe("お出かけ");
     expect(actionText({ scene: "ceiling_light", device: null, state: null })).toBe("電灯選択");
     expect(actionText({ scene: null, device: "indirect_light", state: "on" })).toBe("間接照明を ON");
     expect(actionText({ scene: null, device: "indoor_speaker", state: "off" })).toBe("屋内スピーカーを OFF");
     expect(actionText({ scene: null, device: "bedside_speaker", state: "on" })).toBe("枕元スピーカーを ON");
-    expect(actionText({ scene: null, device: "ceiling_light", state: "on" })).toBe("電灯を ON（未実装）");
-    expect(actionText({ scene: null, device: "ceiling_light", state: "off" })).toBe("電灯を OFF（未実装）");
+    expect(actionText({ scene: null, device: "ceiling_light", state: "on", pattern: "full" })).toBe(
+      "電灯を ON（全灯）",
+    );
+    expect(actionText({ scene: null, device: "ceiling_light", state: "on", pattern: "reading" })).toBe(
+      "電灯を ON（読書）",
+    );
+    expect(actionText({ scene: null, device: "ceiling_light", state: "on", pattern: "relax" })).toBe(
+      "電灯を ON（くつろぎ）",
+    );
+    expect(actionText({ scene: null, device: "ceiling_light", state: "on", pattern: "night" })).toBe(
+      "電灯を ON（夜）",
+    );
+    // OFF や、パターンの無い応答には、パターンを添えない。「未実装」は出さない
+    expect(actionText({ scene: null, device: "ceiling_light", state: "off", pattern: null })).toBe("電灯を OFF");
+    expect(actionText({ scene: null, device: "ceiling_light", state: "on" })).toBe("電灯を ON");
+    expect(actionText({ scene: null, device: "indirect_light", state: "on", pattern: "full" })).toBe(
+      "間接照明を ON",
+    );
   });
 
   it("最終実行の日時は年月日 時分", () => {
@@ -595,5 +611,26 @@ describe("ボタン", () => {
       .findAll(".sch-actions button")
       .map((b) => b.attributes("aria-label"));
     expect(labels).toEqual(["編集", "削除"]);
+  });
+});
+
+
+describe("電灯の調光パターンの表示", () => {
+  it("一覧の実行内容に、パターンの名称が出る。「未実装」は出ない", async () => {
+    mockApi(
+      scheduleHandler([
+        item({ id: 1, scene: null, device: "ceiling_light", state: "on", pattern: "reading" }),
+        item({ id: 2, scene: null, device: "ceiling_light", state: "off", pattern: null, run_time: "23:00" }),
+        item({ id: 3, scene: "ceiling_light", pattern: null, run_time: "08:00" }),
+      ]),
+    );
+    const wrapper = mount(SchedulesView);
+    await flushPromises();
+
+    const text = wrapper.text();
+    expect(text).toContain("電灯を ON（読書）");
+    expect(text).toContain("電灯を OFF");
+    expect(text).toContain("電灯選択");
+    expect(text).not.toContain("未実装");
   });
 });

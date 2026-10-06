@@ -13,7 +13,7 @@ from app.logger import LOG_FILE
 from app.repos import RoomScheduleRow
 from app.services import runner_service
 from app.services.runner_service import base_day, run_once, select_due
-from fakes import ID_BEDSIDE, ID_DOOR, ID_INDIRECT, ID_INDOOR, FakeSwitchBot, failure
+from fakes import ID_BEDSIDE, ID_CEILING, ID_DOOR, ID_INDIRECT, ID_INDOOR, FakeSwitchBot, failure
 from helpers import insert_user, unique
 from test_runner import at, last_run, make
 
@@ -279,7 +279,12 @@ def test_一括切替の定期実行も従来どおり動く(switchbot: FakeSwit
     s = make(user_id, scene="out")
     reports = run_once(now=at(THU5, 7, 0, 30), schedules=[s])
     assert reports[0].outcome == "success"
-    assert set(switchbot.commands) == {(ID_INDOOR, "turnOff"), (ID_BEDSIDE, "turnOff"), (ID_INDIRECT, "turnOff")}
+    assert set(switchbot.commands) == {
+        (ID_CEILING, "turnOff"),
+        (ID_INDOOR, "turnOff"),
+        (ID_BEDSIDE, "turnOff"),
+        (ID_INDIRECT, "turnOff"),
+    }
 
 
 # ---- 機器の個別切替 ----
@@ -313,19 +318,76 @@ def test_個別切替は指定した機器だけに1回指示する(
     assert row_.last_failed_devices == ()
 
 
-@pytest.mark.parametrize("state", ["on", "off"])
-def test_電灯の個別切替は指示せず成功になる(
-    switchbot: FakeSwitchBot, user_id: int, state: str, log_dir: Path
+PATTERN_VALUES = {"full": (100, 6200), "reading": (80, 5000), "relax": (50, 3000), "night": (10, 2700)}
+
+
+def _ceiling_calls(switchbot: FakeSwitchBot) -> list[tuple[str, str]]:
+    return [(c, p) for d, c, p in switchbot.calls if d == ID_CEILING]
+
+
+@pytest.mark.parametrize("pattern", list(PATTERN_VALUES))
+def test_電灯をONにする個別切替は_選んだ調光パターンで3つの指示を順に送る(
+    switchbot: FakeSwitchBot, user_id: int, pattern: str, log_dir: Path
 ) -> None:
-    s = make(user_id, device="ceiling_light", state=state)
+    s = make(user_id, device="ceiling_light", state="on", pattern=pattern)
+
+    reports = run_once(now=at(THU5, 7, 0, 30), schedules=[s])
+
+    brightness, color_temperature = PATTERN_VALUES[pattern]
+    assert reports[0].outcome == "success"
+    assert _ceiling_calls(switchbot) == [
+        ("turnOn", "default"),
+        ("setBrightness", str(brightness)),
+        ("setColorTemperature", str(color_temperature)),
+    ]
+    assert {d for d, _, _ in switchbot.calls} == {ID_CEILING}  # 他の機器は変えない
+    assert last_run(s.id).last_run_result == "success"
+    assert last_run(s.id).last_failed_devices == ()
+    log = (log_dir / LOG_FILE).read_text(encoding="utf-8")
+    assert f"device=ceiling_light state=on pattern={pattern}" in log
+    assert f"device=ceiling_light target=on パターン={pattern} 主体=定期実行 結果=success" in log
+
+
+def test_調光パターンのない電灯のONは_既定のパターンで点灯する(switchbot: FakeSwitchBot, user_id: int) -> None:
+    s = make(user_id, device="ceiling_light", state="on")
+    run_once(now=at(THU5, 7, 0, 30), schedules=[s])
+    assert _ceiling_calls(switchbot) == [
+        ("turnOn", "default"),
+        ("setBrightness", "100"),
+        ("setColorTemperature", "6200"),
+    ]
+
+
+def test_電灯をOFFにする個別切替はturnOffだけを送る(switchbot: FakeSwitchBot, user_id: int) -> None:
+    switchbot.statuses[ID_CEILING] = {"power": "on", "brightness": 80, "colorTemperature": 5000}
+    s = make(user_id, device="ceiling_light", state="off")
 
     reports = run_once(now=at(THU5, 7, 0, 30), schedules=[s])
 
     assert reports[0].outcome == "success"
-    assert switchbot.commands == []
-    assert last_run(s.id).last_run_result == "success"
+    assert _ceiling_calls(switchbot) == [("turnOff", "default")]
+    assert switchbot.status_calls == []  # 定期実行は、反映待ちの取り直しをしない
     assert last_run(s.id).last_failed_devices == ()
-    assert "未実装のため何も指示しない" in (log_dir / LOG_FILE).read_text(encoding="utf-8")
+
+
+@pytest.mark.parametrize("failing", ["turnOn", "setBrightness", "setColorTemperature"])
+def test_電灯の調光の指示が失敗したら_failureと電灯が記録され_残りは送らない(
+    switchbot: FakeSwitchBot, user_id: int, failing: str, log_dir: Path
+) -> None:
+    switchbot.step_errors[(ID_CEILING, failing)] = failure()
+    s = make(user_id, device="ceiling_light", state="on", pattern="reading")
+
+    reports = run_once(now=at(THU5, 7, 0, 30), schedules=[s])
+
+    assert reports[0].outcome == "failure"
+    order = ["turnOn", "setBrightness", "setColorTemperature"]
+    assert [c for c, _ in _ceiling_calls(switchbot)] == order[: order.index(failing) + 1]
+    row_ = last_run(s.id)
+    assert row_.last_run_result == "failure"
+    assert row_.last_failed_devices == ("ceiling_light",)
+    log = (log_dir / LOG_FILE).read_text(encoding="utf-8")
+    assert "device=ceiling_light target=on パターン=reading 主体=定期実行 結果=failure" in log
+    assert ID_CEILING not in log
 
 
 def test_個別切替の失敗はfailureと失敗した機器1つが記録される(

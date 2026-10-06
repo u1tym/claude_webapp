@@ -96,6 +96,7 @@ class Config:
     # SwitchBot の認証情報と機器の識別子（コード・画面・応答・ログに出さない）
     switchbot_token: str
     switchbot_secret: str
+    device_ceiling_light_id: str
     device_indirect_light_id: str
     device_indoor_speaker_id: str
     device_bedside_speaker_id: str
@@ -130,6 +131,7 @@ def load_config(env_path: Path | None = None) -> Config:
         log_backup_count=int(values.get("LOG_BACKUP_COUNT") or "5"),
         switchbot_token=(values.get("SWITCHBOT_TOKEN") or "").strip(),
         switchbot_secret=(values.get("SWITCHBOT_SECRET") or "").strip(),
+        device_ceiling_light_id=(values.get("ROOM_DEVICE_CEILING_LIGHT_ID") or "").strip(),
         device_indirect_light_id=(values.get("ROOM_DEVICE_INDIRECT_LIGHT_ID") or "").strip(),
         device_indoor_speaker_id=(values.get("ROOM_DEVICE_INDOOR_SPEAKER_ID") or "").strip(),
         device_bedside_speaker_id=(values.get("ROOM_DEVICE_BEDSIDE_SPEAKER_ID") or "").strip(),

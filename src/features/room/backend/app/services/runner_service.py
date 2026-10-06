@@ -8,7 +8,7 @@ from app.actors import ACTOR_JOB
 from app.config import load_config
 from app.logger import write
 from app.repos import RoomScheduleRow
-from app.services import device_service, holiday_service, scene_service
+from app.services import device_service, holiday_service, scene_service, schedule_service
 from app.services.device_service import DeviceOperationError
 from app.services.scene_service import FAILURE, SUCCESS
 from app.switchbot.client import SwitchBotApi
@@ -124,7 +124,9 @@ def select_due(
 
 def _action_text(schedule: RoomScheduleRow) -> str:
     if schedule.action_type == "device":
-        return f"action=device device={schedule.device} state={schedule.target_state}"
+        pattern = schedule_service.effective_pattern(schedule)
+        detail = f" pattern={pattern}" if pattern is not None else ""
+        return f"action=device device={schedule.device} state={schedule.target_state}{detail}"
     return f"action=scene scene={schedule.scene}"
 
 
@@ -133,13 +135,12 @@ def _execute_device(
 ) -> tuple[str, tuple[str, ...]]:
     """機器 1 つの個別切替を実行する。指示は 1 回だけで、反映待ちの取り直しはしない。
 
-    結果は成功か失敗のみ。電灯は未実装のため、何も指示せず成功として扱う。
+    結果は成功か失敗のみ。電灯を ON にするときは、調光パターン（省略時は既定のパターン）の指示を含む。
     """
     device = str(schedule.device)
     target = str(schedule.target_state)
-    if device == "ceiling_light":
-        write("INF", f"定期実行の個別切替 id={schedule.id} device={device} target={target} 判断=未実装のため何も指示しない")
-        return SUCCESS, ()
+    pattern = schedule_service.effective_pattern(schedule)  # 電灯を ON にするときだけ値を持つ
+    detail = f" パターン={pattern}" if pattern is not None else ""
     command = device_service.command_for(device, target)
     if command is None:
         write("ERR", f"定期実行の個別切替失敗 id={schedule.id} device={device} target={target} 理由=その機器で取り得ない状態")
@@ -147,12 +148,12 @@ def _execute_device(
     cfg = device_service.load_config()
     active = client if client is not None else device_service.build_client(cfg)
     try:
-        device_service.send_switch(active, cfg, device, target, command, ACTOR_JOB)
+        device_service.send_switch(active, cfg, device, target, command, ACTOR_JOB, pattern)
     except DeviceOperationError:
         # 失敗の理由は send_switch がログに残している
-        write("WRN", f"定期実行の個別切替 id={schedule.id} device={device} target={target} 主体={ACTOR_JOB} 結果=failure")
+        write("WRN", f"定期実行の個別切替 id={schedule.id} device={device} target={target}{detail} 主体={ACTOR_JOB} 結果=failure")
         return FAILURE, (device,)
-    write("INF", f"定期実行の個別切替 id={schedule.id} device={device} target={target} 主体={ACTOR_JOB} 結果=success")
+    write("INF", f"定期実行の個別切替 id={schedule.id} device={device} target={target}{detail} 主体={ACTOR_JOB} 結果=success")
     return SUCCESS, ()
 
 
@@ -173,9 +174,7 @@ def _execute(
         result = scene_service.run_scene(scene, actor=ACTOR_JOB, client=client, refetch=False)
     except Exception as exc:  # 想定外の失敗でも、他の定期実行は続ける
         write("ERR", f"定期実行の実行失敗 id={schedule.id} scene={scene} 理由={type(exc).__name__}")
-        return FAILURE, tuple(
-            device for device, _ in scene_service.SCENES.get(scene, ()) if device != "ceiling_light"
-        )
+        return FAILURE, tuple(device for device, _ in scene_service.SCENES.get(scene, ()))
     failed = tuple(
         r.device for r in result.results if r.outcome == FAILURE and r.device in _RECORDABLE_DEVICES
     )

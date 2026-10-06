@@ -56,6 +56,7 @@ describe("画面を開いたとき", () => {
       res({
         fetched_at: STATE_AT,
         devices: devices({
+          ceiling_light: ERROR,
           indirect_light: ERROR,
           indoor_speaker: ERROR,
           bedside_speaker: ERROR,
@@ -307,13 +308,14 @@ describe("個別切替（間接照明・スピーカー）", () => {
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
   });
 
-  it("電灯は操作しても何も起きない（PUT しない）", async () => {
+  it("電灯を押しただけでは切り替えない（調光パターンを選ぶまで PUT しない）", async () => {
     const { calls } = mockApi(defaultHandler());
     const wrapper = await mountView();
     await part(wrapper, "ceiling_light").trigger("click");
     await flushPromises();
     expect(calls.filter((c) => c.method === "PUT")).toHaveLength(0);
-    expect(part(wrapper, "ceiling_light").text()).toContain("未実装");
+    expect(wrapper.find("[role=dialog]").exists()).toBe(true);
+    expect(part(wrapper, "ceiling_light").text()).not.toContain("未実装");
   });
 
   it.each([401, 403] as const)("切替で %s なら親（殻）へ auth-error を伝える", async (code) => {

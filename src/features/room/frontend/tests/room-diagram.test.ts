@@ -5,7 +5,7 @@ import type { DeviceKey, DeviceState, Devices } from "../src/room";
 
 function devices(override: Partial<Devices> = {}): Devices {
   return {
-    ceiling_light: { status: "ok", state: "off", implemented: false },
+    ceiling_light: { status: "ok", state: "off" },
     indirect_light: { status: "ok", state: "on" },
     indoor_speaker: { status: "ok", state: "off" },
     bedside_speaker: { status: "ok", state: "off" },
@@ -76,11 +76,24 @@ describe("表示", () => {
     expect(part(unlocked, "front_door").classes()).not.toContain("is-on");
   });
 
-  it("電灯は常に OFF で、未実装であることを示す（ON の入力でも OFF にしない）", () => {
-    const wrapper = render();
-    expect(part(wrapper, "ceiling_light").text()).toContain("OFF");
-    expect(part(wrapper, "ceiling_light").text()).toContain("未実装");
-    expect(part(wrapper, "ceiling_light").find(".rd-rays").exists()).toBe(false);
+  it("電灯は ON / OFF を状態どおりに示し、未実装の文言を出さない", () => {
+    const off = render();
+    expect(part(off, "ceiling_light").text()).toContain("OFF");
+    expect(part(off, "ceiling_light").text()).not.toContain("未実装");
+    expect(part(off, "ceiling_light").classes()).not.toContain("is-on");
+    expect(part(off, "ceiling_light").find(".rd-rays").exists()).toBe(false);
+
+    const on = render({ devices: devices({ ceiling_light: { status: "ok", state: "on" } }) });
+    expect(part(on, "ceiling_light").text()).toContain("ON");
+    expect(part(on, "ceiling_light").text()).not.toContain("未実装");
+    expect(part(on, "ceiling_light").classes()).toContain("is-on");
+    expect(part(on, "ceiling_light").find(".rd-rays").exists()).toBe(true);
+  });
+
+  it("電灯の明るさと色温度は表示しない", () => {
+    const wrapper = render({ devices: devices({ ceiling_light: { status: "ok", state: "on" } }) });
+    const text = part(wrapper, "ceiling_light").text();
+    expect(text).not.toMatch(/明るさ|色温度|%|K/);
   });
 
   it("電池残量を割合と塗りで示す", () => {
@@ -168,14 +181,31 @@ describe("操作", () => {
     expect(wrapper.emitted("select")).toBeUndefined();
   });
 
-  it("電灯はボタンではなく、操作しても何も起きない", async () => {
+  it("電灯はボタンで、操作すると選択を伝える（調光パターンは親が選ばせる）", async () => {
     const wrapper = render();
     const ceiling = part(wrapper, "ceiling_light");
-    expect(ceiling.attributes("role")).toBe("img");
-    expect(ceiling.attributes("tabindex")).toBeUndefined();
-    expect(ceiling.attributes("aria-label")).toBe("電灯 OFF（未実装）");
+    expect(ceiling.attributes("role")).toBe("button");
+    expect(ceiling.attributes("tabindex")).toBe("0");
+    expect(ceiling.attributes("aria-label")).toBe("電灯 OFF。押すと調光パターンを選んで点灯します");
     await ceiling.trigger("click");
     await ceiling.trigger("keydown", { key: "Enter" });
+    await ceiling.trigger("keydown", { key: " " });
+    expect(wrapper.emitted("select")).toEqual([["ceiling_light"], ["ceiling_light"], ["ceiling_light"]]);
+  });
+
+  it("点灯中の電灯の aria-label は、調光パターンの変更または消灯ができることを示す", () => {
+    const wrapper = render({ devices: devices({ ceiling_light: { status: "ok", state: "on" } }) });
+    expect(part(wrapper, "ceiling_light").attributes("aria-label")).toBe(
+      "電灯 ON。押すと調光パターンの変更または消灯ができます",
+    );
+  });
+
+  it("取得できなかった電灯は操作できない", async () => {
+    const wrapper = render({ devices: devices({ ceiling_light: ERROR }) });
+    const ceiling = part(wrapper, "ceiling_light");
+    expect(ceiling.attributes("aria-disabled")).toBe("true");
+    expect(ceiling.attributes("tabindex")).toBe("-1");
+    await ceiling.trigger("click");
     expect(wrapper.emitted("select")).toBeUndefined();
   });
 

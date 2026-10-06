@@ -27,7 +27,7 @@ class SwitchBotApi(Protocol):
 
     def get_status(self, device_id: str) -> dict[str, Any]: ...
 
-    def send_command(self, device_id: str, command: str) -> None: ...
+    def send_command(self, device_id: str, command: str, parameter: str = "default") -> None: ...
 
 
 def make_sign(token: str, secret: str, t: str, nonce: str) -> str:
@@ -86,7 +86,7 @@ class SwitchBotClient:
         """デバイスの状態を返す。"""
         return self._request("GET", f"/devices/{device_id}/status")
 
-    def send_command(self, device_id: str, command: str) -> None:
-        """デバイスへコマンドを送る（turnOn / turnOff / lock / unlock）。"""
-        payload = {"command": command, "parameter": "default", "commandType": "command"}
+    def send_command(self, device_id: str, command: str, parameter: str = "default") -> None:
+        """デバイスへコマンドを送る（turnOn / turnOff / lock / unlock、setBrightness / setColorTemperature など）。"""
+        payload = {"command": command, "parameter": parameter, "commandType": "command"}
         self._request("POST", f"/devices/{device_id}/commands", json=payload)

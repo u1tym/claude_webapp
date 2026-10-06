@@ -25,6 +25,7 @@ class ScheduleBody(BaseModel):
     day_shift: Any = None
     device: Any = None
     state: Any = None
+    pattern: Any = None
 
 
 class EnabledBody(BaseModel):
@@ -43,6 +44,7 @@ def _input(body: ScheduleBody | None) -> ScheduleInput:
         day_shift=body.day_shift,
         device=body.device,
         state=body.state,
+        pattern=body.pattern,
     )
 
 

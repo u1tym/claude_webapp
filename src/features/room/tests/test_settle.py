@@ -18,7 +18,7 @@ from app.main import app as room_app
 from app.services import device_service, runner_service
 from app.services.device_service import SETTLE_INTERVAL_SECONDS, settle_step, switch_device
 from app.services.scene_service import run_scene
-from fakes import ID_BEDSIDE, ID_DOOR, ID_INDIRECT, ID_INDOOR, FakeSwitchBot, failure
+from fakes import ID_BEDSIDE, ID_CEILING, ID_DOOR, ID_INDIRECT, ID_INDOOR, FakeSwitchBot, failure
 from helpers import assign_feature, ensure_feature, insert_session, insert_user, unique
 
 
@@ -191,11 +191,15 @@ def test_指示が失敗したときは_待たない(switchbot: FakeSwitchBot, s
     assert switchbot.status_calls == []
 
 
-def test_電灯は何も指示せず_待たない(switchbot: FakeSwitchBot, sleeps: list[float]) -> None:
+def test_電灯のONは_調光の指示のあと_電源が目標になるまで取り直す(
+    switchbot: FakeSwitchBot, sleeps: list[float]
+) -> None:
+    switchbot.lag_reads[ID_CEILING] = 2
     result = switch_device("ceiling_light", "on", actor="画面の利用者")
-    assert result.applied is False
-    assert sleeps == []
-    assert switchbot.status_calls == []
+    assert result.applied is True
+    assert result.result == {"status": "ok", "state": "on"}
+    assert sleeps == [1.5, 1.5, 1.5]
+    assert switchbot.status_calls == [ID_CEILING] * 3
 
 
 def test_APIの応答は_反映を待った結果を返す(switchbot: FakeSwitchBot, sleeps: list[float]) -> None:
@@ -241,7 +245,7 @@ def test_一括切替_反映されないままなら_上限で打ち切る(switc
 
 
 def test_一括切替_全機器の指示が失敗したときは_待たない(switchbot: FakeSwitchBot, sleeps: list[float]) -> None:
-    for device_id in (ID_INDIRECT, ID_INDOOR, ID_BEDSIDE):
+    for device_id in (ID_CEILING, ID_INDIRECT, ID_INDOOR, ID_BEDSIDE):
         switchbot.command_errors[device_id] = failure()
     result = run_scene("out", actor="画面の利用者")
     assert result.outcome == "failure"

@@ -41,6 +41,7 @@ erDiagram
         varchar scene
         varchar device
         varchar target_state
+        varchar dimming_pattern
         bool is_enabled
         timestamptz last_run_at
         varchar last_run_result
@@ -77,6 +78,7 @@ erDiagram
 | `scene` | varchar(32) | NULL | - | 実行する一括切替（`action_type` が `scene` のとき。`device` のときは NULL）。`indoor_speaker`（屋内スピーカー選択）、`bedside_speaker`（枕元スピーカー選択）、`ceiling_light`（電灯選択）、`indirect_light`（間接照明選択）、`out`（お出かけ） |
 | `device` | varchar(16) | NULL | - | 個別切替の機器（`action_type` が `device` のとき。`scene` のときは NULL）。`ceiling_light`、`indirect_light`、`indoor_speaker`、`bedside_speaker` |
 | `target_state` | varchar(3) | NULL | - | 個別切替の目標の状態（`action_type` が `device` のとき。`scene` のときは NULL）。`on`、`off` |
+| `dimming_pattern` | varchar(16) | NULL | - | 電灯を ON にする個別切替の調光パターン（`action_type` が `device`、`device` が `ceiling_light`、`target_state` が `on` のときだけ）。`full`（全灯）、`reading`（読書）、`relax`（くつろぎ）、`night`（夜）。NULL は、既定のパターン（全灯）。それ以外の定期実行は NULL。明るさと色温度の値は持たない（コードの定数。`design.md`） |
 | `is_enabled` | boolean | NOT NULL | true | 有効なら true |
 | `last_run_at` | timestamptz | NULL | - | 最後に実行した日時。未実行は NULL |
 | `last_run_result` | varchar(16) | NULL | - | 最後の実行の結果。`success`（成功）、`partial`（一部失敗）、`failure`（失敗）。未実行は NULL |
@@ -98,6 +100,8 @@ erDiagram
 - CHECK: `device IN ('ceiling_light', 'indirect_light', 'indoor_speaker', 'bedside_speaker')`（NULL を許す。玄関ドアは含めない）
 - CHECK: `target_state IN ('on', 'off')`（NULL を許す）
 - CHECK: `(action_type = 'scene' AND scene IS NOT NULL AND device IS NULL AND target_state IS NULL) OR (action_type = 'device' AND scene IS NULL AND device IS NOT NULL AND target_state IS NOT NULL)`（実行内容の種類に応じた列だけが入る）
+- CHECK: `dimming_pattern IN ('full', 'reading', 'relax', 'night')`（NULL を許す）
+- CHECK: `dimming_pattern IS NULL OR (action_type = 'device' AND device = 'ceiling_light' AND target_state = 'on')`（調光パターンは、電灯を ON にする個別切替のときだけ）
 - CHECK: `last_run_result IN ('success', 'partial', 'failure')`（NULL を許す）
 - CHECK: `(last_run_at IS NULL) = (last_run_result IS NULL)`（最終実行の日時と結果は一緒に入る）
 - CHECK: `last_failed_devices <@ ARRAY['ceiling_light', 'indirect_light', 'indoor_speaker', 'bedside_speaker']::text[]`
@@ -114,6 +118,7 @@ erDiagram
 
 - `last_failed_devices` は、画面に表示するだけで検索・結合に使わない。機器は 4 つで固定のため、配列で持つ（非正規形を許容する）。値の集合は CHECK で縛る。
 - 玄関ドアは、一括切替・個別切替の定期実行の対象に含まれないため、失敗した機器の値に含めない（REQ-007、REQ-008）。
+- 調光パターンの種類（`full`、`reading`、`relax`、`night`）は、`design.md` の `app/dimming.py` の定数と一致させる。種類を増やす・値を変えるときは、要件・設計の改訂と、本表の CHECK の付け替えを伴う。一括切替（`scene`）の定期実行は、調光パターンを持たず、電灯選択は既定のパターンで点灯する。
 - 機器の個別切替の定期実行が失敗したとき、`last_failed_devices` は、その機器 1 つになる。結果は `success` か `failure` のみ（`partial` は一括切替のとき）。
 - 実行内容の種類ごとに入る列が異なる。列を、種類ごとの別表に分けず、1 表に NULL 許容で持つのは、定期実行 1 件が持つ実行内容が 1 つで、列が少ないため。整合は CHECK で保つ。
 - 祝日・曜日の判定に使う日付は、表には持たない。ユーザ休日は、`public.user_holidays`（`schedule` 機能が登録）を、ジョブが読み取りだけで参照する（本機能の表は増やさない。列は `user_id`・`holiday_date`・`is_deleted`）。判定は、ジョブが、実行時に、`holiday_mode`・`day_shift`・曜日（`schedule_weekdays`）から行う（`design.md` の基準日の判定）。
@@ -123,7 +128,7 @@ erDiagram
 
 - 画面・API の操作で、追加・更新・削除・有効／無効の切替をする。
 - ジョブが、有効なものを全件読み、実行後に `last_run_at`、`last_run_result`、`last_failed_devices` を更新する。
-- 定義の更新（実行条件・祝日の扱い・実行日の取り方・時刻・実行内容・有効／無効）では、最終実行の列は変えない。
+- 定義の更新（実行条件・祝日の扱い・実行日の取り方・時刻・実行内容・調光パターン・有効／無効）では、最終実行の列は変えない。
 
 ### room.schedule_weekdays
 
@@ -283,7 +288,17 @@ erDiagram
 | 4 | 実行条件の CHECK を `('daily', 'weekdays')` に付け替える。新しい列の CHECK と、整合の CHECK を足す |
 | 5 | 最終実行の列、`schedule_weekdays`、`schedule_runs` は、変えない |
 
-手順 3 の変換は、意味が変わる（祝日だけに実行していたものが、全曜日の定義になる）ため、**必ず無効にして**残す。変換後の行は、利用者が確認するまで、実行されない。
+**電灯の調光の追加（2026-10-06 の改訂）**: `sql/03_room_dimming.sql` が、`dimming_pattern` を `ADD COLUMN IF NOT EXISTS` で足し（既存の行はすべて NULL = 既定のパターン）、列の CHECK と、整合の CHECK を付け替える。繰り返し適用しても壊れない。既存のデータは、変換しない。
+
+| 手順 | 内容 |
+|------|------|
+| 1 | `dimming_pattern` を、`ADD COLUMN IF NOT EXISTS`（NULL）で足す |
+| 2 | 列の CHECK（種類）と、整合の CHECK（電灯を ON にする個別切替のときだけ）を、付け替える |
+| 3 | 既存の行は変えない |
+
+電灯は、これまで未実装で、実行しても何も起きなかった。この改訂のあとは、既存の定期実行のうち、電灯に関わるもの（電灯の個別切替、電灯選択、お出かけ）も、実際に電灯を操作する。電灯を ON にする既存の個別切替は、既定のパターン（全灯）で点灯する。データの変換や無効化はしない。
+
+手順 3（従来の祝日の指定）の変換は、意味が変わる（祝日だけに実行していたものが、全曜日の定義になる）ため、**必ず無効にして**残す。変換後の行は、利用者が確認するまで、実行されない。
 
 ## 関連
 
@@ -295,8 +310,9 @@ erDiagram
 
 | 要件 | DB設計 |
 |------|--------|
-| REQ-001〜REQ-007 | テーブルなし（機器の状態は SwitchBot から取得し、DB に持たない） |
-| REQ-008 | `room.room_schedules`（実行条件、祝日の扱い、実行日の取り方、時刻、実行内容、有効／無効）、`room.schedule_weekdays`（曜日）、移行（従来の祝日の指定は無効にして残す） |
+| REQ-001〜REQ-005、REQ-007 | テーブルなし（機器の状態は SwitchBot から取得し、DB に持たない） |
+| REQ-006 | テーブルなし（調光パターンは固定の定数。機器の状態は DB に持たない） |
+| REQ-008 | `room.room_schedules`（実行条件、祝日の扱い、実行日の取り方、時刻、実行内容、調光パターン、有効／無効）、`room.schedule_weekdays`（曜日）、移行（従来の祝日の指定は無効にして残す） |
 | REQ-009 | `room.room_schedules`（有効／無効、実行条件、祝日の扱い、実行日の取り方、実行内容）、`room.schedule_weekdays`、`room.schedule_runs`（同じ日の重複実行の防止） |
 | REQ-010 | `room.room_schedules` の `last_run_at`、`last_run_result`、`last_failed_devices`（個別切替は、成功・失敗のみ） |
 | REQ-011 | テーブルなし（API は同じ表を読み書きする） |
@@ -321,3 +337,5 @@ erDiagram
 | 2026-10-01 15:04 | 承認済み | 定期実行の改訂の DB（列の追加、移行）を承認 |
 | 2026-10-03 22:10 | 未承認 | 祝日の判定に `public.user_holidays` を読み取り参照すると明記（本機能のテーブル変更なし） |
 | 2026-10-03 22:12 | 承認済み | ユーザ休日の `public` 化と祝日判定への反映の改訂を承認 |
+| 2026-10-06 19:22 | 未承認 | 電灯の調光に合わせ、`room_schedules` に `dimming_pattern`（`full`／`reading`／`relax`／`night`、NULL は既定）を追加。列と整合の CHECK、既存の DB の移行（`03_room_dimming.sql`）、電灯に関わる既存の定期実行が実際に動くことの注記を追加 |
+| 2026-10-06 19:24 | 承認済み | 電灯の調光の DB（`dimming_pattern` の追加、移行）を承認 |

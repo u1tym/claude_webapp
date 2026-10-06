@@ -133,7 +133,7 @@ const battery = computed(() => {
         </g>
       </g>
 
-      <!-- 電灯: 電球。常に OFF（輪郭のみ）。ON のときは塗りつぶし＋光線 -->
+      <!-- 電灯: 電球。ON は塗りつぶし＋光線、OFF は輪郭のみ（明るさと色温度は表示しない） -->
       <g v-else-if="part.key === 'ceiling_light'" class="rd-icon">
         <circle class="rd-shape" cx="75" cy="52" r="26" />
         <rect class="rd-shape" x="65" y="78" width="20" height="14" rx="3" />
@@ -190,15 +190,6 @@ const battery = computed(() => {
         <template v-if="switching === part.key">切替中…</template>
         <template v-else-if="hasError(part.key)">⚠ 取得できません</template>
         <template v-else>{{ stateText(stateOf(part.key)) }}</template>
-      </text>
-      <text
-        v-if="part.key === 'ceiling_light'"
-        class="rd-note"
-        :x="part.width / 2"
-        y="158"
-        text-anchor="middle"
-      >
-        未実装
       </text>
     </g>
 

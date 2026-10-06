@@ -69,6 +69,17 @@ def test_コマンド送信はPOSTでペイロードを送る() -> None:
     }
 
 
+def test_値つきのコマンドは_parameterに値を送る() -> None:
+    payload = {"statusCode": 100, "message": "success", "body": {}}
+    with patch("app.switchbot.client.requests.request", return_value=_response(payload)) as m:
+        SwitchBotClient("tok", "sec").send_command("ABC", "setBrightness", "80")
+    assert m.call_args.kwargs["json"] == {
+        "command": "setBrightness",
+        "parameter": "80",
+        "commandType": "command",
+    }
+
+
 def test_statusCodeが100以外ならエラー() -> None:
     payload = {"statusCode": 190, "message": "device internal error", "body": {}}
     with patch("app.switchbot.client.requests.request", return_value=_response(payload)):

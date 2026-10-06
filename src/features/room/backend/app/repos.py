@@ -215,11 +215,13 @@ class RoomScheduleRow:
     last_run_at: datetime | None
     last_run_result: str | None
     last_failed_devices: tuple[str, ...]
+    # 電灯を ON にする個別切替の調光パターン。None は既定のパターン（それ以外の定期実行も None）
+    dimming_pattern: str | None = None
 
 
 _SCHEDULE_COLUMNS = """
     s.id, s.created_by_user_id, s.condition_type, s.holiday_mode, s.day_shift, s.run_time,
-    s.action_type, s.scene, s.device, s.target_state, s.is_enabled,
+    s.action_type, s.scene, s.device, s.target_state, s.dimming_pattern, s.is_enabled,
     s.last_run_at, s.last_run_result, s.last_failed_devices,
     COALESCE(
         array_agg(w.weekday ORDER BY w.weekday) FILTER (WHERE w.weekday IS NOT NULL),
@@ -252,6 +254,7 @@ def _schedule_from_row(row: dict[str, object]) -> RoomScheduleRow:
             str(row["last_run_result"]) if row["last_run_result"] is not None else None
         ),
         last_failed_devices=tuple(str(d) for d in row["last_failed_devices"]),  # type: ignore[attr-defined]
+        dimming_pattern=str(row["dimming_pattern"]) if row["dimming_pattern"] is not None else None,
     )
 
 
@@ -299,6 +302,8 @@ class ScheduleDefinition:
     scene: str | None
     device: str | None
     target_state: str | None
+    # 電灯を ON にする個別切替の調光パターン。None は既定のパターン（それ以外の定期実行も None）
+    dimming_pattern: str | None = None
 
 
 def insert_room_schedule(user_id: int, definition: ScheduleDefinition, is_enabled: bool) -> int:
@@ -309,13 +314,13 @@ def insert_room_schedule(user_id: int, definition: ScheduleDefinition, is_enable
             """
             INSERT INTO room.room_schedules
                 (created_by_user_id, condition_type, holiday_mode, day_shift, run_time,
-                 action_type, scene, device, target_state, is_enabled)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                 action_type, scene, device, target_state, dimming_pattern, is_enabled)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             RETURNING id
             """,
             (
                 user_id, d.condition_type, d.holiday_mode, d.day_shift, d.run_time,
-                d.action_type, d.scene, d.device, d.target_state, is_enabled,
+                d.action_type, d.scene, d.device, d.target_state, d.dimming_pattern, is_enabled,
             ),
         )
         row = cur.fetchone()
@@ -335,13 +340,13 @@ def update_room_schedule(
             """
             UPDATE room.room_schedules
             SET condition_type = %s, holiday_mode = %s, day_shift = %s, run_time = %s,
-                action_type = %s, scene = %s, device = %s, target_state = %s,
+                action_type = %s, scene = %s, device = %s, target_state = %s, dimming_pattern = %s,
                 is_enabled = COALESCE(%s, is_enabled), updated_at = now()
             WHERE id = %s
             """,
             (
                 d.condition_type, d.holiday_mode, d.day_shift, d.run_time,
-                d.action_type, d.scene, d.device, d.target_state, is_enabled, schedule_id,
+                d.action_type, d.scene, d.device, d.target_state, d.dimming_pattern, is_enabled, schedule_id,
             ),
         )
         if cur.rowcount == 0:

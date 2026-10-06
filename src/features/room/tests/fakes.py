@@ -5,6 +5,7 @@ from typing import Any
 from app.switchbot.client import SwitchBotError
 
 # テスト用の機器識別子（実機の識別子ではない）。応答・ログに出ないことの確認にも使う
+ID_CEILING = "TESTID-CEILING"
 ID_INDIRECT = "TESTID-INDIRECT"
 ID_INDOOR = "TESTID-INDOOR"
 ID_BEDSIDE = "TESTID-BEDSIDE"
@@ -18,14 +19,19 @@ class FakeSwitchBot:
 
     def __init__(self) -> None:
         self.statuses: dict[str, dict[str, Any] | Exception] = {
+            ID_CEILING: {"power": "off", "brightness": 100, "colorTemperature": 6200},
             ID_INDIRECT: {"power": "on"},
             ID_INDOOR: {"power": "off"},
             ID_BEDSIDE: {"power": "off"},
             ID_DOOR: {"lockState": "locked", "battery": 35},
         }
         self.command_errors: dict[str, Exception] = {}
+        # (機器の識別子, コマンド) ごとの失敗（電灯の調光の途中の失敗の再現用）
+        self.step_errors: dict[tuple[str, str], Exception] = {}
         self.status_calls: list[str] = []
         self.commands: list[tuple[str, str]] = []
+        # 値つきの指示（機器の識別子、コマンド、値）。commands と同じ順
+        self.calls: list[tuple[str, str, str]] = []
         # False なら、指示が成功しても機器の状態は変わらない（食い違いの再現用）
         self.apply_commands = True
         # 指示のあとに状態の取得を失敗させたい機器（取得し直しの失敗の再現用）
@@ -67,19 +73,28 @@ class FakeSwitchBot:
             raise result
         return dict(result)
 
-    def send_command(self, device_id: str, command: str) -> None:
+    def send_command(self, device_id: str, command: str, parameter: str = "default") -> None:
         self.events.append("command")
         self.commands.append((device_id, command))
+        self.calls.append((device_id, command, parameter))
+        step_error = self.step_errors.get((device_id, command))
+        if step_error is not None:
+            raise step_error
         error = self.command_errors.get(device_id)
         if error is not None:
             raise error
+        # 電灯の調光は、値をそのまま状態に残す（状態の取得は電源しか読まないが、指示の内容を確かめるため）
+        if command == "setBrightness" and isinstance(self.statuses.get(device_id), dict):
+            self.statuses[device_id]["brightness"] = int(parameter)  # type: ignore[index]
+        if command == "setColorTemperature" and isinstance(self.statuses.get(device_id), dict):
+            self.statuses[device_id]["colorTemperature"] = int(parameter)  # type: ignore[index]
         if device_id in self.fail_status_after_command:
             self.statuses[device_id] = failure()
             return
         if not self.apply_commands:
             return
         lag = self.lag_reads.get(device_id, 0)
-        if lag > 0:
+        if lag > 0 and command in ("turnOn", "turnOff", "lock", "unlock"):
             self._pending[device_id] = (command, lag)
             return
         # 成功したら、状態も変わったものとして扱う

@@ -8,7 +8,7 @@ export const ERROR: DeviceState = { status: "error", state: null };
 
 export function devices(override: Partial<Devices> = {}): Devices {
   return {
-    ceiling_light: { status: "ok", state: "off", implemented: false },
+    ceiling_light: { status: "ok", state: "off" },
     indirect_light: { status: "ok", state: "on" },
     indoor_speaker: { status: "ok", state: "off" },
     bedside_speaker: { status: "ok", state: "off" },
@@ -16,6 +16,17 @@ export function devices(override: Partial<Devices> = {}): Devices {
     ...override,
   };
 }
+
+/** GET /dimming-patterns の応答（固定の 4 種。値は requirements.md の用語表のとおり）。 */
+export const PATTERNS_RESPONSE = {
+  default: "full",
+  patterns: [
+    { id: "full", name: "全灯", brightness: 100, color_temperature: 6200 },
+    { id: "reading", name: "読書", brightness: 80, color_temperature: 5000 },
+    { id: "relax", name: "くつろぎ", brightness: 50, color_temperature: 3000 },
+    { id: "night", name: "夜", brightness: 10, color_temperature: 2700 },
+  ],
+};
 
 export type Call = { method: string; path: string; body: unknown };
 
@@ -53,6 +64,9 @@ export function defaultHandler(initial: Devices = devices()): Handler {
   return ({ method, path, body }) => {
     if (method === "GET" && path === "/state") {
       return res({ fetched_at: STATE_AT, devices: current });
+    }
+    if (method === "GET" && path === "/dimming-patterns") {
+      return res(PATTERNS_RESPONSE);
     }
     const match = path.match(/^\/devices\/(\w+)\/state$/);
     if (method === "PUT" && match) {

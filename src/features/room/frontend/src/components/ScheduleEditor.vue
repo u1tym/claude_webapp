@@ -1,18 +1,23 @@
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from "vue";
-import { AuthError, SwitchError, createSchedule, updateSchedule } from "../api";
+import { computed, nextTick, onMounted, ref, watch } from "vue";
+import { AuthError, SwitchError, createSchedule, getDimmingPatterns, updateSchedule } from "../api";
 import {
   ACTION_TYPE_OPTIONS,
   CONDITION_OPTIONS,
   DAY_SHIFT_OPTIONS,
+  DEFAULT_PATTERN,
   HOLIDAY_MODE_OPTIONS,
+  PATTERN_OPTIONS,
   SCENES,
   STATE_OPTIONS,
   TIMER_DEVICES,
   WEEKDAY_CHIPS,
   formFromItem,
+  isCeilingOn,
+  patternCaption,
   toScheduleBody,
   validateScheduleForm,
+  type DimmingPattern,
   type ScheduleForm,
   type ScheduleItem,
 } from "../room";
@@ -35,6 +40,46 @@ const saving = ref(false);
 const firstField = ref<HTMLInputElement | null>(null);
 
 const title = props.item === null ? "定期実行の登録" : "定期実行の変更";
+
+// 調光パターンは、電灯を ON にする個別切替のときだけ選べる。明るさと色温度の目安は、初めて出すときに API から取る
+const showPattern = computed(() => isCeilingOn(form.value));
+const patternInfo = ref<DimmingPattern[] | null>(null);
+const patternInfoFailed = ref(false);
+
+/** 選択肢に添える、明るさと色温度の目安。取得できていなければ、添えない。 */
+function captionFor(id: string): string {
+  const info = patternInfo.value?.find((p) => p.id === id);
+  return info ? patternCaption(info) : "";
+}
+
+async function loadPatternInfo(): Promise<void> {
+  if (patternInfo.value !== null) {
+    return;
+  }
+  try {
+    patternInfo.value = (await getDimmingPatterns()).patterns;
+    patternInfoFailed.value = false;
+  } catch (e) {
+    if (e instanceof AuthError) {
+      emit("auth-error", e);
+    } else {
+      patternInfoFailed.value = true;
+    }
+  }
+}
+
+watch(
+  showPattern,
+  (shown) => {
+    if (shown) {
+      void loadPatternInfo();
+    } else {
+      // 条件に合わなくなったら、選択を破棄する（次に出すときは、既定の全灯）
+      form.value.pattern = DEFAULT_PATTERN;
+    }
+  },
+  { immediate: true },
+);
 
 function toggleWeekday(value: number): void {
   const list = form.value.weekdays;
@@ -187,6 +232,16 @@ onMounted(async () => {
           </label>
         </fieldset>
       </template>
+
+      <fieldset v-if="showPattern" class="editor-field" data-field="pattern">
+        <legend>調光パターン</legend>
+        <label v-for="option in PATTERN_OPTIONS" :key="option.value" class="editor-radio">
+          <input v-model="form.pattern" type="radio" name="pattern" :value="option.value" />
+          <span>{{ option.label }}<span v-if="captionFor(option.value)" class="caption">（{{ captionFor(option.value) }}）</span></span>
+        </label>
+        <p class="caption">電灯を ON にするときの、明るさと色温度の組です。</p>
+        <p v-if="patternInfoFailed" class="caption">明るさと色温度の目安を取得できませんでした。</p>
+      </fieldset>
 
       <div class="editor-field editor-enabled">
         <span class="editor-label" id="schedule-enabled-label">有効</span>

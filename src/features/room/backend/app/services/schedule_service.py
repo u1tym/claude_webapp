@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from datetime import time
 from typing import Any
 
-from app import repos
+from app import dimming, repos
 from app.errors import InvalidInputError, NotFoundError
 from app.logger import write
 from app.repos import RoomScheduleRow, ScheduleDefinition
@@ -38,6 +38,7 @@ class ScheduleInput:
     day_shift: object = None
     device: object = None
     state: object = None
+    pattern: object = None
 
 
 @dataclass(frozen=True)
@@ -113,6 +114,16 @@ def validate(data: ScheduleInput) -> ValidScheduleInput:
     else:
         reasons.append("実行内容がない")
 
+    # 調光パターンは、電灯を ON にする個別切替のときだけ。省略（None）は、既定のパターン
+    dimming_pattern: str | None = None
+    if data.pattern is not None:
+        if not isinstance(data.pattern, str) or dimming.find(data.pattern) is None:
+            reasons.append("調光パターンが不正")
+        elif not (action_type == "device" and data.device == "ceiling_light" and data.state == "on"):
+            reasons.append("調光パターンは電灯を ON にする個別切替のときだけ指定できる")
+        else:
+            dimming_pattern = data.pattern
+
     is_enabled = data.is_enabled
     if is_enabled is not None and not isinstance(is_enabled, bool):
         reasons.append("有効／無効が不正")
@@ -132,11 +143,19 @@ def validate(data: ScheduleInput) -> ValidScheduleInput:
         scene=str(data.scene) if is_scene else None,
         device=None if is_scene else str(data.device),
         target_state=None if is_scene else str(data.state),
+        dimming_pattern=dimming_pattern,
     )
     return ValidScheduleInput(
         definition=definition,
         is_enabled=is_enabled if isinstance(is_enabled, bool) else None,
     )
+
+
+def effective_pattern(row: RoomScheduleRow) -> str | None:
+    """電灯を ON にする個別切替の調光パターン（省略は既定のパターン）。それ以外の定期実行は None。"""
+    if row.action_type == "device" and row.device == "ceiling_light" and row.target_state == "on":
+        return row.dimming_pattern or dimming.DEFAULT_PATTERN_ID
+    return None
 
 
 def to_api(row: RoomScheduleRow) -> dict[str, Any]:
@@ -158,6 +177,7 @@ def to_api(row: RoomScheduleRow) -> dict[str, Any]:
         "scene": row.scene,
         "device": row.device,
         "state": row.target_state,
+        "pattern": effective_pattern(row),
         "is_enabled": row.is_enabled,
         "last_run": last_run,
     }
@@ -174,6 +194,8 @@ def _describe(data: ValidScheduleInput) -> str:
     action = (
         f"scene={d.scene}" if d.action_type == "scene" else f"device={d.device} state={d.target_state}"
     )
+    if d.dimming_pattern is not None:
+        action += f" pattern={d.dimming_pattern}"
     return (
         f"condition={d.condition_type} weekdays={list(d.weekdays)} holiday_mode={d.holiday_mode} "
         f"day_shift={d.day_shift} run_time={d.run_time.strftime('%H:%M')} action={d.action_type} "

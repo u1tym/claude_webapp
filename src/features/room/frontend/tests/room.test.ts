@@ -31,9 +31,14 @@ describe("stateText", () => {
 });
 
 describe("isOperable / nextState", () => {
-  it("電灯だけが切り替えられない", () => {
-    expect(isOperable("ceiling_light")).toBe(false);
-    for (const key of ["indirect_light", "indoor_speaker", "bedside_speaker", "front_door"] as const) {
+  it("5 機器すべてが切り替えられる", () => {
+    for (const key of [
+      "ceiling_light",
+      "indirect_light",
+      "indoor_speaker",
+      "bedside_speaker",
+      "front_door",
+    ] as const) {
       expect(isOperable(key)).toBe(true);
     }
   });
@@ -69,8 +74,12 @@ describe("ariaLabelFor", () => {
     );
   });
 
-  it("電灯は未実装であることを示す", () => {
-    expect(ariaLabelFor("ceiling_light", ok("off", { implemented: false }))).toBe("電灯 OFF（未実装）");
+  it("電灯は、押すと調光パターンの選択を開くことを示す", () => {
+    expect(ariaLabelFor("ceiling_light", ok("off"))).toBe("電灯 OFF。押すと調光パターンを選んで点灯します");
+    expect(ariaLabelFor("ceiling_light", ok("on"))).toBe(
+      "電灯 ON。押すと調光パターンの変更または消灯ができます",
+    );
+    expect(ariaLabelFor("ceiling_light", error)).toBe("電灯 取得できません");
   });
 
   it("取得できない機器はそれだけを示す", () => {

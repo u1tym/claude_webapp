@@ -19,6 +19,7 @@ from app.services.runner_service import run_once, select_due
 from app.timeutil import JST
 from fakes import (
     ID_BEDSIDE,
+    ID_CEILING,
     ID_DOOR,
     ID_INDIRECT,
     ID_INDOOR,
@@ -62,6 +63,7 @@ def make(
     day_shift: str = "same",
     device: str | None = None,
     state: str | None = None,
+    pattern: str | None = None,
 ) -> RoomScheduleRow:
     from datetime import time
 
@@ -76,6 +78,7 @@ def make(
         scene=None if device is not None else scene,
         device=device,
         target_state=state,
+        dimming_pattern=pattern,
     )
     schedule_id = repos.insert_room_schedule(user_id, definition, enabled)
     row = repos.get_room_schedule(schedule_id)
@@ -310,12 +313,26 @@ def test_一部失敗は失敗した機器を記録する(switchbot: FakeSwitchB
     assert "結果=partial" in _log_text(log_dir)
 
 
-def test_電灯だけの未実装はskippedで失敗にならない(switchbot: FakeSwitchBot, user_id: int) -> None:
-    s = make(user_id, scene="ceiling_light")  # 電灯 ON（未実装）と間接照明 OFF
+def test_電灯選択の定期実行は_既定のパターンで電灯を点灯し_間接照明を消す(switchbot: FakeSwitchBot, user_id: int) -> None:
+    s = make(user_id, scene="ceiling_light")
     reports = run_once(now=at(THU, 7, 0, 30), schedules=[s])
     assert reports[0].outcome == "success"
-    assert switchbot.commands == [(ID_INDIRECT, "turnOff")]
+    assert set(switchbot.commands) == {
+        (ID_CEILING, "turnOn"),
+        (ID_CEILING, "setBrightness"),
+        (ID_CEILING, "setColorTemperature"),
+        (ID_INDIRECT, "turnOff"),
+    }
+    assert [p for d, c, p in switchbot.calls if d == ID_CEILING and c == "setBrightness"] == ["100"]
     assert last_run(s.id).last_failed_devices == ()
+
+
+def test_電灯選択の定期実行で電灯が失敗したら_失敗した機器に電灯が残る(switchbot: FakeSwitchBot, user_id: int) -> None:
+    switchbot.step_errors[(ID_CEILING, "turnOn")] = failure()
+    s = make(user_id, scene="ceiling_light")
+    reports = run_once(now=at(THU, 7, 0, 30), schedules=[s])
+    assert reports[0].outcome == "partial"
+    assert last_run(s.id).last_failed_devices == ("ceiling_light",)
 
 
 def test_想定外の例外でも失敗として記録し次へ進む(
@@ -338,6 +355,7 @@ def test_想定外の例外でも失敗として記録し次へ進む(
     assert reports[second.id].outcome == "success"
     assert last_run(first.id).last_run_result == "failure"
     assert last_run(first.id).last_failed_devices == (
+        "ceiling_light",
         "indirect_light",
         "indoor_speaker",
         "bedside_speaker",

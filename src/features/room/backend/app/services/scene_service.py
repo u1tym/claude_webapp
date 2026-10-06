@@ -4,8 +4,9 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from typing import Any
 
+from app import dimming
 from app.config import Config
-from app.errors import DeviceOperationError, NotFoundError
+from app.errors import DeviceOperationError, InvalidInputError, NotFoundError
 from app.logger import write
 from app.services import device_service
 from app.services.device_service import (
@@ -34,7 +35,6 @@ SCENES: dict[str, tuple[tuple[str, str], ...]] = {
 
 SUCCESS = "success"
 FAILURE = "failure"
-SKIPPED = "skipped"
 PARTIAL = "partial"
 
 
@@ -42,7 +42,7 @@ PARTIAL = "partial"
 class DeviceOutcome:
     device: str
     target: str
-    outcome: str  # success / failure / skipped
+    outcome: str  # success / failure
 
     def to_dict(self) -> dict[str, str]:
         return {"device": self.device, "target": self.target, "outcome": self.outcome}
@@ -67,11 +67,10 @@ class SceneResult:
 
 
 def overall_outcome(results: tuple[DeviceOutcome, ...]) -> str:
-    """指示した機器（skipped を除く）の成否から、全体の結果を決める。"""
-    executed = [r.outcome for r in results if r.outcome != SKIPPED]
-    if all(o == SUCCESS for o in executed):
+    """指示した機器の成否から、全体の結果を決める（すべて成功なら成功、すべて失敗なら失敗、混在なら一部失敗）。"""
+    if all(r.outcome == SUCCESS for r in results):
         return SUCCESS
-    if all(o == FAILURE for o in executed):
+    if all(r.outcome == FAILURE for r in results):
         return FAILURE
     return PARTIAL
 
@@ -100,36 +99,46 @@ def run_scene(
     username: str = "",
     client: SwitchBotApi | None = None,
     refetch: bool = True,
+    pattern: str | None = None,
 ) -> SceneResult:
     """一括切替を実行する。
 
     対象の機器へ個別の指示を並行して行い、機器ごとの成否を集める。成功した機器は元に戻さない。
-    電灯は未実装のため指示せず skipped とする。玄関ドアは変えない。
+    電灯選択は、調光パターン（省略時は既定のパターン）で電灯を ON にする。玄関ドアは変えない。
     実行のあとに、全機器の状態を取得し直して返す（refetch=False なら取得し直さない）。
     指示は 1 回だけで、再試行しない。
     """
-    write("INF", f"一括切替要求 scene={scene} 主体={actor} username={username}")
+    requested = f" パターン={pattern}" if pattern is not None else ""
+    write("INF", f"一括切替要求 scene={scene} 主体={actor} username={username}{requested}")
     targets = SCENES.get(scene)
     if targets is None:
         write("WRN", f"一括切替失敗 scene={scene} 理由=一括切替が存在しない")
         raise NotFoundError()
+    if pattern is not None and scene != "ceiling_light":
+        write("WRN", f"一括切替失敗 scene={scene} パターン={pattern} 理由=調光パターンは電灯選択だけで指定できる")
+        raise InvalidInputError()
+    if pattern is not None and dimming.find(pattern) is None:
+        write("WRN", f"一括切替失敗 scene={scene} パターン={pattern} 理由=調光パターンが存在しない")
+        raise InvalidInputError()
 
     cfg = device_service.load_config()
     active = client if client is not None else device_service.build_client(cfg)
 
     def run_one(device: str, target: str) -> DeviceOutcome:
-        if device == CEILING_LIGHT:
-            write("INF", f"一括切替 scene={scene} device={device} target={target} 判断=未実装のため何も指示しない")
-            return DeviceOutcome(device, target, SKIPPED)
         command = device_service.command_for(device, target)
         assert command is not None  # 定義の目標は、その機器で取り得る値だけ
+        # 調光パターンは、電灯を ON にするときだけ（省略時は、send_switch が既定のパターンにする）
+        turning_on_ceiling = device == CEILING_LIGHT and target == "on"
+        detail = f" パターン={pattern or dimming.DEFAULT_PATTERN_ID}" if turning_on_ceiling else ""
         try:
-            device_service.send_switch(active, cfg, device, target, command, actor)
+            device_service.send_switch(
+                active, cfg, device, target, command, actor, pattern if turning_on_ceiling else None
+            )
         except DeviceOperationError:
             # 失敗の理由は send_switch がログに残している
-            write("WRN", f"一括切替 scene={scene} device={device} target={target} 主体={actor} 結果=failure")
+            write("WRN", f"一括切替 scene={scene} device={device} target={target}{detail} 主体={actor} 結果=failure")
             return DeviceOutcome(device, target, FAILURE)
-        write("INF", f"一括切替 scene={scene} device={device} target={target} 主体={actor} 結果=success")
+        write("INF", f"一括切替 scene={scene} device={device} target={target}{detail} 主体={actor} 結果=success")
         return DeviceOutcome(device, target, SUCCESS)
 
     with ThreadPoolExecutor(max_workers=len(targets)) as pool:
