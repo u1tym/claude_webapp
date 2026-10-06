@@ -8,6 +8,8 @@ import {
   type ScheduleItem,
 } from "../src/room";
 import SchedulesView from "../src/views/SchedulesView.vue";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { deferred, mockApi, res, type Handler } from "./helpers";
 
 function item(override: Partial<ScheduleItem> = {}): ScheduleItem {
@@ -128,7 +130,6 @@ describe("表示", () => {
     expect(wrapper.get('[role="table"]').attributes("aria-label")).toBe("定期実行の一覧");
     expect(wrapper.findAll('[role="columnheader"]').map((h) => h.text())).toEqual([
       "有効",
-      "タイトル",
       "実行条件",
       "時刻",
       "実行内容",
@@ -619,20 +620,47 @@ describe("電灯の調光パターンの表示", () => {
 });
 
 
-describe("タイトル", () => {
-  it("付いているタイトルを表示し、付いていないものは空欄にする", async () => {
+describe("タイトル（1 件の 1 行目）", () => {
+  it("付いているタイトルは、その件の 1 行目に出る。付いていない件（null・空・項目なし）には、タイトルの行が出ない", async () => {
     mockApi(
       scheduleHandler([
         item({ id: 1, title: "朝の読書灯" }),
         item({ id: 2, title: null }),
         item({ id: 3 }), // 古い応答（項目なし）
+        item({ id: 4, title: "" }),
       ]),
     );
     const wrapper = await mountSchedules();
-    expect(rows(wrapper).map((r) => r.get(".sch-title").text())).toEqual(["朝の読書灯", "", ""]);
+    expect(row(wrapper, 1).get(".sch-title").text()).toBe("朝の読書灯");
+    for (const id of [2, 3, 4]) {
+      expect(row(wrapper, id).find(".sch-title").exists()).toBe(false); // 空の行も、置かない
+      expect(row(wrapper, id).classes()).not.toContain("has-title");
+    }
+    expect(row(wrapper, 1).classes()).toContain("has-title");
   });
 
-  it("タイトルの全文は title 属性と aria-label で示す（長いときは、列の幅に収める）", async () => {
+  it("タイトルは、その件の先頭の要素（本体の行の上）にある", async () => {
+    mockApi(scheduleHandler([item({ id: 1, title: "朝" })]));
+    const wrapper = await mountSchedules();
+    const children = Array.from(row(wrapper, 1).element.children);
+    expect(children[0]!.classList.contains("sch-title")).toBe(true);
+    expect(children[1]!.classList.contains("sch-enabled")).toBe(true);
+  });
+
+  it("タイトルの行と本体の行は、同じ件の一まとまり（別の行にしない）。件の数だけ行がある", async () => {
+    mockApi(
+      scheduleHandler([item({ id: 1, title: "朝" }), item({ id: 2 }), item({ id: 3, title: "夜", run_time: "23:00" })]),
+    );
+    const wrapper = await mountSchedules();
+    expect(rows(wrapper)).toHaveLength(3); // タイトルの行が、別の行として数えられない
+    expect(wrapper.findAll(".sch-body .sch-title")).toHaveLength(2);
+    // タイトルは、件の行の中にある（件と件の間にだけ区切り線を引ける）
+    for (const title of wrapper.findAll(".sch-title")) {
+      expect(title.element.closest(".sch-row")).not.toBeNull();
+    }
+  });
+
+  it("タイトルの全文は title 属性と aria-label で示す（長いときは、省略して示す）", async () => {
     const long = "あ".repeat(50);
     mockApi(scheduleHandler([item({ id: 1, title: long })]));
     const wrapper = await mountSchedules();
@@ -641,19 +669,26 @@ describe("タイトル", () => {
     expect(cell.attributes("aria-label")).toBe(`タイトル ${long}`);
   });
 
-  it("タイトルが付いていない行には、title 属性も aria-label も付けない", async () => {
-    mockApi(scheduleHandler([item({ id: 1 })]));
+  it("無効の件は、タイトルも薄く示す（行の is-disabled に含まれる）", async () => {
+    mockApi(scheduleHandler([item({ id: 1, title: "朝", is_enabled: false })]));
     const wrapper = await mountSchedules();
-    const cell = row(wrapper, 1).get(".sch-title");
-    expect(cell.attributes("title")).toBeUndefined();
-    expect(cell.attributes("aria-label")).toBeUndefined();
+    expect(row(wrapper, 1).classes()).toContain("is-disabled");
+    expect(row(wrapper, 1).get(".sch-title").element.parentElement).toBe(row(wrapper, 1).element);
   });
 
-  it("タイトルが付いている行だけ、カードの先頭にタイトルの行を足す（has-title）", async () => {
-    mockApi(scheduleHandler([item({ id: 1, title: "朝" }), item({ id: 2 })]));
+  it("タイトルがあっても、操作（有効／無効の切替、編集、削除）と、並びは変わらない", async () => {
+    mockApi(
+      scheduleHandler([
+        item({ id: 3, title: "三番目に登録", display_order: 0 }),
+        item({ id: 1, display_order: 5 }),
+      ]),
+    );
     const wrapper = await mountSchedules();
-    expect(row(wrapper, 1).classes()).toContain("has-title");
-    expect(row(wrapper, 2).classes()).not.toContain("has-title");
+    expect(rows(wrapper).map((r) => r.attributes("data-schedule-id"))).toEqual(["3", "1"]);
+    const target = row(wrapper, 3);
+    expect(target.find('[role="switch"]').exists()).toBe(true);
+    expect(target.find('[aria-label="編集"]').exists()).toBe(true);
+    expect(target.find('[aria-label="削除"]').exists()).toBe(true);
   });
 
   it("HTML として解釈しない（タイトルは文字列として表示する）", async () => {
@@ -661,5 +696,51 @@ describe("タイトル", () => {
     const wrapper = await mountSchedules();
     expect(row(wrapper, 1).get(".sch-title").text()).toBe("<b>x</b>");
     expect(row(wrapper, 1).find(".sch-title b").exists()).toBe(false);
+  });
+
+  it("見出し行は 6 列で、「タイトル」の見出しは無い", async () => {
+    mockApi(scheduleHandler([item({ id: 1, title: "朝" })]));
+    const wrapper = await mountSchedules();
+    const headers = wrapper.findAll('[role="columnheader"]').map((h) => h.text());
+    expect(headers).toEqual(["有効", "実行条件", "時刻", "実行内容", "最終実行", "操作"]);
+    expect(headers).not.toContain("タイトル");
+  });
+});
+
+describe("タイトルの行の見た目（CSS）", () => {
+  // CSS は、テストの環境で処理されないよう、ファイルとして読む
+  const css = readFileSync(resolve(process.cwd(), "src/styles.css"), "utf-8");
+
+  const rule = (selector: string): string => {
+    const start = css.indexOf(`${selector} {`);
+    expect(start, `${selector} の規則がある`).toBeGreaterThanOrEqual(0);
+    return css.slice(start, css.indexOf("}", start));
+  };
+
+  it("PC: タイトルは、行の全幅（grid-column: 1 / -1）で、収まらなければ省略する。太字", () => {
+    const text = rule(".sch-title");
+    expect(text).toContain("grid-column: 1 / -1");
+    expect(text).toContain("overflow: hidden");
+    expect(text).toContain("text-overflow: ellipsis");
+    expect(text).toContain("white-space: nowrap");
+    expect(text).toContain("font-weight: 700");
+  });
+
+  it("タイトルの行の下に、区切り線を引かない（線は、件の行にだけある）", () => {
+    expect(rule(".sch-title")).not.toContain("border");
+    expect(rule(".sch-row")).toContain("border-bottom: 1px solid var(--color-border)");
+  });
+
+  it("PC の行は 6 列（タイトルの列は無い）", () => {
+    const tracks = rule(".sch-row").match(/grid-template-columns: ([^;]+);/)![1]!.trim().split(/\s+/);
+    expect(tracks).toHaveLength(6);
+  });
+
+  it("スマートフォン: タイトルが付いているカードだけ、先頭にタイトルの領域を足す。折り返して全文を示す", () => {
+    const mobile = css.slice(css.indexOf("@media (max-width: 767px)"));
+    expect(mobile).toContain(".sch-row.has-title {");
+    expect(mobile).toMatch(/"title title"\s+"time enabled"/);
+    expect(mobile).toContain("grid-area: title");
+    expect(mobile).toContain("white-space: normal");
   });
 });

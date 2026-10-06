@@ -201,7 +201,6 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
       <!-- ヘッダ行は固定し、本体だけスクロールする -->
       <div class="sch-row sch-head" role="row">
         <span role="columnheader">有効</span>
-        <span role="columnheader">タイトル</span>
         <span role="columnheader">実行条件</span>
         <span role="columnheader">時刻</span>
         <span role="columnheader">実行内容</span>
@@ -217,6 +216,15 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
           role="row"
           :data-schedule-id="item.id"
         >
+          <!-- 1 行目: タイトル（付いているときだけ。行の全幅）。2 行目以降が、本体 -->
+          <span
+            v-if="item.title"
+            class="sch-title"
+            role="cell"
+            :title="item.title"
+            :aria-label="`タイトル ${item.title}`"
+            >{{ item.title }}</span
+          >
           <span class="sch-enabled" role="cell">
             <button
               class="sch-switch"
@@ -232,13 +240,6 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
               <span class="sch-switch-text">{{ item.is_enabled ? "有効" : "無効" }}</span>
             </button>
           </span>
-          <span
-            class="sch-title"
-            role="cell"
-            :title="item.title || undefined"
-            :aria-label="item.title ? `タイトル ${item.title}` : undefined"
-            >{{ item.title ?? "" }}</span
-          >
           <span class="sch-condition" role="cell">{{ conditionText(item) }}</span>
           <span class="sch-time" role="cell">{{ item.run_time }}</span>
           <span class="sch-scene" role="cell">{{ actionText(item) }}</span>

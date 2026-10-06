@@ -512,7 +512,7 @@ button:disabled {
 
 .sch-row {
   display: grid;
-  grid-template-columns: 110px 1fr 1.1fr 70px 1.3fr 2.2fr 100px;
+  grid-template-columns: 110px 1.1fr 70px 1.3fr 2.2fr 100px;
   align-items: center;
   gap: var(--space);
   padding: var(--space) calc(var(--space) * 2);
@@ -537,8 +537,10 @@ button:disabled {
   opacity: 0.5;
 }
 
-/* タイトル: PC は、列の幅に収める（全文は title 属性で示す）。スマートフォンのカードでは、先頭の行にする */
+/* タイトル: 1 件の 1 行目。行の全幅に、本体の行の上に置く（付いているときだけ要素がある）。
+   収まらないときは省略し、全文は title 属性で示す。1 件の 2 行の間には、区切り線を入れない（線は、件と件の間だけ） */
 .sch-title {
+  grid-column: 1 / -1;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -651,11 +653,7 @@ button:disabled {
     border-radius: var(--radius);
   }
 
-  /* タイトルが付いているカードだけ、先頭にタイトルの行を足す（付いていなければ、出さない） */
-  .sch-title {
-    display: none;
-  }
-
+  /* タイトルが付いているカードだけ、先頭にタイトルの行を足す（付いていなければ、要素が無い） */
   .sch-row.has-title {
     grid-template-areas:
       "title title"
@@ -666,7 +664,6 @@ button:disabled {
   }
 
   .sch-row.has-title .sch-title {
-    display: block;
     grid-area: title;
     white-space: normal;
     overflow-wrap: anywhere;
