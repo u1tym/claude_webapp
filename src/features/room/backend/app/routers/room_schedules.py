@@ -8,7 +8,7 @@ from pydantic import BaseModel
 from app.deps import AuthContext, get_current_user
 from app.errors import InvalidInputError, NotFoundError
 from app.services import schedule_service
-from app.services.schedule_service import ScheduleInput
+from app.services.schedule_service import UNSET, ScheduleInput
 
 router = APIRouter()
 
@@ -26,6 +26,9 @@ class ScheduleBody(BaseModel):
     device: Any = None
     state: Any = None
     pattern: Any = None
+    # タイトルと表示順。要求に項目が無いのと、`null` とは区別する（model_fields_set で見分ける）
+    title: Any = None
+    display_order: Any = None
 
 
 class EnabledBody(BaseModel):
@@ -45,6 +48,8 @@ def _input(body: ScheduleBody | None) -> ScheduleInput:
         device=body.device,
         state=body.state,
         pattern=body.pattern,
+        title=body.title if "title" in body.model_fields_set else UNSET,
+        display_order=body.display_order if "display_order" in body.model_fields_set else UNSET,
     )
 
 

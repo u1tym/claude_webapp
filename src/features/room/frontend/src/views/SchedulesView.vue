@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import { onBeforeUnmount, onMounted, ref } from "vue";
 import {
   AuthError,
   deleteSchedule,
@@ -16,7 +16,6 @@ import {
   actionText,
   conditionText,
   formatLastRunAt,
-  sortSchedules,
   type ScheduleItem,
 } from "../room";
 
@@ -38,8 +37,6 @@ const deleting = ref<ScheduleItem | null>(null);
 const editor = ref<{ item: ScheduleItem | null } | null>(null);
 
 let clearTimer: ReturnType<typeof setTimeout> | undefined;
-
-const sorted = computed(() => sortSchedules(schedules.value ?? []));
 
 function showStatus(kind: "success" | "error", text: string): void {
   clearTimeout(clearTimer);
@@ -141,16 +138,27 @@ function openEditor(item: ScheduleItem | null): void {
   editor.value = { item };
 }
 
-/** 登録・変更が成功したとき。一覧へ反映し、モーダルを閉じる。 */
+/**
+ * 登録・変更が成功したとき。一覧を取り直して反映し、モーダルを閉じる。
+ * 一覧の並びは、Web アプリが決める（表示順の小さいものから。表示順が無いものは末尾）ので、画面では並べ替えず、
+ * 取り直した順のまま示す。取り直せなかったときは、保存した 1 件だけを反映する（並びは、取り直すまで正しくない）。
+ */
 async function onSaved(saved: ScheduleItem, mode: "created" | "updated"): Promise<void> {
   editor.value = null;
   if (schedules.value === null) {
     // 一覧を取得できていない状態で登録したときは、1 件だけの一覧にせず、取得し直す
     await load();
   } else {
-    const list = schedules.value;
-    schedules.value =
-      mode === "created" ? [...list, saved] : list.map((item) => (item.id === saved.id ? saved : item));
+    try {
+      schedules.value = await getSchedules();
+    } catch (error) {
+      if (passAuthError(error)) {
+        return;
+      }
+      const list = schedules.value;
+      schedules.value =
+        mode === "created" ? [...list, saved] : list.map((item) => (item.id === saved.id ? saved : item));
+    }
   }
   showStatus("success", mode === "created" ? "登録しました。" : "変更しました。");
 }
@@ -193,6 +201,7 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
       <!-- ヘッダ行は固定し、本体だけスクロールする -->
       <div class="sch-row sch-head" role="row">
         <span role="columnheader">有効</span>
+        <span role="columnheader">タイトル</span>
         <span role="columnheader">実行条件</span>
         <span role="columnheader">時刻</span>
         <span role="columnheader">実行内容</span>
@@ -201,10 +210,10 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
       </div>
       <div class="sch-body">
         <div
-          v-for="item in sorted"
+          v-for="item in schedules"
           :key="item.id"
           class="sch-row"
-          :class="{ 'is-disabled': !item.is_enabled }"
+          :class="{ 'is-disabled': !item.is_enabled, 'has-title': Boolean(item.title) }"
           role="row"
           :data-schedule-id="item.id"
         >
@@ -223,6 +232,13 @@ onBeforeUnmount(() => clearTimeout(clearTimer));
               <span class="sch-switch-text">{{ item.is_enabled ? "有効" : "無効" }}</span>
             </button>
           </span>
+          <span
+            class="sch-title"
+            role="cell"
+            :title="item.title || undefined"
+            :aria-label="item.title ? `タイトル ${item.title}` : undefined"
+            >{{ item.title ?? "" }}</span
+          >
           <span class="sch-condition" role="cell">{{ conditionText(item) }}</span>
           <span class="sch-time" role="cell">{{ item.run_time }}</span>
           <span class="sch-scene" role="cell">{{ actionText(item) }}</span>

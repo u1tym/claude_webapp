@@ -5,7 +5,6 @@ import {
   actionText,
   conditionText,
   formatLastRunAt,
-  sortSchedules,
   type ScheduleItem,
 } from "../src/room";
 import SchedulesView from "../src/views/SchedulesView.vue";
@@ -103,41 +102,24 @@ describe("表示", () => {
     expect(row(wrapper, 3).get(".sch-scene").text()).toBe("間接照明を OFF");
   });
 
-  it("時刻の昇順に並べる", async () => {
+  it("API が返した順のまま表示する（画面で並べ替えない）", async () => {
+    // 並びは、Web アプリが決める（表示順の小さいものから、表示順なしは末尾）。ここでは、時刻順でない並びを返す
     mockApi(
       scheduleHandler([
-        item({ id: 1, run_time: "23:10" }),
-        item({ id: 2, run_time: "06:05" }),
-        item({ id: 3, run_time: "12:00" }),
+        item({ id: 3, run_time: "23:10", display_order: 0 }),
+        item({ id: 1, run_time: "06:05", display_order: 5 }),
+        item({ id: 2, run_time: "12:00", display_order: null }),
       ]),
     );
     const wrapper = await mountSchedules();
-    expect(rows(wrapper).map((r) => r.get(".sch-time").text())).toEqual(["06:05", "12:00", "23:10"]);
+    expect(rows(wrapper).map((r) => r.attributes("data-schedule-id"))).toEqual(["3", "1", "2"]);
+    expect(rows(wrapper).map((r) => r.get(".sch-time").text())).toEqual(["23:10", "06:05", "12:00"]);
   });
 
-  it("同じ時刻なら実行内容の名称順に並べる", () => {
-    const list = [
-      item({ id: 1, scene: "out" }),
-      item({ id: 2, scene: "indirect_light" }),
-      item({ id: 3, scene: "bedside_speaker" }),
-      item({ id: 4, scene: "ceiling_light" }),
-      item({ id: 5, scene: "indoor_speaker" }),
-    ];
-    const expected = [...list]
-      .map((s) => actionText(s))
-      .sort((a, b) => a.localeCompare(b, "ja"));
-    expect(sortSchedules(list).map((s) => actionText(s))).toEqual(expected);
-  });
-
-  it("同じ時刻・同じ一括切替なら登録の順（id）に並べる", () => {
-    const list = [item({ id: 9 }), item({ id: 2 }), item({ id: 5 })];
-    expect(sortSchedules(list).map((s) => s.id)).toEqual([2, 5, 9]);
-  });
-
-  it("並べ替えで元の配列を変えない", () => {
-    const list = [item({ id: 1, run_time: "23:00" }), item({ id: 2, run_time: "01:00" })];
-    sortSchedules(list);
-    expect(list.map((s) => s.id)).toEqual([1, 2]);
+  it("表示順の数は、一覧に出さない", async () => {
+    mockApi(scheduleHandler([item({ id: 1, display_order: 4321 })]));
+    const wrapper = await mountSchedules();
+    expect(wrapper.text()).not.toContain("4321");
   });
 
   it("列の見出しがあり、一覧に名前がある", async () => {
@@ -146,6 +128,7 @@ describe("表示", () => {
     expect(wrapper.get('[role="table"]').attributes("aria-label")).toBe("定期実行の一覧");
     expect(wrapper.findAll('[role="columnheader"]').map((h) => h.text())).toEqual([
       "有効",
+      "タイトル",
       "実行条件",
       "時刻",
       "実行内容",
@@ -632,5 +615,51 @@ describe("電灯の調光パターンの表示", () => {
     expect(text).toContain("電灯を OFF");
     expect(text).toContain("電灯選択");
     expect(text).not.toContain("未実装");
+  });
+});
+
+
+describe("タイトル", () => {
+  it("付いているタイトルを表示し、付いていないものは空欄にする", async () => {
+    mockApi(
+      scheduleHandler([
+        item({ id: 1, title: "朝の読書灯" }),
+        item({ id: 2, title: null }),
+        item({ id: 3 }), // 古い応答（項目なし）
+      ]),
+    );
+    const wrapper = await mountSchedules();
+    expect(rows(wrapper).map((r) => r.get(".sch-title").text())).toEqual(["朝の読書灯", "", ""]);
+  });
+
+  it("タイトルの全文は title 属性と aria-label で示す（長いときは、列の幅に収める）", async () => {
+    const long = "あ".repeat(50);
+    mockApi(scheduleHandler([item({ id: 1, title: long })]));
+    const wrapper = await mountSchedules();
+    const cell = row(wrapper, 1).get(".sch-title");
+    expect(cell.attributes("title")).toBe(long);
+    expect(cell.attributes("aria-label")).toBe(`タイトル ${long}`);
+  });
+
+  it("タイトルが付いていない行には、title 属性も aria-label も付けない", async () => {
+    mockApi(scheduleHandler([item({ id: 1 })]));
+    const wrapper = await mountSchedules();
+    const cell = row(wrapper, 1).get(".sch-title");
+    expect(cell.attributes("title")).toBeUndefined();
+    expect(cell.attributes("aria-label")).toBeUndefined();
+  });
+
+  it("タイトルが付いている行だけ、カードの先頭にタイトルの行を足す（has-title）", async () => {
+    mockApi(scheduleHandler([item({ id: 1, title: "朝" }), item({ id: 2 })]));
+    const wrapper = await mountSchedules();
+    expect(row(wrapper, 1).classes()).toContain("has-title");
+    expect(row(wrapper, 2).classes()).not.toContain("has-title");
+  });
+
+  it("HTML として解釈しない（タイトルは文字列として表示する）", async () => {
+    mockApi(scheduleHandler([item({ id: 1, title: "<b>x</b>" })]));
+    const wrapper = await mountSchedules();
+    expect(row(wrapper, 1).get(".sch-title").text()).toBe("<b>x</b>");
+    expect(row(wrapper, 1).find(".sch-title b").exists()).toBe(false);
   });
 });

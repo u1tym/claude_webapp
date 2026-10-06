@@ -346,6 +346,8 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
       "device": null,
       "state": null,
       "pattern": null,
+      "title": "朝のスピーカー",
+      "display_order": 1,
       "is_enabled": true,
       "last_run": {
         "at": "2026-10-01T07:00:02+09:00",
@@ -364,6 +366,8 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
       "device": "indirect_light",
       "state": "off",
       "pattern": null,
+      "title": null,
+      "display_order": null,
       "is_enabled": false,
       "last_run": null
     },
@@ -378,6 +382,8 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
       "device": null,
       "state": null,
       "pattern": null,
+      "title": null,
+      "display_order": null,
       "is_enabled": true,
       "last_run": null
     },
@@ -392,6 +398,8 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
       "device": "ceiling_light",
       "state": "on",
       "pattern": "reading",
+      "title": "朝の読書灯",
+      "display_order": 2,
       "is_enabled": true,
       "last_run": null
     }
@@ -405,7 +413,9 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 - `pattern`: 電灯を `on` にする個別切替のときだけ値を持つ（`full`、`reading`、`relax`、`night`。登録で省略したときは `full`）。それ以外は `null`。
 - `last_run`: 未実行は `null`。`result` は `success`、`partial`、`failure`。`failed_devices` は失敗した機器（`ceiling_light`、`indirect_light`、`indoor_speaker`、`bedside_speaker` のいずれか）。成功のときは空配列。
 - `last_run.result`: 機器の個別切替は、`success` か `failure` のみ（`partial` は一括切替のとき）。失敗のとき、`failed_devices` は、その機器 1 つ。
-- 並びは、`run_time` の昇順、同じ時刻なら、一括切替（`scene` のキー名順）、続いて機器の個別切替（`device`、`state` のキー名順）、最後に `id` の昇順。
+- `title`: 付いているタイトル（50 文字まで）。付いていないときは `null`。
+- `display_order`: 付いている表示順（0〜9999 の整数）。付いていないときは `null`。
+- 並びは、`display_order` の昇順で、`display_order` が `null` のものは末尾。同じ `display_order` のもの同士（`null` 同士を含む）は、`run_time` の昇順、同じ時刻なら、一括切替（`scene` のキー名順）、続いて機器の個別切替（`device`、`state` のキー名順）、最後に `id` の昇順（要件は、同じ値の中の並びを問わないが、決まった並びにする）。
 
 エラー:
 
@@ -432,6 +442,8 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 | `device` | string | 条件付き | 個別切替の機器（`ceiling_light`、`indirect_light`、`indoor_speaker`、`bedside_speaker`）。実行内容が機器の個別切替のとき必須。玄関ドア（`front_door`）は指定できない。一括切替のときは省略 |
 | `state` | string | 条件付き | 個別切替の目標の状態（`on`、`off`）。`device` を指定するとき必須。一括切替のときは省略 |
 | `pattern` | string | 任意 | 調光パターン（`full`、`reading`、`relax`、`night`）。`device` が `ceiling_light` で、`state` が `on` のときだけ指定できる。省略時は `full`。それ以外のとき、指定すると入力不正（一括切替には指定できない。電灯選択は、定期実行では既定のパターンで点灯する） |
+| `title` | string \| null | 任意 | タイトル。50 文字まで。前後の空白は取り除かれ、空になったものは、タイトル無し（`null`）として扱う。省略、または `null` は、タイトル無し |
+| `display_order` | integer \| null | 任意 | 表示順。0 以上 9999 以下の整数。省略、または `null` は、表示順なし（一覧の末尾） |
 | `is_enabled` | boolean | 任意 | 既定は `true` |
 
 応答: 201。`GET /schedules` の 1 件と同じ形（`last_run` は `null`）。
@@ -443,6 +455,7 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 | 状況 | 応答 |
 |------|------|
 | 必須項目が無い、値が取り得る範囲外（実行条件、祝日の扱い、実行日の取り方、時刻の形式、一括切替、機器、状態。従来の実行条件 `holiday` を含む）、`weekdays` が条件と合わない（`weekdays` で 0 件、`daily` で 1 件以上、範囲外、重複）、`daily` なのに、`holiday_mode` が `none` でない、または `day_shift` が `same` でない、実行内容が合わない（`scene` と `device` の両方、どちらも無い、`device` と `state` の片方だけ）、`pattern` が 4 種のいずれでもない、または、電灯を `on` にする個別切替以外で指定された | 400 |
+| `title` が文字列でない、または 50 文字を超える。`display_order` が整数でない（真偽値、小数、文字列を含む）、または 0〜9999 の範囲外 | 400 |
 | 未ログイン | 401 |
 | 権限なし | 403 |
 
@@ -451,11 +464,11 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 - 認証: 要
 - 対応 REQ: REQ-008、REQ-011
 
-要求（本文）: `POST /schedules` と同じ。ただし `is_enabled` も指定する（省略時は現在の値を維持する）。全項目を置き換える（`weekdays` は置き換える）。`holiday_mode` と `day_shift` は、省略すると、現在の値を維持せず、既定（`none`、`same`）になる。実行内容も置き換える（一括切替から個別切替へ、または、その逆に、変えられる）。
+要求（本文）: `POST /schedules` と同じ。ただし `is_enabled` も指定する（省略時は現在の値を維持する）。全項目を置き換える（`weekdays` は置き換える）。**ただし、`title` と `display_order` は、要求に項目が無いときは、現在の値を変えない**（項目があり、値が `null` のときは外す。値があるときは、その値にする。`design.md` の「タイトルと表示順の更新の規則」）。画面は、保存のたびに、この 2 つを必ず送る（空は `null`）。AI などの他のシステムが、これらを送らずに更新しても、付いているタイトルと表示順は消えない。`holiday_mode` と `day_shift` は、省略すると、現在の値を維持せず、既定（`none`、`same`）になる。実行内容も置き換える（一括切替から個別切替へ、または、その逆に、変えられる）。
 
 応答: 200。`GET /schedules` の 1 件と同じ形。
 
-処理概要: 定義を変更する。最終実行（`last_run`）は変えない。
+処理概要: 定義を変更する。最終実行（`last_run`）は変えない。`title` と `display_order` は、上の規則のとおり。`title` の前後の空白の取り除きと、範囲の検査は、`POST /schedules` と同じ。
 
 エラー:
 
@@ -520,10 +533,10 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 | REQ-005 | PUT `/devices/{device}/state`（`front_door`。目標の状態を明示。確認は画面の責務）。電池残量は GET `/state` の `battery`（表示のみ。変更する API なし） |
 | REQ-006 | GET `/state`（`ceiling_light` の電源 `on` / `off`。明るさと色温度は返さない）。GET `/dimming-patterns`。PUT `/devices/{device}/state`（`ceiling_light` の `on` / `off` と `pattern`） |
 | REQ-007 | POST `/scenes/{scene}`（5 種。電灯選択は `pattern` を受け取る。機器ごとの `results`、全体の `outcome`、再取得した `devices`） |
-| REQ-008 | GET / POST / PUT / DELETE `/schedules`、PUT `/schedules/{schedule_id}/enabled`（実行内容の `scene` または `device`+`state`（+電灯の ON のときの `pattern`）、祝日の扱い、実行日の取り方。玄関ドアの施錠・開錠は指定できない） |
+| REQ-008 | GET / POST / PUT / DELETE `/schedules`（`title`・`display_order`、一覧の並び）、PUT `/schedules/{schedule_id}/enabled`（実行内容の `scene` または `device`+`state`（+電灯の ON のときの `pattern`）、祝日の扱い、実行日の取り方。玄関ドアの施錠・開錠は指定できない） |
 | REQ-009 | API なし（ジョブの処理。`design.md`） |
 | REQ-010 | GET `/schedules` の `last_run` |
-| REQ-011 | 本書全体。API キー認証。画面・ジョブ・API が同じサービス層を使う |
+| REQ-011 | 本書全体。API キー認証。画面・ジョブ・API が同じサービス層を使う。`GET /schedules` の `title`・`display_order`。`POST` / `PUT /schedules` の `title`・`display_order`（`PUT` は、項目が無ければ変えない） |
 | REQ-012 | GET `/state`、PUT `/devices/{device}/state`、POST `/scenes/{scene}`。認証情報と機器の識別子は応答に出さない。取得失敗時に推測値を返さない |
 | REQ-013 | API なし（ログの処理。`design.md`） |
 
@@ -547,3 +560,5 @@ GET `/settings` だけ認証不要。それ以外は認証要かつ本機能の�
 | 2026-10-03 22:12 | 承認済み | ユーザ休日の `public` 化と祝日判定への反映の改訂を承認 |
 | 2026-10-06 19:24 | 未承認 | 電灯の調光に合わせ、電灯を実機として扱う（`implemented` と `skipped` を廃止）。調光パターン 4 種（`full`／`reading`／`relax`／`night`）、GET `/dimming-patterns` の追加、PUT `/devices/{device}/state`・POST `/scenes/{scene}`（電灯選択）・`/schedules` の `pattern` の追加 |
 | 2026-10-06 19:27 | 承認済み | 電灯の調光の API（`pattern`、GET `/dimming-patterns`）を承認 |
+| 2026-10-06 21:20 | 未承認 | 定期実行のタイトルと表示順の追加に合わせ、`GET /schedules` の応答に `title`・`display_order` を追加し、並びを「`display_order` の昇順（`null` は末尾）、同じ値の中は時刻の昇順」へ変更。`POST` / `PUT /schedules` の要求に任意の `title`・`display_order` を追加し、`PUT` では、項目が無ければ現在の値を変えない規則を明記。入力不正の条件を追加 |
+| 2026-10-06 21:21 | 承認済み | 定期実行のタイトルと表示順の API（`title`・`display_order`、`PUT` で項目が無ければ変えない規則、並び）を承認 |

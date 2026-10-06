@@ -19,6 +19,21 @@ DEVICES = ("ceiling_light", "indirect_light", "indoor_speaker", "bedside_speaker
 STATES = ("on", "off")
 SCENES = ("indoor_speaker", "bedside_speaker", "ceiling_light", "indirect_light", "out")
 
+# タイトルは 50 文字まで。表示順は 0〜9999 の整数
+TITLE_MAX_LENGTH = 50
+DISPLAY_ORDER_MIN = 0
+DISPLAY_ORDER_MAX = 9999
+
+
+class _Unset:
+    """要求に、その項目が無かったことを表す（`null` とは区別する。変更で、無ければ現在の値を変えない）。"""
+
+    def __repr__(self) -> str:  # pragma: no cover
+        return "UNSET"
+
+
+UNSET = _Unset()
+
 # 時刻は HH:MM（00:00〜23:59）。秒は受け付けない
 _RUN_TIME = re.compile(r"^([01]\d|2[0-3]):([0-5]\d)$")
 # bigint の上限。これを超える識別子は存在しない扱いにする
@@ -39,6 +54,9 @@ class ScheduleInput:
     device: object = None
     state: object = None
     pattern: object = None
+    # タイトルと表示順。UNSET は「要求に項目が無い」（変更では、現在の値を変えない）。None は「付けない／外す」
+    title: object = UNSET
+    display_order: object = UNSET
 
 
 @dataclass(frozen=True)
@@ -124,6 +142,27 @@ def validate(data: ScheduleInput) -> ValidScheduleInput:
         else:
             dimming_pattern = data.pattern
 
+    # タイトル（50 文字まで。前後の空白は取り除き、空になれば付けない）と、表示順（0〜9999 の整数）
+    title: str | None = None
+    if data.title is not UNSET and data.title is not None:
+        if not isinstance(data.title, str):
+            reasons.append("タイトルが文字列でない")
+        else:
+            stripped = data.title.strip()
+            if len(stripped) > TITLE_MAX_LENGTH:
+                reasons.append("タイトルが長すぎる")
+            else:
+                title = stripped or None
+    display_order: int | None = None
+    if data.display_order is not UNSET and data.display_order is not None:
+        order = data.display_order
+        if isinstance(order, bool) or not isinstance(order, int):
+            reasons.append("表示順が整数でない")
+        elif not DISPLAY_ORDER_MIN <= order <= DISPLAY_ORDER_MAX:
+            reasons.append("表示順が範囲外")
+        else:
+            display_order = order
+
     is_enabled = data.is_enabled
     if is_enabled is not None and not isinstance(is_enabled, bool):
         reasons.append("有効／無効が不正")
@@ -144,6 +183,10 @@ def validate(data: ScheduleInput) -> ValidScheduleInput:
         device=None if is_scene else str(data.device),
         target_state=None if is_scene else str(data.state),
         dimming_pattern=dimming_pattern,
+        title=title,
+        display_order=display_order,
+        update_title=data.title is not UNSET,
+        update_display_order=data.display_order is not UNSET,
     )
     return ValidScheduleInput(
         definition=definition,
@@ -178,6 +221,8 @@ def to_api(row: RoomScheduleRow) -> dict[str, Any]:
         "device": row.device,
         "state": row.target_state,
         "pattern": effective_pattern(row),
+        "title": row.title,
+        "display_order": row.display_order,
         "is_enabled": row.is_enabled,
         "last_run": last_run,
     }
@@ -196,6 +241,9 @@ def _describe(data: ValidScheduleInput) -> str:
     )
     if d.dimming_pattern is not None:
         action += f" pattern={d.dimming_pattern}"
+    # タイトルの内容はログに出さない。有無と、表示順の値だけを出す
+    action += " title=" + ("変更なし" if not d.update_title else ("有り" if d.title else "なし"))
+    action += " display_order=" + ("変更なし" if not d.update_display_order else str(d.display_order))
     return (
         f"condition={d.condition_type} weekdays={list(d.weekdays)} holiday_mode={d.holiday_mode} "
         f"day_shift={d.day_shift} run_time={d.run_time.strftime('%H:%M')} action={d.action_type} "

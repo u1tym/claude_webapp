@@ -254,6 +254,10 @@ export type ScheduleItem = {
   state: OnOff | null;
   /** 電灯を ON にする個別切替の調光パターン。それ以外は null */
   pattern?: PatternKey | null;
+  /** 付いているタイトル（50 文字まで）。付いていなければ null */
+  title?: string | null;
+  /** 付いている表示順（0〜9999）。付いていなければ null（一覧の末尾） */
+  display_order?: number | null;
   is_enabled: boolean;
   last_run: { at: string; result: RunResult; failed_devices: DeviceKey[] } | null;
 };
@@ -319,16 +323,6 @@ export function formatLastRunAt(iso: string): string {
   return iso.slice(0, 16).replace("T", " ");
 }
 
-/** 一覧の並び: 時刻の昇順、同じ時刻なら実行内容の名称順。 */
-export function sortSchedules(items: ScheduleItem[]): ScheduleItem[] {
-  return [...items].sort(
-    (a, b) =>
-      a.run_time.localeCompare(b.run_time) ||
-      actionText(a).localeCompare(actionText(b), "ja") ||
-      a.id - b.id,
-  );
-}
-
 /** 実行内容の種類。scene = 一括切替、device = 機器の個別切替。空文字は未選択。 */
 export type ActionType = "" | "scene" | "device";
 
@@ -349,8 +343,17 @@ export type ScheduleForm = {
   state: "" | OnOff;
   /** 調光パターン。電灯を ON にする個別切替のときだけ意味を持つ（既定は全灯） */
   pattern: PatternKey;
+  /** タイトル（任意。空は「付けない」）。入力欄の値のまま持つ */
+  title: string;
+  /** 表示順（任意。空は「付けない」）。入力欄の値のまま持つ（検証で、0〜9999 の整数かを確かめる） */
+  displayOrder: string;
   enabled: boolean;
 };
+
+/** タイトルの最大の長さ（文字）。表示順の範囲。Web アプリの API と同じ。 */
+export const TITLE_MAX_LENGTH = 50;
+export const DISPLAY_ORDER_MAX = 9999;
+const DISPLAY_ORDER_PATTERN = /^[0-9]{1,4}$/;
 
 /** 曜日のチップ（表示の順。値は ISO 8601 の曜日: 1 = 月曜 … 7 = 日曜）。 */
 export const WEEKDAY_CHIPS: { value: number; label: string }[] = WEEKDAY_NAMES.map(
@@ -414,13 +417,28 @@ export function validateScheduleForm(form: ScheduleForm): string | null {
     return "実行内容を選択してください。";
   }
   if (form.actionType === "scene") {
-    return form.scene === "" ? "一括切替を選択してください。" : null;
+    if (form.scene === "") {
+      return "一括切替を選択してください。";
+    }
+    return validateTitleAndOrder(form);
   }
   if (form.device === "") {
     return "機器を選択してください。";
   }
   if (form.state === "") {
     return "状態（ON / OFF）を選択してください。";
+  }
+  return validateTitleAndOrder(form);
+}
+
+/** タイトルと表示順の検証。問題があれば、最初の 1 件を一文で返す（タイトル → 表示順）。どちらも空でよい。 */
+export function validateTitleAndOrder(form: Pick<ScheduleForm, "title" | "displayOrder">): string | null {
+  if (form.title.trim().length > TITLE_MAX_LENGTH) {
+    return `タイトルは ${TITLE_MAX_LENGTH} 文字以内で入力してください。`;
+  }
+  const order = form.displayOrder.trim();
+  if (order !== "" && (!DISPLAY_ORDER_PATTERN.test(order) || Number(order) > DISPLAY_ORDER_MAX)) {
+    return `表示順は 0 以上 ${DISPLAY_ORDER_MAX} 以下の整数で入力してください。`;
   }
   return null;
 }
@@ -430,10 +448,15 @@ export function validateScheduleForm(form: ScheduleForm): string | null {
  * 実行内容は、一括切替なら scene、個別切替なら device と state のどちらか一方だけを付ける。
  */
 export function toScheduleBody(form: ScheduleForm): ScheduleInput {
+  // タイトルと表示順は、常に送る（空は null。Web アプリは、項目が無いと現在の値を変えないため、外すには null を送る）
+  const title = form.title.trim();
+  const order = form.displayOrder.trim();
   const body: ScheduleInput = {
     condition: form.condition as Condition,
     weekdays: form.condition === "weekdays" ? [...form.weekdays].sort((a, b) => a - b) : [],
     run_time: form.time,
+    title: title === "" ? null : title,
+    display_order: order === "" ? null : Number(order),
     is_enabled: form.enabled,
   };
   if (form.condition === "weekdays") {
@@ -469,6 +492,10 @@ export type ScheduleInput = {
   device?: TimerDeviceKey;
   state?: OnOff;
   pattern?: PatternKey;
+  /** タイトル。空は null（外す） */
+  title: string | null;
+  /** 表示順。空は null（外す） */
+  display_order: number | null;
   is_enabled: boolean;
 };
 
@@ -486,6 +513,8 @@ export function formFromItem(item: ScheduleItem | null): ScheduleForm {
       device: "",
       state: "",
       pattern: DEFAULT_PATTERN,
+      title: "",
+      displayOrder: "",
       enabled: true,
     };
   }
@@ -501,6 +530,8 @@ export function formFromItem(item: ScheduleItem | null): ScheduleForm {
     device: isDevice ? (item.device ?? "") : "",
     state: isDevice ? (item.state ?? "") : "",
     pattern: item.pattern ?? DEFAULT_PATTERN,
+    title: item.title ?? "",
+    displayOrder: item.display_order == null ? "" : String(item.display_order),
     enabled: item.is_enabled,
   };
 }

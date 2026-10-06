@@ -29,7 +29,14 @@ function serverHandler(initial: ScheduleItem[]): Handler {
   return ({ method, path, body }) => {
     const input = body as Omit<ScheduleItem, "id" | "last_run">;
     if (method === "GET" && path === "/schedules") {
-      return res({ schedules: current });
+      // Web アプリと同じ並び: 表示順の昇順（無いものは末尾）、同じ値の中は時刻、id の順
+      const sorted = [...current].sort(
+        (a, b) =>
+          (a.display_order ?? Number.POSITIVE_INFINITY) - (b.display_order ?? Number.POSITIVE_INFINITY) ||
+          a.run_time.localeCompare(b.run_time) ||
+          a.id - b.id,
+      );
+      return res({ schedules: sorted });
     }
     if (method === "POST" && path === "/schedules") {
       const created: ScheduleItem = { id: nextId++, ...input, last_run: null };
@@ -94,10 +101,10 @@ describe("新規登録", () => {
 
     await fillAndSave(wrapper, { condition: "daily", time: "12:30", scene: "out" });
 
-    expect(calls.at(-1)).toEqual({
+    expect(calls.filter((c) => c.method !== "GET").at(-1)).toEqual({
       method: "POST",
       path: "/schedules",
-      body: { condition: "daily", weekdays: [], run_time: "12:30", scene: "out", is_enabled: true },
+      body: { condition: "daily", weekdays: [], run_time: "12:30", scene: "out", title: null, display_order: null, is_enabled: true },
     });
     expect(wrapper.find("[role=dialog]").exists()).toBe(false);
     expect(rows(wrapper).map((r) => r.get(".sch-time").text())).toEqual(["07:00", "12:30", "22:00"]);
@@ -221,10 +228,10 @@ describe("変更", () => {
     await wrapper.get("form").trigger("submit");
     await flushPromises();
 
-    expect(calls.at(-1)).toEqual({
+    expect(calls.filter((c) => c.method !== "GET").at(-1)).toEqual({
       method: "PUT",
       path: "/schedules/1",
-      body: { condition: "daily", weekdays: [], run_time: "20:00", scene: "out", is_enabled: true },
+      body: { condition: "daily", weekdays: [], run_time: "20:00", scene: "out", title: null, display_order: null, is_enabled: true },
     });
     expect(wrapper.find("[role=dialog]").exists()).toBe(false);
     // 時刻が変わったので、並びも変わる
@@ -305,5 +312,110 @@ describe("キャンセル・失敗", () => {
     expect(emitted).toHaveLength(1);
     expect(emitted[0]![0]).toBeInstanceOf(AuthError);
     expect((emitted[0]![0] as AuthError).status).toBe(code);
+  });
+});
+
+
+describe("保存のあとの並び（Web アプリが決める並びのまま）", () => {
+  it("保存のあとに、一覧を取り直し、表示順の小さいものが先に並ぶ", async () => {
+    const { calls } = mockApi(
+      serverHandler([item({ id: 1, run_time: "07:00" }), item({ id: 2, run_time: "09:00", display_order: 5 })]),
+    );
+    const wrapper = await mountSchedules();
+    // 表示順のあるもの（2）が先、表示順なし（1）が末尾
+    expect(rows(wrapper).map((r) => r.attributes("data-schedule-id"))).toEqual(["2", "1"]);
+
+    await wrapper.get('.schedules-top [aria-label="新規"]').trigger("click");
+    await wrapper.get('input[value="daily"]').setValue(true);
+    await wrapper.get("#schedule-time").setValue("23:00");
+    await wrapper.get('input[name="action-type"][value="scene"]').setValue(true);
+    await wrapper.get("#schedule-scene").setValue("out");
+    await wrapper.get("#schedule-title").setValue("先頭にしたい");
+    await wrapper.get("#schedule-display-order").setValue("0");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+
+    // 保存のあとに、一覧を取り直している（GET は、開いたときと、保存のあとの 2 回）
+    expect(calls.filter((c) => c.method === "GET" && c.path === "/schedules")).toHaveLength(2);
+    expect(rows(wrapper).map((r) => r.attributes("data-schedule-id"))).toEqual(["100", "2", "1"]);
+    expect(row(wrapper, 100).get(".sch-title").text()).toBe("先頭にしたい");
+    expect(status(wrapper).text()).toBe("登録しました。");
+  });
+
+  it("変更で表示順を付けると、並びが変わる。外すと戻る", async () => {
+    mockApi(serverHandler([item({ id: 1, run_time: "07:00" }), item({ id: 2, run_time: "09:00" })]));
+    const wrapper = await mountSchedules();
+    expect(rows(wrapper).map((r) => r.attributes("data-schedule-id"))).toEqual(["1", "2"]);
+
+    await row(wrapper, 2).get('[aria-label="編集"]').trigger("click");
+    await wrapper.get("#schedule-display-order").setValue("0");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(rows(wrapper).map((r) => r.attributes("data-schedule-id"))).toEqual(["2", "1"]);
+
+    await row(wrapper, 2).get('[aria-label="編集"]').trigger("click");
+    await wrapper.get("#schedule-display-order").setValue("");
+    await wrapper.get("form").trigger("submit");
+    await flushPromises();
+    expect(rows(wrapper).map((r) => r.attributes("data-schedule-id"))).toEqual(["1", "2"]);
+  });
+
+  it("取り直しに失敗しても、保存した 1 件は一覧に反映し、「登録しました。」を示す", async () => {
+    let getCount = 0;
+    const base = serverHandler([item({ id: 1 })]);
+    mockApi((call) => {
+      if (call.method === "GET" && call.path === "/schedules") {
+        getCount += 1;
+        if (getCount >= 2) {
+          return res({}, 500); // 保存のあとの取り直しだけ失敗する
+        }
+      }
+      return base(call);
+    });
+    const wrapper = await mountSchedules();
+    await wrapper.get('.schedules-top [aria-label="新規"]').trigger("click");
+    await fillAndSave(wrapper, { condition: "daily", time: "08:00", scene: "out" });
+
+    expect(rows(wrapper)).toHaveLength(2);
+    expect(wrapper.find("[role=dialog]").exists()).toBe(false);
+    expect(status(wrapper).text()).toBe("登録しました。");
+  });
+
+  it.each([401, 403] as const)("保存のあとの取り直しで %s なら、親（殻）へ auth-error を伝える", async (code) => {
+    let getCount = 0;
+    const base = serverHandler([item({ id: 1 })]);
+    mockApi((call) => {
+      if (call.method === "GET" && call.path === "/schedules") {
+        getCount += 1;
+        if (getCount >= 2) {
+          return res({}, code);
+        }
+      }
+      return base(call);
+    });
+    const wrapper = await mountSchedules();
+    await wrapper.get('.schedules-top [aria-label="新規"]').trigger("click");
+    await fillAndSave(wrapper, { condition: "daily", time: "08:00", scene: "out" });
+    const emitted = wrapper.emitted("auth-error");
+    expect(emitted).toHaveLength(1);
+    expect((emitted![0]![0] as AuthError).status).toBe(code);
+  });
+
+  it("有効／無効の切替と削除では、一覧を取り直さない（並びは変わらない）", async () => {
+    const { calls } = mockApi(
+      (() => {
+        const base = serverHandler([item({ id: 1 }), item({ id: 2, run_time: "09:00" })]);
+        return (call: Parameters<typeof base>[0]) =>
+          call.method === "PUT" && call.path.endsWith("/enabled")
+            ? res({ ...item({ id: 1 }), is_enabled: false })
+            : call.method === "DELETE"
+              ? res({}, 204)
+              : base(call);
+      })(),
+    );
+    const wrapper = await mountSchedules();
+    await row(wrapper, 1).get('[role="switch"]').trigger("click");
+    await flushPromises();
+    expect(calls.filter((c) => c.method === "GET")).toHaveLength(1);
   });
 });

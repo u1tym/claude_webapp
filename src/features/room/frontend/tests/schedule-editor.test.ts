@@ -6,6 +6,7 @@ import {
   formFromItem,
   toScheduleBody,
   validateScheduleForm,
+  validateTitleAndOrder,
   type ScheduleForm,
   type ScheduleItem,
 } from "../src/room";
@@ -82,6 +83,8 @@ const emptyForm: ScheduleForm = {
   device: "",
   state: "",
   pattern: "full",
+  title: "",
+  displayOrder: "",
   enabled: true,
 };
 
@@ -170,6 +173,8 @@ describe("入力フォームの補助関数", () => {
       weekdays: [],
       run_time: "07:00",
       scene: "out",
+      title: null,
+      display_order: null,
       is_enabled: true,
     });
   });
@@ -190,6 +195,8 @@ describe("入力フォームの補助関数", () => {
       day_shift: "after",
       run_time: "07:00",
       scene: "out",
+      title: null,
+      display_order: null,
       is_enabled: true,
     });
   });
@@ -209,6 +216,8 @@ describe("入力フォームの補助関数", () => {
       run_time: "07:00",
       device: "bedside_speaker",
       state: "off",
+      title: null,
+      display_order: null,
       is_enabled: true,
     });
   });
@@ -430,6 +439,8 @@ describe("登録", () => {
           weekdays,
           run_time: values.time,
           scene: values.scene,
+          title: null,
+          display_order: null,
           is_enabled: true,
         },
       },
@@ -454,6 +465,8 @@ describe("登録", () => {
       day_shift: "same",
       run_time: "22:30",
       scene: "out",
+      title: null,
+      display_order: null,
       is_enabled: true,
     });
   });
@@ -531,6 +544,8 @@ describe("変更", () => {
           day_shift: "same",
           run_time: "06:45",
           scene: "bedside_speaker",
+          title: null,
+          display_order: null,
           is_enabled: true,
         },
       },
@@ -746,6 +761,8 @@ describe("祝日の扱いと実行日の取り方", () => {
       day_shift: shift,
       run_time: "21:00",
       scene: "out",
+      title: null,
+      display_order: null,
       is_enabled: true,
     });
   });
@@ -767,6 +784,8 @@ describe("祝日の扱いと実行日の取り方", () => {
       weekdays: [],
       run_time: "21:00",
       scene: "out",
+      title: null,
+      display_order: null,
       is_enabled: true,
     });
   });
@@ -843,7 +862,7 @@ describe("実行内容", () => {
       {
         method: "POST",
         path: "/schedules",
-        body: { condition: "daily", weekdays: [], run_time: "06:30", device, state, ...pattern, is_enabled: true },
+        body: { condition: "daily", weekdays: [], run_time: "06:30", device, state, ...pattern, title: null, display_order: null, is_enabled: true },
       },
     ]);
     const body = calls.find((c) => c.method === "POST")!.body as Record<string, unknown>;
@@ -906,6 +925,8 @@ describe("実行内容", () => {
           run_time: "22:30",
           device: "bedside_speaker",
           state: "off",
+          title: null,
+          display_order: null,
           is_enabled: false,
         },
       },
@@ -1044,6 +1065,8 @@ describe("調光パターン", () => {
         device: "ceiling_light",
         state: "on",
         pattern: "reading",
+        title: null,
+        display_order: null,
         is_enabled: true,
       },
     ]);
@@ -1114,5 +1137,227 @@ describe("調光パターン", () => {
     const wrapper = mountEditor(item({ scene: "ceiling_light" }));
     await flushPromises();
     expect(patternField(wrapper).exists()).toBe(false);
+  });
+});
+
+
+// ---- タイトルと表示順 ----
+
+const titleInput = (w: VueWrapper) => w.get("#schedule-title");
+const orderInput = (w: VueWrapper) => w.get("#schedule-display-order");
+
+describe("タイトルと表示順の入力", () => {
+  it("新規は、どちらも空。説明（Caption）がある", () => {
+    const wrapper = mountEditor();
+    expect((titleInput(wrapper).element as HTMLInputElement).value).toBe("");
+    expect((orderInput(wrapper).element as HTMLInputElement).value).toBe("");
+    expect(wrapper.text()).toContain("一覧で見分けるための名前です。付けなくてもかまいません。");
+    expect(wrapper.text()).toContain("一覧での並びです。小さい数が先に並びます。空にすると末尾に並びます。");
+    expect(wrapper.get('label[for="schedule-title"]').text()).toBe("タイトル");
+    expect(wrapper.get('label[for="schedule-display-order"]').text()).toBe("表示順");
+  });
+
+  it("タイトルは 50 文字を超えて入力できない（入力欄の上限）", () => {
+    expect(titleInput(mountEditor()).attributes("maxlength")).toBe("50");
+  });
+
+  it("どちらも空で保存でき、title と display_order は null で送る（項目を省かない）", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30", scene: "out" });
+    await submit(wrapper);
+    await flushPromises();
+    const body = calls[0]!.body as Record<string, unknown>;
+    expect("title" in body && "display_order" in body).toBe(true);
+    expect(body.title).toBeNull();
+    expect(body.display_order).toBeNull();
+  });
+
+  it("付けた値を送る。タイトルの前後の空白は取り除き、表示順は数にする", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30", scene: "out" });
+    await titleInput(wrapper).setValue("  朝の読書灯　");
+    await orderInput(wrapper).setValue("12");
+    await submit(wrapper);
+    await flushPromises();
+    const body = calls[0]!.body as Record<string, unknown>;
+    expect(body.title).toBe("朝の読書灯");
+    expect(body.display_order).toBe(12);
+  });
+
+  it("空白だけのタイトルは、null で送る", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30", scene: "out" });
+    await titleInput(wrapper).setValue("   ");
+    await submit(wrapper);
+    await flushPromises();
+    expect((calls[0]!.body as Record<string, unknown>).title).toBeNull();
+  });
+
+  it.each([
+    ["0", 0],
+    ["9999", 9999],
+    ["007", 7],
+    [" 5 ", 5],
+  ])("表示順 %s は、%d として送る", async (input, expected) => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30", scene: "out" });
+    await orderInput(wrapper).setValue(input);
+    await submit(wrapper);
+    await flushPromises();
+    expect((calls[0]!.body as Record<string, unknown>).display_order).toBe(expected);
+  });
+
+  it("50 文字ちょうどのタイトルは送れる", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30", scene: "out" });
+    await titleInput(wrapper).setValue("あ".repeat(50));
+    await submit(wrapper);
+    await flushPromises();
+    expect((calls[0]!.body as Record<string, unknown>).title).toBe("あ".repeat(50));
+  });
+
+  it("51 文字のタイトルは、理由を示し、送信しない", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30", scene: "out" });
+    await titleInput(wrapper).setValue("あ".repeat(51));
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe("タイトルは 50 文字以内で入力してください。");
+    expect(calls).toHaveLength(0);
+  });
+
+  it.each(["-1", "10000", "1.5", "abc", "１２", "1e3", "+5", "0x10", "12345"])(
+    "表示順 %s は、理由を示し、送信しない",
+    async (input) => {
+      const { calls } = mockApi(okHandler);
+      const wrapper = mountEditor();
+      await fill(wrapper, { condition: "daily", time: "06:30", scene: "out" });
+      await orderInput(wrapper).setValue(input);
+      await submit(wrapper);
+      expect(errorText(wrapper)).toBe("表示順は 0 以上 9999 以下の整数で入力してください。");
+      expect(calls).toHaveLength(0);
+    },
+  );
+
+  it("検証の順は、実行内容 → タイトル → 表示順。最初の 1 件だけを示す", async () => {
+    mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30" });
+    await titleInput(wrapper).setValue("あ".repeat(51));
+    await orderInput(wrapper).setValue("-1");
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe("実行内容を選択してください。"); // 実行内容が先
+
+    await fill(wrapper, { scene: "out" });
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe("タイトルは 50 文字以内で入力してください。"); // タイトルが先
+
+    await titleInput(wrapper).setValue("朝");
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe("表示順は 0 以上 9999 以下の整数で入力してください。");
+  });
+
+  it("個別切替でも、タイトルと表示順を検証する", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor();
+    await fill(wrapper, { condition: "daily", time: "06:30" });
+    await pick(wrapper, "action-type", "device");
+    await wrapper.get("#schedule-device").setValue("indirect_light");
+    await pick(wrapper, "state", "on");
+    await orderInput(wrapper).setValue("10000");
+    await submit(wrapper);
+    expect(errorText(wrapper)).toBe("表示順は 0 以上 9999 以下の整数で入力してください。");
+    expect(calls).toHaveLength(0);
+  });
+
+  it("変更では、付いているタイトルと表示順が入る", () => {
+    const wrapper = mountEditor(item({ title: "朝の読書灯", display_order: 3 }));
+    expect((titleInput(wrapper).element as HTMLInputElement).value).toBe("朝の読書灯");
+    expect((orderInput(wrapper).element as HTMLInputElement).value).toBe("3");
+  });
+
+  it("変更で、表示順 0 は「付いている」ので、0 と入る（空にならない）", () => {
+    const wrapper = mountEditor(item({ title: null, display_order: 0 }));
+    expect((orderInput(wrapper).element as HTMLInputElement).value).toBe("0");
+    expect((titleInput(wrapper).element as HTMLInputElement).value).toBe("");
+  });
+
+  it("変更で、付いていない定期実行（項目が無い応答を含む）は、どちらも空", () => {
+    for (const target of [item({ title: null, display_order: null }), item()]) {
+      const wrapper = mountEditor(target);
+      expect((titleInput(wrapper).element as HTMLInputElement).value).toBe("");
+      expect((orderInput(wrapper).element as HTMLInputElement).value).toBe("");
+    }
+  });
+
+  it("変更で、空にして保存すると null を送る（外す）。値を変えると、その値を送る", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor(item({ title: "朝", display_order: 3 }));
+    await titleInput(wrapper).setValue("");
+    await orderInput(wrapper).setValue("");
+    await submit(wrapper);
+    await flushPromises();
+    const cleared = calls[0]!.body as Record<string, unknown>;
+    expect(cleared.title).toBeNull();
+    expect(cleared.display_order).toBeNull();
+
+    const second = mountEditor(item({ title: "朝", display_order: 3 }));
+    await titleInput(second).setValue("夜");
+    await orderInput(second).setValue("8");
+    await submit(second);
+    await flushPromises();
+    const changed = calls[1]!.body as Record<string, unknown>;
+    expect(changed.title).toBe("夜");
+    expect(changed.display_order).toBe(8);
+  });
+
+  it("変更で、タイトルと表示順に触れずに保存しても、付いている値をそのまま送る（消さない）", async () => {
+    const { calls } = mockApi(okHandler);
+    const wrapper = mountEditor(item({ title: "朝", display_order: 3 }));
+    await submit(wrapper);
+    await flushPromises();
+    const body = calls[0]!.body as Record<string, unknown>;
+    expect(body.title).toBe("朝");
+    expect(body.display_order).toBe(3);
+  });
+});
+
+describe("タイトルと表示順の補助関数", () => {
+  const base = { title: "", displayOrder: "" };
+
+  it("validateTitleAndOrder: 空、1〜50 文字、0〜9999 は問題なし", () => {
+    expect(validateTitleAndOrder(base)).toBeNull();
+    expect(validateTitleAndOrder({ title: "あ", displayOrder: "0" })).toBeNull();
+    expect(validateTitleAndOrder({ title: "x".repeat(50), displayOrder: "9999" })).toBeNull();
+    expect(validateTitleAndOrder({ title: "  " + "x".repeat(50) + "  ", displayOrder: "" })).toBeNull(); // 取り除いた長さで見る
+  });
+
+  it("validateTitleAndOrder: タイトルが先、表示順が後", () => {
+    expect(validateTitleAndOrder({ title: "x".repeat(51), displayOrder: "-1" })).toBe(
+      "タイトルは 50 文字以内で入力してください。",
+    );
+    expect(validateTitleAndOrder({ title: "x", displayOrder: "-1" })).toBe(
+      "表示順は 0 以上 9999 以下の整数で入力してください。",
+    );
+  });
+
+  it("formFromItem: 新規は、タイトルも表示順も空", () => {
+    const form = formFromItem(null);
+    expect(form.title).toBe("");
+    expect(form.displayOrder).toBe("");
+  });
+
+  it("toScheduleBody: 常に title と display_order を持つ（空は null）", () => {
+    const form: ScheduleForm = { ...emptyForm, condition: "daily", time: "07:00", actionType: "scene", scene: "out" };
+    expect(toScheduleBody(form)).toMatchObject({ title: null, display_order: null });
+    expect(toScheduleBody({ ...form, title: " 朝 ", displayOrder: " 4 " })).toMatchObject({
+      title: "朝",
+      display_order: 4,
+    });
   });
 });

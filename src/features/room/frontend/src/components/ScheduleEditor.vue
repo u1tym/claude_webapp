@@ -9,6 +9,7 @@ import {
   HOLIDAY_MODE_OPTIONS,
   PATTERN_OPTIONS,
   SCENES,
+  TITLE_MAX_LENGTH,
   STATE_OPTIONS,
   TIMER_DEVICES,
   WEEKDAY_CHIPS,
@@ -242,6 +243,32 @@ onMounted(async () => {
         <p class="caption">電灯を ON にするときの、明るさと色温度の組です。</p>
         <p v-if="patternInfoFailed" class="caption">明るさと色温度の目安を取得できませんでした。</p>
       </fieldset>
+
+      <div class="editor-field">
+        <label class="editor-label" for="schedule-title">タイトル</label>
+        <input
+          id="schedule-title"
+          v-model="form.title"
+          class="editor-input"
+          type="text"
+          :maxlength="TITLE_MAX_LENGTH"
+          autocomplete="off"
+        />
+        <p class="caption">一覧で見分けるための名前です。付けなくてもかまいません。</p>
+      </div>
+
+      <div class="editor-field">
+        <label class="editor-label" for="schedule-display-order">表示順</label>
+        <input
+          id="schedule-display-order"
+          v-model="form.displayOrder"
+          class="editor-input"
+          type="text"
+          inputmode="numeric"
+          autocomplete="off"
+        />
+        <p class="caption">一覧での並びです。小さい数が先に並びます。空にすると末尾に並びます。</p>
+      </div>
 
       <div class="editor-field editor-enabled">
         <span class="editor-label" id="schedule-enabled-label">有効</span>

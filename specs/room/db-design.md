@@ -42,6 +42,8 @@ erDiagram
         varchar device
         varchar target_state
         varchar dimming_pattern
+        varchar title
+        integer display_order
         bool is_enabled
         timestamptz last_run_at
         varchar last_run_result
@@ -79,6 +81,8 @@ erDiagram
 | `device` | varchar(16) | NULL | - | 個別切替の機器（`action_type` が `device` のとき。`scene` のときは NULL）。`ceiling_light`、`indirect_light`、`indoor_speaker`、`bedside_speaker` |
 | `target_state` | varchar(3) | NULL | - | 個別切替の目標の状態（`action_type` が `device` のとき。`scene` のときは NULL）。`on`、`off` |
 | `dimming_pattern` | varchar(16) | NULL | - | 電灯を ON にする個別切替の調光パターン（`action_type` が `device`、`device` が `ceiling_light`、`target_state` が `on` のときだけ）。`full`（全灯）、`reading`（読書）、`relax`（くつろぎ）、`night`（夜）。NULL は、既定のパターン（全灯）。それ以外の定期実行は NULL。明るさと色温度の値は持たない（コードの定数。`design.md`） |
+| `title` | varchar(50) | NULL | - | 定期実行のタイトル（利用者が付ける名前）。付けていないときは NULL。空文字は持たない（空の入力は NULL にする）。前後に空白を持たない。画面の一覧に表示する。定期実行の判定と実行には関わらない |
+| `display_order` | integer | NULL | - | 画面の一覧に並べる順を決める数（0 以上 9999 以下）。小さい数が先に並び、NULL は末尾に並ぶ。付けていないときは NULL。定期実行の判定と実行には関わらない |
 | `is_enabled` | boolean | NOT NULL | true | 有効なら true |
 | `last_run_at` | timestamptz | NULL | - | 最後に実行した日時。未実行は NULL |
 | `last_run_result` | varchar(16) | NULL | - | 最後の実行の結果。`success`（成功）、`partial`（一部失敗）、`failure`（失敗）。未実行は NULL |
@@ -102,6 +106,8 @@ erDiagram
 - CHECK: `(action_type = 'scene' AND scene IS NOT NULL AND device IS NULL AND target_state IS NULL) OR (action_type = 'device' AND scene IS NULL AND device IS NOT NULL AND target_state IS NOT NULL)`（実行内容の種類に応じた列だけが入る）
 - CHECK: `dimming_pattern IN ('full', 'reading', 'relax', 'night')`（NULL を許す）
 - CHECK: `dimming_pattern IS NULL OR (action_type = 'device' AND device = 'ceiling_light' AND target_state = 'on')`（調光パターンは、電灯を ON にする個別切替のときだけ）
+- CHECK: `title IS NULL OR (char_length(title) BETWEEN 1 AND 50 AND title = btrim(title))`（タイトルは、あれば 1〜50 文字で、前後に空白を持たない）
+- CHECK: `display_order IS NULL OR display_order BETWEEN 0 AND 9999`
 - CHECK: `last_run_result IN ('success', 'partial', 'failure')`（NULL を許す）
 - CHECK: `(last_run_at IS NULL) = (last_run_result IS NULL)`（最終実行の日時と結果は一緒に入る）
 - CHECK: `last_failed_devices <@ ARRAY['ceiling_light', 'indirect_light', 'indoor_speaker', 'bedside_speaker']::text[]`
@@ -112,7 +118,8 @@ erDiagram
 | 名前 | 対象カラム | 種別 |
 |------|------------|------|
 | `ix_room_schedules_enabled` | `is_enabled` | 通常（ジョブが有効なものを選ぶ） |
-| `ix_room_schedules_run_time` | `run_time`, `scene` | 通常（一覧の並び順） |
+| `ix_room_schedules_run_time` | `run_time`, `scene` | 通常（時刻順の参照） |
+| `ix_room_schedules_display_order` | `display_order`, `run_time`, `id` | 通常（一覧の並び順。`ORDER BY display_order ASC NULLS LAST, run_time, id`。PostgreSQL の昇順は、NULL を末尾に置く） |
 
 補足:
 
@@ -129,6 +136,8 @@ erDiagram
 - 画面・API の操作で、追加・更新・削除・有効／無効の切替をする。
 - ジョブが、有効なものを全件読み、実行後に `last_run_at`、`last_run_result`、`last_failed_devices` を更新する。
 - 定義の更新（実行条件・祝日の扱い・実行日の取り方・時刻・実行内容・調光パターン・有効／無効）では、最終実行の列は変えない。
+- タイトルと表示順は、定義の更新で、サービスが「要求に項目があるときだけ」書き換える（`design.md` の「タイトルと表示順の更新の規則」。項目が無ければ現在の値のまま、`null` なら外す）。DB の列は、付けていない状態を NULL で表す。
+- 一覧の並びは、`display_order` の昇順（NULL は末尾）、同じ値の中は `run_time`、`id` の昇順とする（要件は、同じ値の中の並びを問わないが、決まった並びにするため）。
 
 ### room.schedule_weekdays
 
@@ -296,6 +305,15 @@ erDiagram
 | 2 | 列の CHECK（種類）と、整合の CHECK（電灯を ON にする個別切替のときだけ）を、付け替える |
 | 3 | 既存の行は変えない |
 
+**定期実行のタイトルと表示順の追加（2026-10-06 の改訂）**: `sql/04_room_schedule_title_order.sql` が、`title` と `display_order` を `ADD COLUMN IF NOT EXISTS`（NULL）で足し、列の CHECK と、並びのインデックスを付ける。繰り返し適用しても壊れない。既存の行は、すべて NULL（タイトル無し、表示順なし）になり、変換しない。
+
+| 手順 | 内容 |
+|------|------|
+| 1 | `title`（varchar(50)）と `display_order`（integer）を、`ADD COLUMN IF NOT EXISTS`（NULL）で足す |
+| 2 | 列の CHECK（`title`、`display_order`）を、付け替える（`DROP CONSTRAINT IF EXISTS` のあと `ADD CONSTRAINT`） |
+| 3 | インデックス `ix_room_schedules_display_order` を、`CREATE INDEX IF NOT EXISTS` で作る |
+| 4 | 既存の行は変えない（並びは、すべて表示順なしの扱いになり、時刻の昇順になる） |
+
 電灯は、これまで未実装で、実行しても何も起きなかった。この改訂のあとは、既存の定期実行のうち、電灯に関わるもの（電灯の個別切替、電灯選択、お出かけ）も、実際に電灯を操作する。電灯を ON にする既存の個別切替は、既定のパターン（全灯）で点灯する。データの変換や無効化はしない。
 
 手順 3（従来の祝日の指定）の変換は、意味が変わる（祝日だけに実行していたものが、全曜日の定義になる）ため、**必ず無効にして**残す。変換後の行は、利用者が確認するまで、実行されない。
@@ -312,10 +330,10 @@ erDiagram
 |------|--------|
 | REQ-001〜REQ-005、REQ-007 | テーブルなし（機器の状態は SwitchBot から取得し、DB に持たない） |
 | REQ-006 | テーブルなし（調光パターンは固定の定数。機器の状態は DB に持たない） |
-| REQ-008 | `room.room_schedules`（実行条件、祝日の扱い、実行日の取り方、時刻、実行内容、調光パターン、有効／無効）、`room.schedule_weekdays`（曜日）、移行（従来の祝日の指定は無効にして残す） |
+| REQ-008 | `room.room_schedules`（実行条件、祝日の扱い、実行日の取り方、時刻、実行内容、調光パターン、有効／無効、タイトル、表示順。並びのインデックス）、`room.schedule_weekdays`（曜日）、移行（従来の祝日の指定は無効にして残す） |
 | REQ-009 | `room.room_schedules`（有効／無効、実行条件、祝日の扱い、実行日の取り方、実行内容）、`room.schedule_weekdays`、`room.schedule_runs`（同じ日の重複実行の防止） |
 | REQ-010 | `room.room_schedules` の `last_run_at`、`last_run_result`、`last_failed_devices`（個別切替は、成功・失敗のみ） |
-| REQ-011 | テーブルなし（API は同じ表を読み書きする） |
+| REQ-011 | テーブルなし（API は同じ表を読み書きする。タイトルと表示順も同じ列） |
 | REQ-012 | テーブルなし（認証情報と機器の識別子は `.env`） |
 | REQ-013 | テーブルなし（ログはファイル） |
 
@@ -339,3 +357,5 @@ erDiagram
 | 2026-10-03 22:12 | 承認済み | ユーザ休日の `public` 化と祝日判定への反映の改訂を承認 |
 | 2026-10-06 19:22 | 未承認 | 電灯の調光に合わせ、`room_schedules` に `dimming_pattern`（`full`／`reading`／`relax`／`night`、NULL は既定）を追加。列と整合の CHECK、既存の DB の移行（`03_room_dimming.sql`）、電灯に関わる既存の定期実行が実際に動くことの注記を追加 |
 | 2026-10-06 19:24 | 承認済み | 電灯の調光の DB（`dimming_pattern` の追加、移行）を承認 |
+| 2026-10-06 21:18 | 未承認 | 定期実行のタイトルと表示順の追加に合わせ、`room_schedules` に `title`（varchar(50)、NULL 可）と `display_order`（integer、NULL 可）を追加。列の CHECK、並びのインデックス `ix_room_schedules_display_order`、既存の DB の移行（`04_room_schedule_title_order.sql`）、一覧の並びの規則を追記 |
+| 2026-10-06 21:20 | 承認済み | 定期実行のタイトルと表示順の DB（列、制約、インデックス、移行）を承認 |

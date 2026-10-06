@@ -80,6 +80,8 @@ def test_毎日の定期実行を登録できる(ctx: tuple[TestClient, int], lo
         "device": None,
         "state": None,
         "pattern": None,
+        "title": None,
+        "display_order": None,
         "is_enabled": True,  # 既定は有効
         "last_run": None,
     }
@@ -652,3 +654,225 @@ def test_有効_無効の切替と最終実行は_調光パターンを変えな
     res = client.put(f"/schedules/{schedule_id}/enabled", json={"is_enabled": False})
     assert res.status_code == 200
     assert res.json()["pattern"] == "relax"
+
+
+# ---- タイトルと表示順 ----
+
+
+def _row(schedule_id: int) -> dict[str, object]:
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute("SELECT title, display_order, run_time FROM room.room_schedules WHERE id = %s", (schedule_id,))
+        return dict(cur.fetchone())
+
+
+def test_タイトルと表示順を付けて登録でき_応答と一覧に出る(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    body = _create(client, title="朝のスピーカー", display_order=3)
+    assert (body["title"], body["display_order"]) == ("朝のスピーカー", 3)
+    listed = client.get("/schedules").json()["schedules"]
+    item = next(i for i in listed if i["id"] == body["id"])
+    assert (item["title"], item["display_order"]) == ("朝のスピーカー", 3)
+    row = _row(body["id"])
+    assert (row["title"], row["display_order"]) == ("朝のスピーカー", 3)
+
+
+def test_付けない登録は_nullで_従来どおり動く(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    body = _create(client)
+    assert (body["title"], body["display_order"]) == (None, None)
+    nulls = _create(client, title=None, display_order=None)
+    assert (nulls["title"], nulls["display_order"]) == (None, None)
+
+
+@pytest.mark.parametrize(
+    ("given", "stored"),
+    [
+        ("  朝の読書灯  ", "朝の読書灯"),
+        ("　朝の読書灯　", "朝の読書灯"),  # 全角の空白も取り除く
+        ("\t朝\n", "朝"),
+        ("朝 の読書灯", "朝 の読書灯"),  # 途中の空白は残す
+        ("", None),
+        ("   ", None),  # 空白だけは、タイトル無し
+        ("　", None),
+    ],
+)
+def test_タイトルの前後の空白は取り除かれ_空になれば付けない(
+    ctx: tuple[TestClient, int], given: str, stored: str | None
+) -> None:
+    client, _ = ctx
+    body = _create(client, title=given)
+    assert body["title"] == stored
+    assert _row(body["id"])["title"] == stored
+
+
+@pytest.mark.parametrize("title", ["あ", "x" * 50, "あ" * 50, "  " + "x" * 50 + "  "])
+def test_1から50文字のタイトルは登録できる(ctx: tuple[TestClient, int], title: str) -> None:
+    client, _ = ctx
+    body = _create(client, title=title)
+    assert body["title"] == title.strip()
+
+
+@pytest.mark.parametrize("order", [0, 1, 9999])
+def test_0から9999の表示順は登録できる(ctx: tuple[TestClient, int], order: int) -> None:
+    client, _ = ctx
+    assert _create(client, display_order=order)["display_order"] == order
+
+
+@pytest.mark.parametrize(
+    "override",
+    [
+        {"title": "x" * 51},
+        {"title": "あ" * 51},
+        {"title": " " + "x" * 51 + " "},  # 取り除いたあとの長さで判定する
+        {"title": 123},
+        {"title": True},
+        {"title": ["a"]},
+        {"title": {"a": 1}},
+        {"display_order": -1},
+        {"display_order": 10000},
+        {"display_order": 1.5},
+        {"display_order": 3.0},  # 整数でない（小数の形）
+        {"display_order": "3"},
+        {"display_order": ""},
+        {"display_order": True},
+        {"display_order": False},
+        {"display_order": [1]},
+    ],
+)
+def test_不正なタイトルと表示順は400で登録されない(
+    ctx: tuple[TestClient, int], override: dict[str, object], log_dir: Path
+) -> None:
+    client, user_id = ctx
+    res = client.post("/schedules", json=_valid(**override))
+    assert res.status_code == 400
+    assert res.json() == {"detail": "入力が不正です"}
+    assert _mine(user_id) == []
+    assert "定期実行の入力不正" in _log_text(log_dir)
+
+
+def test_PUTで項目が無ければ_タイトルと表示順は変わらない(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    created = _create(client, title="朝の読書灯", display_order=2)
+
+    # タイトルと表示順を送らない全項目の更新（AI などの他のシステムが、これらを知らずに更新するのと同じ）
+    res = client.put(f"/schedules/{created['id']}", json=_valid(run_time="08:30", scene="out"))
+
+    assert res.status_code == 200
+    body = res.json()
+    assert (body["title"], body["display_order"]) == ("朝の読書灯", 2)  # 変わらない
+    assert body["run_time"] == "08:30" and body["scene"] == "out"  # 他の項目は、置き換わる
+    row = _row(created["id"])
+    assert (row["title"], row["display_order"]) == ("朝の読書灯", 2)
+
+
+def test_PUTでnullを送ると外れ_値を送るとその値になる(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    created = _create(client, title="朝", display_order=2)
+    url = f"/schedules/{created['id']}"
+
+    res = client.put(url, json=_valid(title=None, display_order=None))
+    assert (res.json()["title"], res.json()["display_order"]) == (None, None)
+    assert (_row(created["id"])["title"], _row(created["id"])["display_order"]) == (None, None)
+
+    res = client.put(url, json=_valid(title="夜", display_order=9))
+    assert (res.json()["title"], res.json()["display_order"]) == ("夜", 9)
+
+    res = client.put(url, json=_valid(title="  ", display_order=0))  # 空白だけは外す。0 は、有効な値
+    assert (res.json()["title"], res.json()["display_order"]) == (None, 0)
+
+
+def test_PUTで片方の項目だけ送ると_もう片方は変わらない(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    created = _create(client, title="朝", display_order=2)
+    url = f"/schedules/{created['id']}"
+
+    only_title = client.put(url, json=_valid(title="夕")).json()
+    assert (only_title["title"], only_title["display_order"]) == ("夕", 2)
+    only_order = client.put(url, json=_valid(display_order=7)).json()
+    assert (only_order["title"], only_order["display_order"]) == ("夕", 7)
+    clear_order = client.put(url, json=_valid(display_order=None)).json()
+    assert (clear_order["title"], clear_order["display_order"]) == ("夕", None)
+
+
+def test_PUTの不正なタイトルと表示順は400で_何も変わらない(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    created = _create(client, title="朝", display_order=2)
+    url = f"/schedules/{created['id']}"
+    for override in ({"title": "x" * 51}, {"display_order": 10000}, {"display_order": -1}, {"title": 5}):
+        res = client.put(url, json=_valid(run_time="09:09", **override))
+        assert res.status_code == 400, override
+    row = _row(created["id"])
+    assert (row["title"], row["display_order"]) == ("朝", 2)
+    assert str(row["run_time"]) == "07:00:00"  # 他の項目も、変わっていない
+
+
+def test_有効_無効の切替と最終実行の記録は_タイトルと表示順を変えない(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    created = _create(client, title="朝", display_order=2)
+    res = client.put(f"/schedules/{created['id']}/enabled", json={"is_enabled": False})
+    assert res.status_code == 200
+    assert (res.json()["title"], res.json()["display_order"]) == ("朝", 2)
+    with get_conn() as conn, conn.cursor() as cur:
+        cur.execute(
+            "UPDATE room.room_schedules SET last_run_at = now(), last_run_result = 'success' WHERE id = %s",
+            (created["id"],),
+        )
+    row = _row(created["id"])
+    assert (row["title"], row["display_order"]) == ("朝", 2)
+
+
+def test_一覧は_表示順の昇順で_表示順なしが末尾_同じ値の中は時刻の順(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    made = {
+        "order2_late": _create(client, display_order=2, run_time="09:00"),
+        "none_early": _create(client, run_time="06:00"),
+        "order1": _create(client, display_order=1, run_time="23:00"),
+        "order2_early": _create(client, display_order=2, run_time="08:00"),
+        "order0": _create(client, display_order=0, run_time="23:59"),
+        "none_late": _create(client, run_time="22:00"),
+    }
+    ours = {m["id"] for m in made.values()}
+    listed = [i["id"] for i in client.get("/schedules").json()["schedules"] if i["id"] in ours]
+    assert listed == [
+        made["order0"]["id"],
+        made["order1"]["id"],
+        made["order2_early"]["id"],
+        made["order2_late"]["id"],
+        made["none_early"]["id"],
+        made["none_late"]["id"],
+    ]
+
+
+def test_表示順を付けていない定期実行だけなら_従来どおり時刻の昇順(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    late = _create(client, run_time="22:00")
+    early = _create(client, run_time="06:30")
+    ours = {late["id"], early["id"]}
+    listed = [i["id"] for i in client.get("/schedules").json()["schedules"] if i["id"] in ours]
+    assert listed == [early["id"], late["id"]]
+
+
+def test_表示順を後から付けると_並びが変わる(ctx: tuple[TestClient, int]) -> None:
+    client, _ = ctx
+    first = _create(client, run_time="06:00")
+    second = _create(client, run_time="07:00")
+    ours = {first["id"], second["id"]}
+
+    def order() -> list[int]:
+        return [i["id"] for i in client.get("/schedules").json()["schedules"] if i["id"] in ours]
+
+    assert order() == [first["id"], second["id"]]
+    client.put(f"/schedules/{second['id']}", json=_valid(run_time="07:00", display_order=0))
+    assert order() == [second["id"], first["id"]]  # 表示順のあるものが先
+    client.put(f"/schedules/{second['id']}", json=_valid(run_time="07:00", display_order=None))
+    assert order() == [first["id"], second["id"]]  # 外すと、時刻順に戻る
+
+
+def test_ログにタイトルの内容は出ず_表示順の値は出る(ctx: tuple[TestClient, int], log_dir: Path) -> None:
+    client, _ = ctx
+    created = _create(client, title="ひみつの題名", display_order=42)
+    client.put(f"/schedules/{created['id']}", json=_valid(scene="out"))  # 項目が無い更新
+    log = _log_text(log_dir)
+    assert "ひみつの題名" not in log
+    assert "title=有り display_order=42" in log  # 登録
+    assert "title=変更なし display_order=変更なし" in log  # 項目が無い更新
