@@ -168,10 +168,15 @@ def logical_delete_user(user_id: int) -> None:
 
 
 def insert_session(session_id: UUID, user_id: int, expires_at: datetime) -> None:
+    """セッションを追加する。同じユーザが、複数の端末で同時にログインできる（上限なし）。
+
+    そのユーザの既存のセッションは、削除しない。期限切れのセッションだけを、この機会に削除する
+    （期限切れの行が溜まらないようにするため。他のユーザの行と、期限内の行は、変えない）。
+    """
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(
-                "DELETE FROM public.sessions WHERE user_id = %s",
+                "DELETE FROM public.sessions WHERE user_id = %s AND expires_at <= now()",
                 (user_id,),
             )
             cur.execute(
