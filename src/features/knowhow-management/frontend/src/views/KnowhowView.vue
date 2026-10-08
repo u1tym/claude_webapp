@@ -729,7 +729,7 @@ async function confirmKnowhowDelete(): Promise<void> {
     </div>
 
     <div v-if="showKnowhowForm" class="modal-back">
-      <div class="modal">
+      <div class="modal modal-wide">
         <h2 class="section-title">{{ editingKnowhowId === null ? "ノウハウの登録" : "ノウハウの編集" }}</h2>
         <form class="form" @submit.prevent="submitKnowhowForm">
           <p v-if="knowhowFormError" class="banner-error">{{ knowhowFormError }}</p>
@@ -743,7 +743,7 @@ async function confirmKnowhowDelete(): Promise<void> {
           </div>
           <div class="field">
             <label for="kh-content">本文</label>
-            <textarea id="kh-content" v-model="formContent" rows="6" placeholder="本文を入力"></textarea>
+            <textarea id="kh-content" v-model="formContent" rows="14" placeholder="本文を入力"></textarea>
           </div>
           <div class="field">
             <label for="kh-middle">所属する中項目</label>
