@@ -42,13 +42,12 @@ def _names(c: TestClient, **params: Any) -> list[str]:
     return [i["name"] for i in _list(c, **params)]
 
 
-def test_list_all_in_id_order(make_owner: Callable[..., Owner], make_client: Callable[..., TestClient]) -> None:
+def test_list_all_in_name_order(make_owner: Callable[..., Owner], make_client: Callable[..., TestClient]) -> None:
     owner = make_owner()
     ids = _setup(owner)
     c = make_client(owner)
     items = _list(c)
-    assert [i["id"] for i in items] == sorted(i["id"] for i in items)
-    assert [i["name"] for i in items] == ["Netflix", "Hulu", "旧サービス", "Aカード", "a_b", "aXb"]  # ステータスが解約のものも含む
+    assert [i["name"] for i in items] == ["a_b", "aXb", "Aカード", "Hulu", "Netflix", "旧サービス"]  # 名称の昇順（DB の照合順序に従う）。ステータスが解約のものも含む
     assert items[0]["category"] == {"id": ids["video"], "name": "動画配信", "is_financial": False}
 
 
@@ -167,10 +166,10 @@ def test_accounts(make_owner: Callable[..., Owner], make_client: Callable[..., T
     res = c.get("/accounts")
     assert res.status_code == 200
     body = res.json()
-    # ユーザ名またはパスワードを持つ契約だけ（契約を伴わない契約、ステータスが解約のものも対象）。ID 昇順
-    assert [i["name"] for i in body["items"]] == ["Netflix", "Hulu", "Aカード"]
+    # ユーザ名またはパスワードを持つ契約だけ（契約を伴わない契約、ステータスが解約のものも対象）。名称の昇順
+    assert [i["name"] for i in body["items"]] == ["Aカード", "Hulu", "Netflix"]
     assert body["total"] == 3
-    netflix = body["items"][0]
+    netflix = body["items"][2]
     assert netflix == {
         "id": ids["netflix"], "name": "Netflix", "username": "taro",
         "homepage": "https://netflix.example", "has_password": True, "password_unset": False,
@@ -181,8 +180,10 @@ def test_accounts(make_owner: Callable[..., Owner], make_client: Callable[..., T
     only_pw = insert_contract(owner, ids["video"], "パスワードのみ", password="x")
     cancelled_with_name = insert_contract(owner, ids["video"], "解約済みアカウント", status="cancelled", username="u9")
     items = c.get("/accounts").json()["items"]
-    assert [i["id"] for i in items][-2:] == [only_pw, cancelled_with_name]
-    assert items[-2]["username"] is None and items[-2]["has_password"] is True
+    by_id = {i["id"]: i for i in items}
+    assert [i["name"] for i in items] == sorted(i["name"] for i in items)
+    assert by_id[only_pw]["username"] is None and by_id[only_pw]["has_password"] is True
+    assert cancelled_with_name in by_id
     # 削除済みは除く
     execute("UPDATE contract_management.contracts SET is_deleted = true WHERE id = %s", (ids["hulu"],))
     assert "Hulu" not in [i["name"] for i in c.get("/accounts").json()["items"]]

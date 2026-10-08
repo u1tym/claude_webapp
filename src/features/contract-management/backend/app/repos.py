@@ -181,7 +181,7 @@ def list_contract_rows(
     has_contract: bool | None,
     password_unset: bool,
 ) -> list[dict[str, object]]:
-    """本人の削除されていない契約を、ID 昇順で返す。条件はすべて満たすものだけ。
+    """本人の削除されていない契約を、名称の昇順（同名は ID 昇順）で返す。条件はすべて満たすものだけ。
 
     返す列は contract_view.CONTRACT_COLUMNS（パスワードの値は含まない）。
     """
@@ -210,7 +210,7 @@ def list_contract_rows(
     with conn.cursor() as cur:
         cur.execute(
             f"SELECT {CONTRACT_COLUMNS} FROM contract_management.contracts "
-            f"WHERE {' AND '.join(where)} ORDER BY id",
+            f"WHERE {' AND '.join(where)} ORDER BY name, id",
             tuple(params),
         )
         return [dict(r) for r in cur.fetchall()]
@@ -234,7 +234,7 @@ def get_contract_password(conn: PgConnection, user_id: int, contract_id: int) ->
 
 
 def list_account_rows(conn: PgConnection, user_id: int, keyword: str | None) -> list[dict[str, object]]:
-    """ユーザ名またはパスワードを持つ、本人の削除されていない契約を、ID 昇順で返す。パスワードの値は含まない。"""
+    """ユーザ名またはパスワードを持つ、本人の削除されていない契約を、名称の昇順（同名は ID 昇順）で返す。パスワードの値は含まない。"""
     where = [
         "user_id = %s",
         "is_deleted = false",
@@ -253,7 +253,7 @@ def list_account_rows(conn: PgConnection, user_id: int, keyword: str | None) -> 
                    (login_password AND password IS NULL) AS password_unset
             FROM contract_management.contracts
             WHERE {' AND '.join(where)}
-            ORDER BY id
+            ORDER BY name, id
             """,
             tuple(params),
         )
