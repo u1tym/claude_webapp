@@ -14,6 +14,10 @@ const props = defineProps<{
   part: Part;
   /** ファイル名と大きさも示す（ダイアログ・印刷） */
   detailed?: boolean;
+  /** PDF の閲覧欄を表示する（ダイアログだけ） */
+  viewer?: boolean;
+  /** PDF のダウンロードのリンクを出す（カードだけ） */
+  downloadLink?: boolean;
   /** チェックリストを取得し直すための値 */
   refresh?: number;
 }>();
@@ -59,6 +63,25 @@ const isImage = computed(() => props.part.type === "jpeg" || props.part.type ===
       :markers="part.markers"
       :image-scale="part.image_scale"
     />
+    <div v-else-if="part.type === 'pdf'" class="pdf-view">
+      <div class="binary-view">
+        <span class="binary-name">{{ part.filename || "（名前なし）" }}</span>
+        <span class="caption">{{ formatByteSize(part.byte_size) }}</span>
+        <a
+          v-if="downloadLink"
+          class="btn-secondary link-button"
+          :href="partContentUrl(part.id, true, contentVersion(part))"
+          @click.stop
+          @keydown.enter.stop
+        >ダウンロード</a>
+      </div>
+      <iframe
+        v-if="viewer"
+        class="pdf-frame"
+        :src="partContentUrl(part.id, false, contentVersion(part))"
+        :title="part.filename || 'PDF'"
+      ></iframe>
+    </div>
     <div v-else-if="part.type === 'binary'" class="binary-view">
       <span class="binary-name">{{ part.filename || "（名前なし）" }}</span>
       <span v-if="detailed" class="caption">{{ formatByteSize(part.byte_size) }}</span>

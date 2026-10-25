@@ -115,7 +115,7 @@ function onChecklistChanged(): void {
 
       <div class="dialog-body">
         <template v-if="mode === 'view'">
-          <PartContent :part="part" detailed :refresh="refresh" />
+          <PartContent :part="part" detailed viewer :refresh="refresh" />
 
           <div v-if="isBinary && part.revisions.length > 0" class="revision-list">
             <h4>過去の世代</h4>

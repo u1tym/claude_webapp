@@ -12,7 +12,7 @@
 - 移行元（`sample/note`）は、フォルダ・ファイルの論理削除を「削除番号」（同名の削除済みを区別する連番）で表す。本機能は、削除フラグに置き換え、同名の一意制約を、削除されていない行だけに掛ける（削除済み同士の同名は可）。
 - 移行元の「表」に関するテーブル（`table`・`table_cell`・`table_col_width`）と、パーツの種別「表」は持たない。
 - チェックリストは、移行元がパーツの本文に識別子を文字列で格納していたのを改め、パーツへの外部キー（1 対 1）で持つ。
-- 画像・バイナリの中身は、移行元と同じく Base64 の文字列で `data` に持つ。展開後の大きさを `byte_size` に持ち、中身を読まずに大きさを返せるようにする。
+- 画像・PDF・バイナリの中身は、移行元と同じく Base64 の文字列で `data` に持つ。展開後の大きさを `byte_size` に持ち、中身を読まずに大きさを返せるようにする。
 - 移行のための専用列・専用テーブルは持たない。移行済みの判定は、既存の列（利用者・親・名前・削除状態）の一致で行う（`design.md`）。
 - 移行元に無い列は持たない（`byte_size` を除く。展開後の大きさは、`data` から計算できる値）。作成日時・更新日時も持たない（過去世代の保管日時を除く）。
 - ログはファイルへ出す。テーブルには置かない。
@@ -179,10 +179,10 @@ erDiagram
 | `file_id` | integer | NOT NULL | - | 所属ファイル。`note_management.files.id` |
 | `sort_order` | integer | NOT NULL | - | 同じファイルの中の並び順（昇順） |
 | `is_deleted` | boolean | NOT NULL | false | 削除フラグ |
-| `ptype` | text | NOT NULL | - | 種別。`text` `md` `tex` `url` `action` `checklist` `jpeg` `png` `binary` のいずれか |
-| `data` | text | NOT NULL | '' | 本文。テキスト・Markdown・TeX・URL の文字列、行動予定の JSON 文字列、画像・バイナリの Base64 文字列。チェックリストは空 |
-| `byte_size` | integer | NOT NULL | 0 | 画像・バイナリの展開後の大きさ（バイト）。それ以外は 0 |
-| `filename` | text | NOT NULL | '' | ファイル名（画像・バイナリ） |
+| `ptype` | text | NOT NULL | - | 種別。`text` `md` `tex` `url` `action` `checklist` `jpeg` `png` `pdf` `binary` のいずれか |
+| `data` | text | NOT NULL | '' | 本文。テキスト・Markdown・TeX・URL の文字列、行動予定の JSON 文字列、画像・PDF・バイナリの Base64 文字列。チェックリストは空 |
+| `byte_size` | integer | NOT NULL | 0 | 画像・PDF・バイナリの展開後の大きさ（バイト）。それ以外は 0 |
+| `filename` | text | NOT NULL | '' | ファイル名（画像・PDF・バイナリ） |
 | `title` | text | NOT NULL | '' | 表示用のタイトル（画像。任意） |
 | `markers` | jsonb | NOT NULL | '[]' | 画像のマーカーの配列（`id` `kind` `x` `y` `text`、番号マーカーは `number`） |
 | `image_scale` | real | NOT NULL | 1.0 | 画像の表示倍率（1.0 = 100%） |
@@ -193,8 +193,8 @@ erDiagram
 - 外部キー: `user_id` → `public.users.id`（ON DELETE RESTRICT）
 - 外部キー: `file_id` → `note_management.files.id`（NO ACTION）
 - 一意: `(user_id, file_id, sort_order)`（削除済みを含む）。入れ替えは、一時的な値（-1）を経由する
-- 検査: `ptype IN ('text','md','tex','url','action','checklist','jpeg','png','binary')`
-- 検査: `ptype NOT IN ('jpeg','png','binary') OR char_length(btrim(filename)) > 0`（画像・バイナリはファイル名が必須）
+- 検査: `ptype IN ('text','md','tex','url','action','checklist','jpeg','png','pdf','binary')`
+- 検査: `ptype NOT IN ('jpeg','png','pdf','binary') OR char_length(btrim(filename)) > 0`（画像・PDF・バイナリはファイル名が必須）
 - 検査: `byte_size >= 0`
 - 検査: `image_scale >= 0.25 AND image_scale <= 4.0`
 - 検査: `jsonb_typeof(markers) = 'array'`
@@ -205,7 +205,7 @@ erDiagram
 
 ### note_management.part_revisions
 
-目的: 画像・バイナリのパーツの過去世代。差し替えの直前の内容を保管する。
+目的: 画像・PDF・バイナリのパーツの過去世代。差し替えの直前の内容を保管する。
 
 | カラム | 型 | NULL | 既定 | 説明 |
 |--------|-----|------|------|------|
@@ -213,7 +213,7 @@ erDiagram
 | `user_id` | integer | NOT NULL | - | 所有者。`public.users.id` |
 | `part_id` | integer | NOT NULL | - | 元のパーツ。`note_management.parts.id` |
 | `revision_number` | integer | NOT NULL | - | パーツの中の世代番号（1 から、差し替えのたびに増える） |
-| `ptype` | text | NOT NULL | - | その世代の種別。`jpeg` `png` `binary` のいずれか |
+| `ptype` | text | NOT NULL | - | その世代の種別。`jpeg` `png` `pdf` `binary` のいずれか |
 | `filename` | text | NOT NULL | - | その世代のファイル名 |
 | `data` | text | NOT NULL | - | その世代の中身（Base64） |
 | `byte_size` | integer | NOT NULL | 0 | その世代の展開後の大きさ（バイト） |
@@ -225,7 +225,9 @@ erDiagram
 - 外部キー: `user_id` → `public.users.id`（ON DELETE RESTRICT）
 - 外部キー: `part_id` → `note_management.parts.id`（ON DELETE CASCADE）
 - 一意: `(part_id, revision_number)`
-- 検査: `ptype IN ('jpeg','png','binary')`、`byte_size >= 0`
+- 検査: `ptype IN ('jpeg','png','pdf','binary')`、`byte_size >= 0`
+
+既存の DB への反映: 種別に関する検査制約（`parts_ptype_check`、ファイル名の検査、`part_revisions_ptype_check`）は、`sql/apply.py` の DDL で、削除して作り直す（`DROP CONSTRAINT IF EXISTS` のあと `ADD CONSTRAINT`。何度実行しても同じ結果になる）。既存のデータは変更しない（新しい制約は、既存のすべての行を満たす）。
 
 インデックス: 一意制約に付随する `(part_id, revision_number)`（一覧・最大の世代番号・古い世代の削除）。
 
@@ -333,3 +335,5 @@ erDiagram
 |------|------|----------|
 | 2026-09-21 22:54 | 未承認 | 初版 |
 | 2026-09-21 22:55 | 承認済み | 初版を承認 |
+| 2026-10-25 22:51 | 未承認 | PDF パーツ（種別 pdf）の追加: 登録・Web 上での表示・ダウンロード・過去世代 |
+| 2026-10-25 22:55 | 承認済み | PDF パーツの追加（改訂）を承認 |

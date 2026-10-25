@@ -2,7 +2,7 @@
 
 import type { Marker, Part, PartCreateBody, PartType, PartUpdateBody } from "../types";
 import { emptyActionForm, formFromData, serializeActionForm, type ActionForm } from "./actionPlan";
-import type { PickedFile } from "./file";
+import { checkPdf, type PickedFile } from "./file";
 import { cloneMarkers } from "./imageMarkers";
 import { percentToScale, scaleToPercent } from "./imageScale";
 
@@ -15,6 +15,7 @@ export const TYPE_OPTIONS: { value: PartType; label: string }[] = [
   { value: "checklist", label: "チェックリスト" },
   { value: "jpeg", label: "JPEG" },
   { value: "png", label: "PNG" },
+  { value: "pdf", label: "PDF" },
   { value: "binary", label: "バイナリ" },
 ];
 
@@ -27,7 +28,7 @@ export function groupOf(type: PartType): Group {
   if (type === "text" || type === "md" || type === "tex" || type === "url") {
     return "text";
   }
-  if (type === "jpeg" || type === "png" || type === "binary") {
+  if (type === "jpeg" || type === "png" || type === "pdf" || type === "binary") {
     return "binary";
   }
   return type;
@@ -114,7 +115,12 @@ function parseScale(input: string | number): number | null {
 }
 
 const FILE_REQUIRED = (type: PartType): string =>
-  isImageType(type) ? "画像のファイルを選択してください" : "ファイルを選択してください";
+  isImageType(type) ? "画像のファイルを選択してください" : type === "pdf" ? "PDF のファイルを選択してください" : "ファイルを選択してください";
+
+/** 選んだファイルが、種別に合うか（PDF だけ検査する）。合わないときは理由を返す。 */
+function pickedError(type: PartType, picked: PickedFile): string | null {
+  return type === "pdf" ? checkPdf(picked.filename, picked.data) : null;
+}
 
 type Built<T> = { body: T } | { error: string };
 
@@ -132,6 +138,10 @@ export function buildCreateBody(draft: PartDraft): Built<PartCreateBody> {
   }
   if (draft.picked === null) {
     return { error: FILE_REQUIRED(draft.type) };
+  }
+  const pickedProblem = pickedError(draft.type, draft.picked);
+  if (pickedProblem !== null) {
+    return { error: pickedProblem };
   }
   const body: PartCreateBody = { type: draft.type, data: draft.picked.data, filename: draft.picked.filename };
   if (isImageType(draft.type)) {
@@ -171,6 +181,10 @@ export function buildUpdateBody(part: Part, draft: PartDraft): Built<PartUpdateB
     return { body };
   }
   if (draft.picked !== null) {
+    const pickedProblem = pickedError(draft.type, draft.picked);
+    if (pickedProblem !== null) {
+      return { error: pickedProblem };
+    }
     body.data = draft.picked.data;
     body.filename = draft.picked.filename;
   } else if (groupChanged) {

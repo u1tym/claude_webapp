@@ -29,6 +29,14 @@ export function readFileAsBase64(file: File): Promise<string> {
   });
 }
 
+export const PDF_FILE_MESSAGE = "PDF のファイルを選択してください";
+
+/** PDF として受け付けられるか（拡張子 .pdf、先頭のバイト列 %PDF-。data は Base64）。受け付けないときは、理由を返す。 */
+export function checkPdf(filename: string, data: string): string | null {
+  // "%PDF-" を Base64 にすると "JVBERi0"
+  return filename.toLowerCase().endsWith(".pdf") && data.startsWith("JVBERi0") ? null : PDF_FILE_MESSAGE;
+}
+
 /** 選んだファイルの読み込み結果。 */
 export interface PickedFile {
   filename: string;

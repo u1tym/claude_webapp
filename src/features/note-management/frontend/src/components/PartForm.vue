@@ -2,7 +2,7 @@
 import { computed, ref } from "vue";
 import { partContentUrl } from "../api";
 import type { PartType } from "../types";
-import { formatByteSize, pickedFromFile } from "../utils/file";
+import { checkPdf, formatByteSize, pickedFromFile } from "../utils/file";
 import { changeDraftType, groupOf, isImageType, TYPE_OPTIONS, type PartDraft } from "../utils/partDraft";
 import { renderMarkdown, renderTex } from "../utils/render";
 import { clampImageScale } from "../utils/imageScale";
@@ -77,6 +77,13 @@ async function onFile(event: Event): Promise<void> {
       emit("error", result.error);
       return;
     }
+    if (draft.value.type === "pdf") {
+      const problem = checkPdf(result.filename, result.data);
+      if (problem !== null) {
+        emit("error", problem);
+        return;
+      }
+    }
     draft.value.picked = result;
     // 画像を差し替えたときは、マーカーを空にする
     draft.value.markers = [];
@@ -85,7 +92,7 @@ async function onFile(event: Event): Promise<void> {
   }
 }
 
-const accept = computed(() => (draft.value.type === "jpeg" ? "image/jpeg" : draft.value.type === "png" ? "image/png" : "*/*"));
+const accept = computed(() => (draft.value.type === "jpeg" ? "image/jpeg" : draft.value.type === "png" ? "image/png" : draft.value.type === "pdf" ? "application/pdf,.pdf" : "*/*"));
 const shownName = computed(() => draft.value.picked?.filename ?? draft.value.existingFilename);
 const shownSize = computed(() => (draft.value.picked ? draft.value.picked.size : draft.value.existingSize));
 </script>

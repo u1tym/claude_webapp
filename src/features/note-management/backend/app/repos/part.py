@@ -7,12 +7,12 @@ from typing import Any
 
 from psycopg2.extensions import cursor as PgCursor
 
-BINARY_TYPES = ("jpeg", "png", "binary")
+BINARY_TYPES = ("jpeg", "png", "pdf", "binary")
 
-# 画像・バイナリの中身（Base64）は、一覧・取得では読まない
+# 画像・PDF・バイナリの中身（Base64）は、一覧・取得では読まない
 _LIGHT_COLUMNS = """
     id, file_id, sort_order, is_deleted, ptype,
-    CASE WHEN ptype IN ('jpeg', 'png', 'binary') THEN '' ELSE data END AS data,
+    CASE WHEN ptype IN ('jpeg', 'png', 'pdf', 'binary') THEN '' ELSE data END AS data,
     byte_size, filename, title, markers, image_scale
 """
 
@@ -134,11 +134,11 @@ def set_sort_order(cur: PgCursor, part_id: int, sort_order: int) -> None:
 
 
 def get_content(cur: PgCursor, user_id: int, part_id: int) -> dict[str, Any] | None:
-    """画像・バイナリのパーツの中身。それ以外の種別は None。"""
+    """画像・PDF・バイナリのパーツの中身。それ以外の種別は None。"""
     cur.execute(
         """
         SELECT ptype, filename, data FROM note_management.parts
-        WHERE id = %s AND user_id = %s AND ptype IN ('jpeg', 'png', 'binary')
+        WHERE id = %s AND user_id = %s AND ptype IN ('jpeg', 'png', 'pdf', 'binary')
         """,
         (part_id, user_id),
     )

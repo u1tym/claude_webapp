@@ -25,11 +25,13 @@ ALL_TYPES = TEXT_TYPES + ("action", "checklist") + BINARY_TYPES
 CONTENT_MESSAGE = "ファイルの内容が正しくありません"
 FILENAME_MESSAGE = "ファイル名を入力してください"
 FORMAT_MESSAGE = "画像の形式が正しくありません"
+PDF_FORMAT_MESSAGE = "PDF の形式が正しくありません"
 CHECKLIST_MESSAGE = "チェックリストの種別は変更できません"
 
 _SIGNATURES = {
     "jpeg": b"\xff\xd8\xff",
     "png": b"\x89PNG\r\n\x1a\n",
+    "pdf": b"%PDF-",
 }
 
 
@@ -79,7 +81,8 @@ def _decode_binary(data: Any, ptype: str) -> int:
 def _check_signature(head: bytes, ptype: str) -> None:
     signature = _SIGNATURES.get(ptype)
     if signature is not None and not head.startswith(signature):
-        raise InvalidInputError(FORMAT_MESSAGE, reason=f"形式の不一致 type={ptype}")
+        message = PDF_FORMAT_MESSAGE if ptype == "pdf" else FORMAT_MESSAGE
+        raise InvalidInputError(message, reason=f"形式の不一致 type={ptype}")
 
 
 def _signature_of_prefix(prefix: str, ptype: str) -> None:
@@ -275,7 +278,7 @@ def update_part(user_id: int, part_id: int, body: dict[str, Any], provided: set[
                 new_size = _decode_binary(body["data"], new_type)
                 new_data = body["data"]
                 content_changed = not (was_binary and repo.data_equals(cur, part_id, new_data))
-            elif new_type in IMAGE_TYPES and new_type != old_type:
+            elif new_type in _SIGNATURES and new_type != old_type:
                 _signature_of_prefix(repo.data_prefix(cur, part_id), new_type)
             filename = _clean_filename(body["filename"]) if "filename" in provided and body.get("filename") is not None else cur_row["filename"]
             if filename.strip() == "":
@@ -363,7 +366,7 @@ def swap_order(user_id: int, part_id_1: int, part_id_2: int) -> None:
 # ---- 中身の取得 -------------------------------------------------------------
 
 
-_MEDIA_TYPES = {"jpeg": "image/jpeg", "png": "image/png", "binary": "application/octet-stream"}
+_MEDIA_TYPES = {"jpeg": "image/jpeg", "png": "image/png", "pdf": "application/pdf", "binary": "application/octet-stream"}
 
 
 def get_content(user_id: int, part_id: int) -> dict[str, Any]:
@@ -390,5 +393,5 @@ def _content_out(row: dict[str, Any]) -> dict[str, Any]:
         "content": raw,
         "media_type": _MEDIA_TYPES[row["ptype"]],
         "filename": row["filename"],
-        "inline": row["ptype"] in IMAGE_TYPES,
+        "inline": row["ptype"] in IMAGE_TYPES or row["ptype"] == "pdf",
     }

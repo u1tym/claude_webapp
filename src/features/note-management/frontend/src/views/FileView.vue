@@ -158,7 +158,7 @@ watch(showDeletedParts, load);
             </div>
             <div class="part-body" role="button" tabindex="0" @click="openedId = part.id" @keydown.enter="openedId = part.id">
               <span v-if="part.is_deleted" class="badge danger">削除済み</span>
-              <PartContent :part="part" :refresh="checklistRefresh" />
+              <PartContent :part="part" download-link :refresh="checklistRefresh" />
             </div>
           </li>
         </ul>

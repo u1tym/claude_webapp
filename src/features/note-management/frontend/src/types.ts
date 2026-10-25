@@ -31,7 +31,7 @@ export interface ItemsResponse {
   files: FileSummary[];
 }
 
-export type PartType = "text" | "md" | "tex" | "url" | "action" | "checklist" | "jpeg" | "png" | "binary";
+export type PartType = "text" | "md" | "tex" | "url" | "action" | "checklist" | "jpeg" | "png" | "pdf" | "binary";
 
 export type MarkerKind = "house" | "number";
 
