@@ -101,7 +101,7 @@ function onChecklistChanged(): void {
 
 <template>
   <div class="modal-back">
-    <div class="modal part-dialog" :class="{ 'pdf-wide': part.type === 'pdf' }" role="dialog" aria-modal="true" aria-label="パーツ">
+    <div class="modal part-dialog" :class="{ 'pdf-wide': part.type === 'pdf' && mode === 'view' }" role="dialog" aria-modal="true" aria-label="パーツ">
       <div class="dialog-head">
         <h3>
           パーツ
