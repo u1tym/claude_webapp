@@ -937,6 +937,11 @@ fieldset {
   overflow: hidden;
 }
 
+/* PDF は、ビューアが広い方が読みやすい */
+.modal.part-dialog.pdf-wide {
+  width: min(1200px, 100%);
+}
+
 .dialog-head {
   display: flex;
   align-items: center;
